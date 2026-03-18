@@ -44,14 +44,16 @@ Set up frontend app with canvas, basic panels, and load/render an image.
 Completed
 
 **Goal**
-Add grid system.
+Add source and target grid system.
 
 **Prompt**
-Implement tile grid with configurable size.
+Implement source grid spacing and target/output grid configuration.
 
 **Deliverables**
 
 * tile size (8 / 16 / 32 / 64)
+* source grid spacing
+* target/output grid size
 * grid overlay
 * tile indexing
 
@@ -65,20 +67,22 @@ Implement tile grid with configurable size.
 ## Ticket 3: Selection + placement (mouse)
 
 **Goal**
-Move data from source → tiles.
+Move data from source tilesheet → target tilesheet.
 
 **Prompt**
-Implement mouse selection and assign to grid tiles.
+Implement source tile selection and assign the selected tiles to target/output tiles.
 
 **Deliverables**
 
-* rectangle selection (mouse)
-* assign selection to tile
-* render tile content
+* source selection snaps to source grid
+* one or more source tiles can be selected
+* assign selection to target/output tile
+* copied content is centered in the target tile
+* render tile content in target/output grid
 
 **Validation**
 
-* tile shows selected region
+* tile shows selected source tiles
 * mouse interactions are correct
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
 
@@ -87,7 +91,7 @@ Implement mouse selection and assign to grid tiles.
 ## Ticket 4: Transform + editor panel (mouse + keyboard)
 
 **Goal**
-Adjust tile content.
+Adjust target/output tile content.
 
 **Prompt**
 Add per-tile transforms and editor panel controls.
@@ -99,6 +103,7 @@ Add per-tile transforms and editor panel controls.
 * flip
 * editor panel for tile properties
 * keyboard shortcuts for editing
+* seam-fixing adjustments inside the target tile
 
 **Validation**
 

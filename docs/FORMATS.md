@@ -18,6 +18,8 @@ Editable source of truth.
 {
   "version": 1,
   "sourceImage": "source.png",
+  "sourceTileWidth": 32,
+  "sourceTileHeight": 32,
 
   "tileWidth": 32,
   "tileHeight": 32,
@@ -54,6 +56,9 @@ Editable source of truth.
 * defines full output
 * transforms applied at export
 * `sourceImage` is a string reference, not embedded image data
+* `sourceTileWidth` / `sourceTileHeight` define the source tilesheet grid
+* `tileWidth` / `tileHeight` define the target/output tilesheet grid
+* `sourceRect` must align to the source grid
 
 ---
 
@@ -108,6 +113,7 @@ Standard Tiled tileset.
 * sourceRect not included in export
 * transforms baked into PNG
 * metadata → TSJ properties
+* copied source content is centered in the target tile before transforms
 
 ---
 
