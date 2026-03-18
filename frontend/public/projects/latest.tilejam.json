@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sourceImage": "test-tile-1.png",
+  "sourceImage": "test-tile-dungeon.png",
   "tileWidth": 32,
   "tileHeight": 32,
   "columns": 4,
