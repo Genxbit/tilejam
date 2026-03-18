@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "sourceImage": "test-tile-1.png",
+  "tileWidth": 32,
+  "tileHeight": 32,
+  "columns": 4,
+  "rows": 2,
+  "tiles": []
+}

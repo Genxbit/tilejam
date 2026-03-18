@@ -12,6 +12,9 @@ Keep tickets small. Keep the app runnable.
 
 ## Ticket 1: Scaffold + layout + image loading
 
+**Status**
+Completed
+
 **Goal**
 Create app shell, responsive layout, and load source image.
 

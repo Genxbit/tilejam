@@ -1,0 +1,155 @@
+:root {
+  color-scheme: dark;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  background:
+    radial-gradient(circle at top, rgba(133, 180, 201, 0.2), transparent 32%),
+    linear-gradient(180deg, #0d1720 0%, #091119 100%);
+  color: #e6edf4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  min-height: 100vh;
+}
+
+.workspace {
+  padding: 20px;
+}
+
+.canvas-wrap {
+  height: calc(100vh - 40px);
+  min-height: 320px;
+  border: 1px solid rgba(131, 169, 190, 0.28);
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(17, 31, 43, 0.9), rgba(7, 16, 22, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.workspace-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 24px;
+  border-left: 1px solid rgba(131, 169, 190, 0.16);
+  background: rgba(7, 16, 22, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.panel-copy,
+.panel-note {
+  margin: 0;
+  color: #b2c4d2;
+}
+
+.file-input {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 16px;
+  border: 1px solid #5d8ba5;
+  border-radius: 999px;
+  color: #f3f7fb;
+  background: linear-gradient(180deg, #20445b 0%, #173244 100%);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.file-input-secondary {
+  background: transparent;
+  border-color: rgba(131, 169, 190, 0.35);
+}
+
+.file-input input {
+  display: none;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid rgba(131, 169, 190, 0.16);
+  border-radius: 16px;
+  background: rgba(18, 32, 47, 0.82);
+}
+
+.meta-grid dt {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7fa3b8;
+}
+
+.meta-grid dd {
+  margin: 2px 0 10px;
+  color: #edf4fa;
+}
+
+.meta-grid dd:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace {
+    padding: 16px 16px 0;
+  }
+
+  .canvas-wrap {
+    height: 56vh;
+  }
+
+  .sidebar {
+    border-left: 0;
+    border-top: 1px solid rgba(131, 169, 190, 0.16);
+  }
+}
