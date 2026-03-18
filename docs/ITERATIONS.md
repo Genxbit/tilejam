@@ -74,7 +74,7 @@ Implement source tile selection and assign the selected tiles to target/output t
 
 **Deliverables**
 
-* zoom and pain in source and target grid for easy editing
+* zoom and pan in source and target grid for easy editing
 * source selection snaps to source grid
 * one or more source tiles can be selected
 * assign selection to target/output tile
@@ -92,20 +92,33 @@ Implement source tile selection and assign the selected tiles to target/output t
 ## Ticket 4: Transform + editor panel (mouse + keyboard)
 
 **Goal**
-Adjust target/output tile content.
+Repair and organize placed target/output tiles.
 
 **Prompt**
-Add per-tile transforms and editor panel controls.
+Add output tile selection, full editor panel controls, seam-repair adjustments, and tile moving.
 
 **Deliverables**
 
-* keyboard shortcuts for editing
-* seam-fixing adjustments inside the target tile
+* select a placed output tile in the output grid
+* editor panel shows selected tile parameters
+* move selected tile to another output grid cell
+* edit `offsetX` / `offsetY`
+* edit `scaleX` / `scaleY`
+* edit `flipX` / `flipY`
+* edit color correction parameters
+* edit filtering / sampling parameters
+* edit `name`, `tags`, and `collision`
+* minimal keyboard shortcuts only for moving selected tiles between output cells
 
 **Validation**
 
 * transforms apply correctly
-* keyboard input works
+* selected tile updates correctly
+* panel edits are reflected in the output grid
+* tile can be moved between output cells
+* seam-repair adjustments are visible in the preview
+* visual adjustments are serializable in project data
+* keyboard input works for tile movement
 * panel updates state
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
 

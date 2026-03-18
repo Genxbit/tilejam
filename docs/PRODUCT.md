@@ -14,8 +14,10 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 4. create or configure target/output image size and tile grid
 5. select one or more source tiles
 6. assign the selection to a target/output tile
-7. adjust target/output tile content (move, scale, flip)
-8. save project or export tileset
+7. select a placed output tile
+8. repair target/output tile content in the editor panel
+9. move placed tiles between output cells when needed
+10. save project or export tileset
 
 ---
 
@@ -29,6 +31,9 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 * target/output tilesheet configuration
 * grid-based editing
 * per-tile transforms
+* per-tile seam-repair controls in the editor panel
+* moving placed tiles between output cells
+* per-tile visual correction controls
 * project JSON load/save
 * seamless tiling support
 * PNG export
@@ -50,6 +55,8 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 * source selection must align to the source grid
 * target/output tiles must align to the output grid
 * copied source content is centered into the target tile before further transforms
+* seam repair is done through explicit tile parameters, not hidden edits
+* tile movement between output cells must stay deterministic
 * output must be production-ready
 * behavior must be explicit
 * no hidden state

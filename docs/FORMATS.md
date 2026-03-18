@@ -40,6 +40,12 @@ Editable source of truth.
       "scaleY": 1,
       "flipX": false,
       "flipY": false,
+      "brightness": 0,
+      "contrast": 1,
+      "saturation": 1,
+      "tintColor": null,
+      "filterMode": "nearest",
+      "pixelSnap": true,
 
       "name": "tile_name",
       "tags": ["tag1", "tag2"],
@@ -60,6 +66,8 @@ Editable source of truth.
 * `tileWidth` / `tileHeight` define the target/output tilesheet grid
 * `outputWidth` / `outputHeight` define the target/output image size
 * `sourceRect` must align to the source grid
+* per-tile seam-repair parameters must be stored explicitly in `tiles[]`
+* moving a tile between output cells updates `destCol` / `destRow`
 
 ---
 
@@ -114,8 +122,10 @@ Standard Tiled tileset.
 * output columns / rows are derived from output image size and target tile size
 * sourceRect not included in export
 * transforms baked into PNG
+* visual correction parameters baked into PNG
 * metadata → TSJ properties
 * copied source content is centered in the target tile before transforms
+* filtering and pixel snapping affect rendering/export, not TSJ metadata
 
 ---
 

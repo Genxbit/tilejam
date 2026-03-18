@@ -142,6 +142,8 @@ Rule of thumb:
 
 * stored in tile placement state
 * applied by system logic
+* includes seam-repair parameters and visual correction settings
+* editor panel is the primary editing surface for per-tile repair
 
 **Export**
 
@@ -165,6 +167,7 @@ Serializable project state must fully describe:
 * grid
 * tile assignments
 * transforms
+* per-tile visual repair parameters
 
 No hidden state.
 
