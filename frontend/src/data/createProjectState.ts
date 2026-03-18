@@ -39,6 +39,8 @@ export function createProjectState(): ProjectState {
         panX: 0,
         panY: 0,
       },
+      sourceImageAssetCache: {},
+      renderRevision: 0,
     },
   };
 }

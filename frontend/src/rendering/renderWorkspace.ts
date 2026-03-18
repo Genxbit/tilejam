@@ -1,6 +1,7 @@
 import type { ProjectState } from "../types/project";
 import { getSelectedOutputTile } from "../systems/tileEditorSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
+import { getSourceImageForRef } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, getSourceGridMetrics } from "../systems/tileGridSystem";
 import { getWorkspaceLayout, type OutputViewport, type SourceViewport } from "../systems/workspaceSystem";
 
@@ -19,6 +20,15 @@ const PLACEMENT_STROKE = "rgba(255, 214, 122, 0.45)";
 const SELECTED_TILE_STROKE = "#77f1b2";
 const SELECTED_TILE_FILL = "rgba(119, 241, 178, 0.12)";
 const VIEW_HINT = "rgba(198, 215, 229, 0.72)";
+
+type RenderCache = {
+  sourceBaseCanvas: HTMLCanvasElement | null;
+  sourceBaseKey: string | null;
+  outputBaseCanvas: HTMLCanvasElement | null;
+  outputBaseKey: string | null;
+};
+
+const renderCacheByCanvas = new WeakMap<HTMLCanvasElement, RenderCache>();
 
 export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState): void {
   const parent = canvas.parentElement;
@@ -48,10 +58,11 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
   const { image } = state.sourceImageAsset;
   const layout = getWorkspaceLayout(width, height, state);
   const { sourcePanel, outputPanel } = layout;
+  const cache = getRenderCache(canvas);
 
   drawPanel(context, sourcePanel);
   drawPanel(context, outputPanel);
-  drawOutputGrid(context, state, layout.outputViewport);
+  drawOutputGrid(context, state, layout.outputViewport, cache);
 
   if (!image) {
     drawEmptyState(context, sourcePanel);
@@ -65,16 +76,7 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
     return;
   }
 
-  context.fillStyle = EMPTY_PANEL;
-  context.fillRect(viewport.frame.x - 8, viewport.frame.y - 8, viewport.frame.width + 16, viewport.frame.height + 16);
-  context.save();
-  context.beginPath();
-  context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
-  context.clip();
-  context.drawImage(image, viewport.contentX, viewport.contentY, viewport.contentWidth, viewport.contentHeight);
-  drawGridOverlay(context, state, viewport, image.width, image.height);
-  drawSourceSelection(context, state, viewport);
-  context.restore();
+  drawSourcePanel(context, state, viewport, image, cache);
   context.strokeStyle = BORDER;
   context.lineWidth = 2;
   context.strokeRect(viewport.frame.x - 8, viewport.frame.y - 8, viewport.frame.width + 16, viewport.frame.height + 16);
@@ -85,6 +87,78 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
   context.fillText(`Source: ${label} · ${image.width} x ${image.height}`, sourcePanel.x + 12, sourcePanel.y + 18);
   context.fillStyle = VIEW_HINT;
   context.fillText(`Zoom ${state.session.sourceCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`, sourcePanel.x + 12, sourcePanel.y + sourcePanel.height - 12);
+}
+
+function getRenderCache(canvas: HTMLCanvasElement): RenderCache {
+  let cache = renderCacheByCanvas.get(canvas);
+
+  if (!cache) {
+    cache = {
+      sourceBaseCanvas: null,
+      sourceBaseKey: null,
+      outputBaseCanvas: null,
+      outputBaseKey: null,
+    };
+    renderCacheByCanvas.set(canvas, cache);
+  }
+
+  return cache;
+}
+
+function drawSourcePanel(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: SourceViewport,
+  image: HTMLImageElement,
+  cache: RenderCache,
+): void {
+  const sourceKey = [
+    state.session.renderRevision,
+    state.project.sourceImage,
+    state.project.sourceTileWidth,
+    state.project.sourceTileHeight,
+    viewport.frame.x,
+    viewport.frame.y,
+    viewport.frame.width,
+    viewport.frame.height,
+    viewport.contentX,
+    viewport.contentY,
+    viewport.contentWidth,
+    viewport.contentHeight,
+  ].join("|");
+
+  if (cache.sourceBaseKey !== sourceKey || !cache.sourceBaseCanvas) {
+    const baseCanvas = document.createElement("canvas");
+    baseCanvas.width = context.canvas.width;
+    baseCanvas.height = context.canvas.height;
+    const baseContext = baseCanvas.getContext("2d");
+
+    if (baseContext) {
+      baseContext.fillStyle = EMPTY_PANEL;
+      baseContext.fillRect(viewport.frame.x - 8, viewport.frame.y - 8, viewport.frame.width + 16, viewport.frame.height + 16);
+      baseContext.save();
+      baseContext.beginPath();
+      baseContext.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+      baseContext.clip();
+      baseContext.drawImage(image, viewport.contentX, viewport.contentY, viewport.contentWidth, viewport.contentHeight);
+      drawGridOverlay(baseContext, state, viewport, image.width, image.height);
+      baseContext.restore();
+    }
+
+    cache.sourceBaseCanvas = baseCanvas;
+    cache.sourceBaseKey = sourceKey;
+  }
+
+  if (cache.sourceBaseCanvas) {
+    context.drawImage(cache.sourceBaseCanvas, 0, 0);
+  }
+
+  context.save();
+  context.beginPath();
+  context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+  context.clip();
+  drawSourceSelection(context, state, viewport);
+  context.restore();
 }
 
 function drawGridOverlay(
@@ -156,6 +230,7 @@ function drawOutputGrid(
   context: CanvasRenderingContext2D,
   state: ProjectState,
   viewport: OutputViewport,
+  cache: RenderCache,
 ): void {
   const projectPixels = getProjectPixelSize(state.project);
   const outputGrid = getOutputGridMetrics(state.project);
@@ -168,13 +243,11 @@ function drawOutputGrid(
     viewport.frame.y - 14,
   );
 
-  context.fillStyle = OUTPUT_FILL;
-  context.fillRect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+  drawOutputBase(context, state, viewport, cache);
   context.save();
   context.beginPath();
   context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
   context.clip();
-  drawPlacedTiles(context, state, viewport);
   drawHoveredOutputTile(context, state, viewport);
   drawSelectedOutputTile(context, state, viewport);
   context.restore();
@@ -209,6 +282,52 @@ function drawOutputGrid(
   );
 }
 
+function drawOutputBase(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+  cache: RenderCache,
+): void {
+  const outputKey = [
+    state.session.renderRevision,
+    viewport.frame.x,
+    viewport.frame.y,
+    viewport.frame.width,
+    viewport.frame.height,
+    viewport.contentX,
+    viewport.contentY,
+    viewport.contentWidth,
+    viewport.contentHeight,
+    viewport.cellWidth,
+    viewport.cellHeight,
+  ].join("|");
+
+  if (cache.outputBaseKey !== outputKey || !cache.outputBaseCanvas) {
+    const baseCanvas = document.createElement("canvas");
+    baseCanvas.width = context.canvas.width;
+    baseCanvas.height = context.canvas.height;
+    const baseContext = baseCanvas.getContext("2d");
+
+    if (baseContext) {
+      baseContext.fillStyle = OUTPUT_FILL;
+      baseContext.fillRect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+      baseContext.save();
+      baseContext.beginPath();
+      baseContext.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+      baseContext.clip();
+      drawPlacedTiles(baseContext, state, viewport);
+      baseContext.restore();
+    }
+
+    cache.outputBaseCanvas = baseCanvas;
+    cache.outputBaseKey = outputKey;
+  }
+
+  if (cache.outputBaseCanvas) {
+    context.drawImage(cache.outputBaseCanvas, 0, 0);
+  }
+}
+
 function drawSourceSelection(
   context: CanvasRenderingContext2D,
   state: ProjectState,
@@ -237,13 +356,13 @@ function drawPlacedTiles(
   state: ProjectState,
   viewport: OutputViewport,
 ): void {
-  const image = state.sourceImageAsset.image;
-
-  if (!image) {
-    return;
-  }
-
   for (const tile of state.project.tiles) {
+    const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+    if (!image) {
+      continue;
+    }
+
     const cellX = viewport.contentX + tile.destCol * viewport.cellWidth;
     const cellY = viewport.contentY + tile.destRow * viewport.cellHeight;
     const rawDrawX = cellX + tile.offsetX * viewport.scaleX;

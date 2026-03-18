@@ -39,28 +39,30 @@ function parseTilejamProject(value: unknown): TilejamProject {
     throw new Error("Project file must contain a JSON object.");
   }
 
+  const sourceImage = readNullableString(value.sourceImage, "sourceImage");
+
   return {
     version: readPositiveInteger(value.version, "version"),
-    sourceImage: readNullableString(value.sourceImage, "sourceImage"),
+    sourceImage,
     sourceTileWidth: readOptionalTileSize(value.sourceTileWidth, value.tileWidth, "sourceTileWidth"),
     sourceTileHeight: readOptionalTileSize(value.sourceTileHeight, value.tileHeight, "sourceTileHeight"),
     tileWidth: readTileSize(value.tileWidth, "tileWidth"),
     tileHeight: readTileSize(value.tileHeight, "tileHeight"),
     outputWidth: readOutputDimension(value.outputWidth, value.columns, value.tileWidth, "outputWidth"),
     outputHeight: readOutputDimension(value.outputHeight, value.rows, value.tileHeight, "outputHeight"),
-    tiles: readTiles(value.tiles),
+    tiles: readTiles(value.tiles, sourceImage),
   };
 }
 
-function readTiles(value: unknown): TilePlacement[] {
+function readTiles(value: unknown, defaultSourceImage: string | null): TilePlacement[] {
   if (!Array.isArray(value)) {
     throw new Error("tiles must be an array.");
   }
 
-  return value.map((entry, index) => parseTile(entry, index));
+  return value.map((entry, index) => parseTile(entry, index, defaultSourceImage));
 }
 
-function parseTile(value: unknown, index: number): TilePlacement {
+function parseTile(value: unknown, index: number, defaultSourceImage: string | null): TilePlacement {
   if (!isRecord(value)) {
     throw new Error(`tiles[${index}] must be an object.`);
   }
@@ -69,6 +71,7 @@ function parseTile(value: unknown, index: number): TilePlacement {
     id: readNonNegativeInteger(value.id, `tiles[${index}].id`),
     destCol: readNonNegativeInteger(value.destCol, `tiles[${index}].destCol`),
     destRow: readNonNegativeInteger(value.destRow, `tiles[${index}].destRow`),
+    sourceImageRef: readOptionalNullableString(value.sourceImageRef, defaultSourceImage, `tiles[${index}].sourceImageRef`),
     sourceRect: parseSourceRect(value.sourceRect, `tiles[${index}].sourceRect`),
     offsetX: readNumber(value.offsetX, `tiles[${index}].offsetX`),
     offsetY: readNumber(value.offsetY, `tiles[${index}].offsetY`),

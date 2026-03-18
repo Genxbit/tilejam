@@ -29,6 +29,44 @@ export function setOutputImageSize(state: ProjectState, width: number, height: n
   state.project.outputHeight = height;
 }
 
+export function normalizeProjectTilesToGrid(state: ProjectState): number {
+  const outputGrid = getOutputGridMetrics(state.project);
+  const selectedTile = state.project.tiles.find((tile) => tile.id === state.session.selectedOutputTileId) ?? null;
+  const dedupedTiles = new Map<string, typeof state.project.tiles[number]>();
+  let droppedCount = 0;
+
+  for (const tile of state.project.tiles) {
+    if (
+      tile.destCol < 0 ||
+      tile.destCol >= outputGrid.columns ||
+      tile.destRow < 0 ||
+      tile.destRow >= outputGrid.rows
+    ) {
+      droppedCount += 1;
+      continue;
+    }
+
+    dedupedTiles.set(`${tile.destCol}:${tile.destRow}`, tile);
+  }
+
+  state.project.tiles = Array.from(dedupedTiles.values());
+
+  for (const tile of state.project.tiles) {
+    tile.id = getTileIndex(tile.destCol, tile.destRow, outputGrid.columns);
+  }
+
+  state.project.tiles.sort((left, right) => left.id - right.id);
+  state.session.selectedOutputTileId = selectedTile
+    && selectedTile.destCol >= 0
+    && selectedTile.destCol < outputGrid.columns
+    && selectedTile.destRow >= 0
+    && selectedTile.destRow < outputGrid.rows
+      ? getTileIndex(selectedTile.destCol, selectedTile.destRow, outputGrid.columns)
+      : null;
+
+  return droppedCount;
+}
+
 export function getTileIndex(col: number, row: number, columns: number): number {
   return col + row * columns;
 }

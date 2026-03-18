@@ -35,6 +35,8 @@ export type SessionState = {
   hoveredPanel: WorkspacePanel | null;
   sourceCamera: CameraState;
   outputCamera: CameraState;
+  sourceImageAssetCache: Record<string, CachedSourceImageAsset>;
+  renderRevision: number;
 };
 
 export type TileSize = 8 | 16 | 32 | 64;
@@ -66,6 +68,7 @@ export type TilePlacement = {
   id: number;
   destCol: number;
   destRow: number;
+  sourceImageRef: string | null;
   sourceRect: SourceRect;
   offsetX: number;
   offsetY: number;
@@ -85,6 +88,14 @@ export type TilePlacement = {
 };
 
 export type TileFilterMode = "nearest" | "linear";
+
+export type CachedSourceImageAsset = {
+  image: HTMLImageElement;
+  name: string;
+  width: number;
+  height: number;
+  objectUrl: string | null;
+};
 
 export type SourceRect = {
   x: number;

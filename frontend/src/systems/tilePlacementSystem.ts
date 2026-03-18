@@ -144,6 +144,7 @@ function createTilePlacementFromSourceRect(
     id,
     destCol,
     destRow,
+    sourceImageRef: state.project.sourceImage,
     sourceRect,
     offsetX,
     offsetY,

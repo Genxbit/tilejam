@@ -1,5 +1,5 @@
 import type { ProjectState, TilePlacement } from "../types/project";
-import { getOutputGridMetrics, getTileIndex } from "./tileGridSystem";
+import { getOutputGridMetrics, normalizeProjectTilesToGrid } from "./tileGridSystem";
 
 type EditableTileFields = Pick<
   TilePlacement,
@@ -103,17 +103,7 @@ export function moveTileToCell(state: ProjectState, tileId: number, destCol: num
 }
 
 function reindexTiles(state: ProjectState): void {
-  const outputGrid = getOutputGridMetrics(state.project);
-  const selectedTile = getSelectedOutputTile(state);
-
-  for (const tile of state.project.tiles) {
-    tile.id = getTileIndex(tile.destCol, tile.destRow, outputGrid.columns);
-  }
-
-  state.project.tiles.sort((left, right) => left.id - right.id);
-  state.session.selectedOutputTileId = selectedTile
-    ? getTileIndex(selectedTile.destCol, selectedTile.destRow, outputGrid.columns)
-    : null;
+  normalizeProjectTilesToGrid(state);
 }
 
 function clamp(value: number, min: number, max: number): number {
