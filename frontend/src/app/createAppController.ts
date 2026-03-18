@@ -1,4 +1,5 @@
 import type { ProjectState } from "../types/project";
+import { exportTilesetPng, exportTilesetTsj } from "../io/exportTileset";
 import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
@@ -135,6 +136,32 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
         const message = error instanceof Error ? error.message : "Unknown project save error.";
         state.session.message = `Project save failed: ${message}`;
+      }
+
+      renderAll();
+    },
+    onExportPng: async () => {
+      try {
+        const filename = getExportFilename(state, "png");
+        const result = await exportTilesetPng(state, filename);
+        state.session.message = result.missingTileCount > 0
+          ? `Exported ${filename}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
+          : `Exported ${filename}.`;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown PNG export error.";
+        state.session.message = `PNG export failed: ${message}`;
+      }
+
+      renderAll();
+    },
+    onExportTsj: async () => {
+      try {
+        const filename = getExportFilename(state, "tsj");
+        exportTilesetTsj(state, filename);
+        state.session.message = `Exported ${filename}.`;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown TSJ export error.";
+        state.session.message = `TSJ export failed: ${message}`;
       }
 
       renderAll();
@@ -620,6 +647,12 @@ function restoreHistoryEntry(state: ProjectState, entry: HistoryEntry): void {
   state.project = JSON.parse(JSON.stringify(entry.project)) as ProjectState["project"];
   state.session.selectedOutputTileId = entry.selectedOutputTileId;
   normalizeProjectTilesToGrid(state);
+}
+
+function getExportFilename(state: ProjectState, extension: "png" | "tsj"): string {
+  const projectName = state.session.projectFileName ?? "latest.tilejam.json";
+  const baseName = projectName.replace(/(?:\.tilejam)?\.json$/i, "");
+  return `${baseName || "tileset"}.${extension}`;
 }
 
 async function loadProjectIntoState(state: ProjectState, project: ProjectState["project"], messagePrefix: string): Promise<void> {

@@ -11,6 +11,8 @@ type ShellOptions = {
   onProjectSelected: (file: File) => Promise<void>;
   onOpenProject: () => Promise<boolean>;
   onSaveProject: () => Promise<void>;
+  onExportPng: () => Promise<void>;
+  onExportTsj: () => Promise<void>;
   onSourceGridSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
   onOutputTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
   onOutputWidthChanged: (width: number) => void;
@@ -56,6 +58,8 @@ export function createShell({
   onProjectSelected,
   onOpenProject,
   onSaveProject,
+  onExportPng,
+  onExportTsj,
   onSourceGridSizeChanged,
   onOutputTileSizeChanged,
   onOutputWidthChanged,
@@ -163,6 +167,12 @@ export function createShell({
   const redoButton = createActionButton("Redo", onRedo);
   const copyAllButton = createActionButton("Copy All Tiles", onCopyAllTiles);
   historyActions.append(undoButton, redoButton, copyAllButton);
+
+  const exportActions = document.createElement("div");
+  exportActions.className = "panel-actions";
+  const exportPngButton = createAsyncActionButton("Export PNG", onExportPng);
+  const exportTsjButton = createAsyncActionButton("Export TSJ", onExportTsj);
+  exportActions.append(exportPngButton, exportTsjButton);
 
   const sourceGridField = document.createElement("label");
   sourceGridField.className = "field-group";
@@ -498,7 +508,7 @@ export function createShell({
   notes.className = "panel-note";
   notes.textContent = state.session.message ?? "";
 
-  panel.append(heading, intro, actions, historyActions, sidebarTabs, projectPanel, editorPanel, notes);
+  panel.append(heading, intro, actions, historyActions, exportActions, sidebarTabs, projectPanel, editorPanel, notes);
   appShell.append(workspace, panel);
   root.append(appShell);
 
@@ -649,6 +659,17 @@ function createActionButton(label: string, onClick: () => void): HTMLButtonEleme
   button.textContent = label;
   button.addEventListener("click", () => {
     onClick();
+  });
+  return button;
+}
+
+function createAsyncActionButton(label: string, onClick: () => Promise<void>): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "file-input file-input-secondary";
+  button.textContent = label;
+  button.addEventListener("click", async () => {
+    await onClick();
   });
   return button;
 }
