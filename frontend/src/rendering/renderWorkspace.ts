@@ -55,7 +55,8 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
 
   context.fillStyle = LABEL;
   context.font = "12px monospace";
-  context.fillText(`${state.project.sourceImage ?? "image"} · ${image.width} x ${image.height}`, x, y - 14);
+  const label = state.sourceImageAsset.name ?? state.project.sourceImage ?? "image";
+  context.fillText(`${label} · ${image.width} x ${image.height}`, x, y - 14);
 }
 
 function drawEmptyState(context: CanvasRenderingContext2D, width: number, height: number): void {

@@ -1,5 +1,5 @@
 import type { ProjectState } from "../types/project";
-import { applyProjectData, loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
+import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
 import { clearSourceImageAsset, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
@@ -13,14 +13,15 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     state,
     onFileSelected: async (file) => {
       await loadSourceImageFromFile(state, file);
+      state.session.message = `Loaded source image: ${file.name}. The project stores this as a reference, so reopening may require relinking the image.`;
       render();
     },
     onProjectSelected: async (file) => {
       try {
         const project = await loadProjectFile(file);
-        await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
         state.session.projectFileName = file.name;
         state.session.projectFileHandle = null;
+        await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown project import error.";
         state.session.message = `Project import failed: ${message}`;
@@ -52,9 +53,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         }
 
         const { file, project } = await loadProjectFromHandle(handle);
-        await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
         state.session.projectFileName = file.name;
         state.session.projectFileHandle = handle;
+        await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return true;
@@ -117,12 +118,13 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       window.addEventListener("resize", render);
 
       try {
-        const project = await loadProjectFromUrl("/projects/latest.tilejam.json");
-        await loadProjectIntoState(state, project, "Loaded default project.");
         state.session.projectFileName = "latest.tilejam.json";
         state.session.projectFileHandle = null;
+        const project = await loadProjectFromUrl("/projects/latest.tilejam.json");
+        await loadProjectIntoState(state, project, "Loaded default project.");
       } catch {
         await loadSourceImageFromUrl(state, "/sample-source.svg", "sample-source.svg");
+        state.session.message = "Loaded fallback sample image.";
       }
 
       render();
@@ -131,10 +133,11 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 }
 
 async function loadProjectIntoState(state: ProjectState, project: ProjectState["project"], messagePrefix: string): Promise<void> {
-  applyProjectData(state, project);
+  state.project = project;
 
   if (!project.sourceImage) {
-    clearSourceImageAsset(state, `${messagePrefix} No source image reference was included.`);
+    clearSourceImageAsset(state);
+    state.session.message = `${messagePrefix} No source image reference was included.`;
     return;
   }
 
@@ -142,9 +145,7 @@ async function loadProjectIntoState(state: ProjectState, project: ProjectState["
     await loadSourceImageFromUrl(state, project.sourceImage, project.sourceImage);
     state.session.message = `${messagePrefix} Source image resolved from ${project.sourceImage}.`;
   } catch {
-    clearSourceImageAsset(
-      state,
-      `${messagePrefix} Source image "${project.sourceImage}" could not be resolved in the browser yet.`,
-    );
+    clearSourceImageAsset(state);
+    state.session.message = `${messagePrefix} Source image "${project.sourceImage}" could not be resolved automatically. Use "Choose image" to relink it.`;
   }
 }

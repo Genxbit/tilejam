@@ -1,4 +1,4 @@
-import type { ProjectState, SourceRect, TilePlacement, TilejamProject } from "../types/project";
+import type { SourceRect, TilePlacement, TilejamProject } from "../types/project";
 
 export async function loadProjectFile(file: File): Promise<TilejamProject> {
   const text = await file.text();
@@ -30,10 +30,6 @@ export async function loadProjectFromUrl(url: string): Promise<TilejamProject> {
   return parseTilejamProject(value);
 }
 
-export function applyProjectData(state: ProjectState, project: TilejamProject): void {
-  state.project = project;
-}
-
 export function serializeProject(project: TilejamProject): string {
   return JSON.stringify(project, null, 2);
 }
@@ -44,12 +40,12 @@ function parseTilejamProject(value: unknown): TilejamProject {
   }
 
   return {
-    version: readNumber(value.version, "version"),
+    version: readPositiveInteger(value.version, "version"),
     sourceImage: readNullableString(value.sourceImage, "sourceImage"),
     tileWidth: readTileSize(value.tileWidth, "tileWidth"),
     tileHeight: readTileSize(value.tileHeight, "tileHeight"),
-    columns: readNumber(value.columns, "columns"),
-    rows: readNumber(value.rows, "rows"),
+    columns: readPositiveInteger(value.columns, "columns"),
+    rows: readPositiveInteger(value.rows, "rows"),
     tiles: readTiles(value.tiles),
   };
 }
@@ -68,14 +64,14 @@ function parseTile(value: unknown, index: number): TilePlacement {
   }
 
   return {
-    id: readNumber(value.id, `tiles[${index}].id`),
-    destCol: readNumber(value.destCol, `tiles[${index}].destCol`),
-    destRow: readNumber(value.destRow, `tiles[${index}].destRow`),
+    id: readNonNegativeInteger(value.id, `tiles[${index}].id`),
+    destCol: readNonNegativeInteger(value.destCol, `tiles[${index}].destCol`),
+    destRow: readNonNegativeInteger(value.destRow, `tiles[${index}].destRow`),
     sourceRect: parseSourceRect(value.sourceRect, `tiles[${index}].sourceRect`),
     offsetX: readNumber(value.offsetX, `tiles[${index}].offsetX`),
     offsetY: readNumber(value.offsetY, `tiles[${index}].offsetY`),
-    scaleX: readNumber(value.scaleX, `tiles[${index}].scaleX`),
-    scaleY: readNumber(value.scaleY, `tiles[${index}].scaleY`),
+    scaleX: readPositiveNumber(value.scaleX, `tiles[${index}].scaleX`),
+    scaleY: readPositiveNumber(value.scaleY, `tiles[${index}].scaleY`),
     flipX: readBoolean(value.flipX, `tiles[${index}].flipX`),
     flipY: readBoolean(value.flipY, `tiles[${index}].flipY`),
     name: readString(value.name, `tiles[${index}].name`),
@@ -90,10 +86,10 @@ function parseSourceRect(value: unknown, path: string): SourceRect {
   }
 
   return {
-    x: readNumber(value.x, `${path}.x`),
-    y: readNumber(value.y, `${path}.y`),
-    w: readNumber(value.w, `${path}.w`),
-    h: readNumber(value.h, `${path}.h`),
+    x: readNonNegativeInteger(value.x, `${path}.x`),
+    y: readNonNegativeInteger(value.y, `${path}.y`),
+    w: readPositiveInteger(value.w, `${path}.w`),
+    h: readPositiveInteger(value.h, `${path}.h`),
   };
 }
 
@@ -129,6 +125,46 @@ function readNumber(value: unknown, path: string): number {
   }
 
   return value;
+}
+
+function readInteger(value: unknown, path: string): number {
+  const result = readNumber(value, path);
+
+  if (!Number.isInteger(result)) {
+    throw new Error(`${path} must be an integer.`);
+  }
+
+  return result;
+}
+
+function readPositiveInteger(value: unknown, path: string): number {
+  const result = readInteger(value, path);
+
+  if (result <= 0) {
+    throw new Error(`${path} must be greater than 0.`);
+  }
+
+  return result;
+}
+
+function readNonNegativeInteger(value: unknown, path: string): number {
+  const result = readInteger(value, path);
+
+  if (result < 0) {
+    throw new Error(`${path} must be 0 or greater.`);
+  }
+
+  return result;
+}
+
+function readPositiveNumber(value: unknown, path: string): number {
+  const result = readNumber(value, path);
+
+  if (result <= 0) {
+    throw new Error(`${path} must be greater than 0.`);
+  }
+
+  return result;
 }
 
 function readBoolean(value: unknown, path: string): boolean {

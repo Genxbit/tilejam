@@ -110,7 +110,7 @@ export function createShell({ root, state, onFileSelected, onProjectSelected, on
   metadata.className = "meta-grid";
 
   const items = [
-    ["Source", state.project.sourceImage ?? "Not loaded"],
+    ["Source", state.sourceImageAsset.name ?? state.project.sourceImage ?? "Not loaded"],
     ["Resolution", `${state.sourceImageAsset.width} x ${state.sourceImageAsset.height}`],
     ["Tile size", `${state.project.tileWidth} x ${state.project.tileHeight}`],
     ["Layout", `${state.project.columns} columns x ${state.project.rows} rows`],
@@ -129,7 +129,7 @@ export function createShell({ root, state, onFileSelected, onProjectSelected, on
   return {
     canvas,
     update(nextState) {
-      items[0].description.textContent = nextState.project.sourceImage ?? "Not loaded";
+      items[0].description.textContent = nextState.sourceImageAsset.name ?? nextState.project.sourceImage ?? "Not loaded";
       items[1].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
       items[2].description.textContent = `${nextState.project.tileWidth} x ${nextState.project.tileHeight}`;
       items[3].description.textContent = `${nextState.project.columns} columns x ${nextState.project.rows} rows`;

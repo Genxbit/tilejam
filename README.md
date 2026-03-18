@@ -26,6 +26,8 @@ Grid editing, tile placement, transforms, and export are planned in later ticket
 
 The checked-in default project file lives at [`frontend/public/projects/latest.tilejam.json`](/Users/larsdahllof/Development/tilejam/frontend/public/projects/latest.tilejam.json).
 
+Project files store a `sourceImage` reference, not embedded image binary data. App-served images can be restored automatically; local images loaded from disk may need to be relinked when reopening a project in the browser.
+
 ## Project Structure
 
 The frontend follows the structure defined in [`docs/TECH_WORKFLOW.md`](/Users/larsdahllof/Development/tilejam/docs/TECH_WORKFLOW.md):

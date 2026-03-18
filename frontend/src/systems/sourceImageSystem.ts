@@ -10,9 +10,9 @@ export async function loadSourceImageFromUrl(
   const image = await loadImage(url);
   state.project.sourceImage = name;
   state.sourceImageAsset.image = image;
+  state.sourceImageAsset.name = name;
   state.sourceImageAsset.width = image.width;
   state.sourceImageAsset.height = image.height;
-  state.session.message = `Loaded source image: ${name}.`;
 }
 
 export async function loadSourceImageFromFile(state: ProjectState, file: File): Promise<void> {
@@ -24,22 +24,22 @@ export async function loadSourceImageFromFile(state: ProjectState, file: File): 
     const image = await loadImage(objectUrl);
     state.project.sourceImage = file.name;
     state.sourceImageAsset.image = image;
+    state.sourceImageAsset.name = file.name;
     state.sourceImageAsset.width = image.width;
     state.sourceImageAsset.height = image.height;
     state.sourceImageAsset.objectUrl = objectUrl;
-    state.session.message = `Loaded source image: ${file.name}.`;
   } catch (error) {
     URL.revokeObjectURL(objectUrl);
     throw error;
   }
 }
 
-export function clearSourceImageAsset(state: ProjectState, message: string | null = null): void {
+export function clearSourceImageAsset(state: ProjectState): void {
   releaseObjectUrl(state);
   state.sourceImageAsset.image = null;
+  state.sourceImageAsset.name = null;
   state.sourceImageAsset.width = 0;
   state.sourceImageAsset.height = 0;
-  state.session.message = message;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

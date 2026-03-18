@@ -16,6 +16,7 @@ export type TilejamProject = {
 
 export type SourceImageAssetState = {
   image: HTMLImageElement | null;
+  name: string | null;
   width: number;
   height: number;
   objectUrl: string | null;
