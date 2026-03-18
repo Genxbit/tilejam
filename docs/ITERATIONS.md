@@ -27,6 +27,7 @@ Set up frontend app with canvas, basic panels, and load/render an image.
 * responsive layout (canvas + panel area)
 * canvas setup
 * image load + render
+* foundational `.tilejam.json` load/save path for architecture
 
 **Validation**
 
@@ -124,16 +125,17 @@ Export tileset PNG and TSJ.
 ## Ticket 6: Project save/load
 
 **Goal**
-Persist project.
+Harden project persistence.
 
 **Prompt**
-Save and load `.tilejam.json`.
+Complete save/load behavior for full editor state.
 
 **Deliverables**
 
-* save project
-* load project
+* save project for all editable fields
+* load project for all editable fields
+* restore full editor session state needed for editing workflow
 
 **Validation**
 
-* project restores state corre
+* project restores state correctly

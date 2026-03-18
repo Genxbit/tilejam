@@ -8,12 +8,13 @@ Tilejam is a tool for converting messy or AI-generated images into clean, grid-a
 
 ## Workflow
 
-1. load source image
-2. set tile size (8 / 16 / 32)
-3. select source region
-4. assign to tile
-5. adjust (move, scale, flip)
-6. export tileset
+1. create or open project
+2. load source image
+3. set tile size (8 / 16 / 32)
+4. select source region
+5. assign to tile
+6. adjust (move, scale, flip)
+7. save project or export tileset
 
 ---
 
@@ -25,6 +26,7 @@ Tilejam is a tool for converting messy or AI-generated images into clean, grid-a
 * source → tile workflow
 * grid-based editing
 * per-tile transforms
+* project JSON load/save
 * seamless tiling support
 * PNG export
 * TSJ export
@@ -35,7 +37,7 @@ Tilejam is a tool for converting messy or AI-generated images into clean, grid-a
 
 * `tileset.png`
 * `tileset.tsj`
-* `project.tilejam.json`
+* `.tilejam.json`
 
 ---
 
@@ -45,6 +47,7 @@ Tilejam is a tool for converting messy or AI-generated images into clean, grid-a
 * output must be production-ready
 * behavior must be explicit
 * no hidden state
+* project data must stay editable and serializable
 
 ---
 

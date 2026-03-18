@@ -38,6 +38,7 @@ docs/
   FORMATS.md
 
 frontend/
+  public/
   src/
     app/
     data/
@@ -85,6 +86,7 @@ Keep behavior inside its domain.
 * `rendering/` = draw only
 * `ui/` = input + panels
 * `io/` = save/load/export
+* `public/` = bundled sample assets and default project files
 
 Rules:
 
@@ -117,7 +119,8 @@ Rule of thumb:
 
 **SourceImage**
 
-* owns image data
+* project stores source image reference as serializable data
+* runtime-loaded image asset stays outside serializable project data
 * region queries live in a system
 
 **TileGrid**
@@ -150,12 +153,13 @@ Rule of thumb:
 * full editable state
 * fully serializable
 * matches `docs/FORMATS.md`
+* runtime-only browser state must stay separate from project data
 
 ---
 
 ## Data Model Rule
 
-State must fully describe:
+Serializable project state must fully describe:
 
 * source image
 * grid
@@ -163,6 +167,14 @@ State must fully describe:
 * transforms
 
 No hidden state.
+
+Allowed runtime-only state:
+
+* decoded browser image objects
+* transient UI status messages
+* browser file handles or object URLs
+
+Runtime-only state must not change export rules or project meaning.
 
 ---
 
@@ -173,6 +185,7 @@ No hidden state.
 * avoid duplicated logic
 * avoid callback chains
 * prefer direct dependencies
+* project parsing and serialization live in `io/`
 
 ---
 
@@ -213,6 +226,11 @@ Prepare for later:
 `.tilejam.json` is the editable source of truth.
 
 It must match `docs/FORMATS.md`.
+
+Notes:
+
+* checked-in sample or default projects may live in `frontend/public/`
+* browser file overwrite behavior is an IO concern, not a project-format concern
 
 ---
 

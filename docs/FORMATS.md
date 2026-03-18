@@ -53,6 +53,7 @@ Editable source of truth.
 * no hidden state
 * defines full output
 * transforms applied at export
+* `sourceImage` is a string reference, not embedded image data
 
 ---
 
@@ -115,6 +116,8 @@ Standard Tiled tileset.
 * project = editable
 * PNG = visual truth
 * TSJ = interoperability
+
+`sourceImage` may be stored as a relative path or app-served path.
 
 ---
 
