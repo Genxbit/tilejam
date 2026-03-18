@@ -2,7 +2,8 @@ import type { ProjectState } from "../types/project";
 import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
-import { assignSelectionToOutputTile } from "../systems/tilePlacementSystem";
+import { clearSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
+import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile } from "../systems/tilePlacementSystem";
 import { clearSelectionState, commitDraftSourceSelection, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import { clearSourceImageAsset, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
@@ -18,13 +19,22 @@ import {
 } from "../systems/workspaceSystem";
 import { createShell } from "../ui/createShell";
 
+type HistoryEntry = {
+  project: ProjectState["project"];
+  selectedOutputTileId: number | null;
+};
+
 export function createAppController(root: HTMLElement, state: ProjectState) {
   let resizeObserver: ResizeObserver | null = null;
   let activePointerId: number | null = null;
   let sourceDragAnchor: { col: number; row: number } | null = null;
-  let dragMode: "select" | "pan" | null = null;
+  let dragMode: "select" | "pan" | "move-tile" | null = null;
   let panPanel: "source" | "output" | null = null;
   let lastPointerPoint: { x: number; y: number } | null = null;
+  let movingTileId: number | null = null;
+  let movingTileOrigin: { col: number; row: number } | null = null;
+  const undoStack: HistoryEntry[] = [];
+  const redoStack: HistoryEntry[] = [];
 
   const shell = createShell({
     root,
@@ -41,6 +51,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.projectFileName = file.name;
         state.session.projectFileHandle = null;
         await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
+        undoStack.length = 0;
+        redoStack.length = 0;
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown project import error.";
         state.session.message = `Project import failed: ${message}`;
@@ -75,6 +87,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.projectFileName = file.name;
         state.session.projectFileHandle = handle;
         await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
+        undoStack.length = 0;
+        redoStack.length = 0;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return true;
@@ -121,12 +135,14 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       render();
     },
     onSourceGridSizeChanged: (tileSize) => {
+      recordHistory();
       setSourceGridTileSize(state, tileSize);
       clearSelectionState(state);
       state.session.message = `Source grid set to ${tileSize} x ${tileSize}.`;
       render();
     },
     onOutputTileSizeChanged: (tileSize) => {
+      recordHistory();
       setOutputTileSize(state, tileSize);
       const grid = getOutputGridMetrics(state.project);
       const outputPixels = getProjectPixelSize(state.project);
@@ -134,15 +150,53 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       render();
     },
     onOutputWidthChanged: (width) => {
+      recordHistory();
       setOutputImageSize(state, width, state.project.outputHeight);
       const grid = getOutputGridMetrics(state.project);
       state.session.message = `Output image width set to ${state.project.outputWidth}. Output grid is ${grid.columns} x ${grid.rows}.`;
       render();
     },
     onOutputHeightChanged: (height) => {
+      recordHistory();
       setOutputImageSize(state, state.project.outputWidth, height);
       const grid = getOutputGridMetrics(state.project);
       state.session.message = `Output image height set to ${state.project.outputHeight}. Output grid is ${grid.columns} x ${grid.rows}.`;
+      render();
+    },
+    onSelectedTileUpdated: (patch) => {
+      recordHistory();
+      const tile = updateSelectedOutputTile(state, patch);
+
+      if (!tile) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before editing it.";
+        render();
+        return;
+      }
+
+      state.session.message = `Updated tile ${tile.id} at ${tile.destCol}, ${tile.destRow}.`;
+      render();
+    },
+    onUndo: () => {
+      applyUndo();
+    },
+    onRedo: () => {
+      applyRedo();
+    },
+    onCopyAllTiles: () => {
+      recordHistory();
+      clearSelectedOutputTile(state);
+      const placed = assignAllSourceTilesToOutputGrid(state);
+
+      if (placed < 1) {
+        undoStack.pop();
+        state.session.message = "Load a source image before copying all source tiles.";
+      } else {
+        state.session.sourceSelection = null;
+        state.session.draftSourceSelection = null;
+        state.session.message = `Copied ${placed} source tile${placed === 1 ? "" : "s"} into the output grid.`;
+      }
+
       render();
     },
   });
@@ -150,6 +204,41 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
   function render(): void {
     shell.update(state);
     renderWorkspace(shell.canvas, state);
+  }
+
+  function recordHistory(): void {
+    undoStack.push(createHistoryEntry(state));
+    redoStack.length = 0;
+  }
+
+  function applyUndo(): void {
+    const entry = undoStack.pop();
+
+    if (!entry) {
+      state.session.message = "Nothing to undo.";
+      render();
+      return;
+    }
+
+    redoStack.push(createHistoryEntry(state));
+    restoreHistoryEntry(state, entry);
+    state.session.message = "Undid the last change.";
+    render();
+  }
+
+  function applyRedo(): void {
+    const entry = redoStack.pop();
+
+    if (!entry) {
+      state.session.message = "Nothing to redo.";
+      render();
+      return;
+    }
+
+    undoStack.push(createHistoryEntry(state));
+    restoreHistoryEntry(state, entry);
+    state.session.message = "Redid the last change.";
+    render();
   }
 
   function handlePointerDown(event: PointerEvent): void {
@@ -196,11 +285,23 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     setHoveredOutputTile(state, outputHit);
 
     if (!state.session.sourceSelection) {
-      state.session.message = "Select one or more source tiles first, then click the output grid to place them.";
+      const selectedTile = selectOutputTileAtCell(state, outputHit.col, outputHit.row);
+      if (selectedTile) {
+        activePointerId = event.pointerId;
+        dragMode = "move-tile";
+        movingTileId = selectedTile.id;
+        movingTileOrigin = { col: selectedTile.destCol, row: selectedTile.destRow };
+        shell.canvas.setPointerCapture(event.pointerId);
+        state.session.message = `Selected tile ${selectedTile.id} at ${selectedTile.destCol}, ${selectedTile.destRow}. Drag to move it.`;
+      } else {
+        clearSelectedOutputTile(state);
+        state.session.message = "No placed tile at that output cell.";
+      }
       render();
       return;
     }
 
+    recordHistory();
     const assignedCount = assignSelectionToOutputTile(
       state,
       state.session.sourceSelection,
@@ -209,10 +310,12 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     );
 
     if (assignedCount > 0) {
+      clearSelectedOutputTile(state);
       state.session.sourceSelection = null;
       state.session.draftSourceSelection = null;
       state.session.message = `Placed ${assignedCount} tile${assignedCount === 1 ? "" : "s"} starting at output tile ${outputHit.col}, ${outputHit.row}. Select source tiles again for the next placement.`;
     } else {
+      undoStack.pop();
       state.session.message = "Selection did not fit inside the output grid.";
     }
     render();
@@ -240,6 +343,16 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         render();
       }
 
+      return;
+    }
+
+    if (activePointerId === event.pointerId && dragMode === "move-tile" && movingTileId !== null) {
+      const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
+      setHoveredOutputTile(state, outputHit);
+      if (outputHit) {
+        state.session.message = `Move tile to ${outputHit.col}, ${outputHit.row}.`;
+      }
+      render();
       return;
     }
 
@@ -272,6 +385,42 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         shell.canvas.releasePointerCapture(event.pointerId);
       }
 
+      render();
+      return;
+    }
+
+    if (dragMode === "move-tile" && movingTileId !== null) {
+      const point = getCanvasPoint(shell.canvas, event);
+      const layout = getWorkspaceLayout(shell.canvas.width, shell.canvas.height, state);
+      const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
+      const shouldMove = outputHit && movingTileOrigin
+        ? outputHit.col !== movingTileOrigin.col || outputHit.row !== movingTileOrigin.row
+        : false;
+
+      if (shouldMove) {
+        recordHistory();
+      }
+
+      const movedTile = outputHit ? moveTileToCell(state, movingTileId, outputHit.col, outputHit.row) : null;
+      const moved = movedTile && movingTileOrigin
+        ? movedTile.destCol !== movingTileOrigin.col || movedTile.destRow !== movingTileOrigin.row
+        : false;
+
+      activePointerId = null;
+      dragMode = null;
+      movingTileId = null;
+      movingTileOrigin = null;
+      lastPointerPoint = null;
+
+      if (shell.canvas.hasPointerCapture(event.pointerId)) {
+        shell.canvas.releasePointerCapture(event.pointerId);
+      }
+
+      state.session.message = movedTile
+        ? moved
+          ? `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`
+          : `Selected tile ${movedTile.id} at ${movedTile.destCol}, ${movedTile.destRow}.`
+        : "Tile move cancelled.";
       render();
       return;
     }
@@ -309,6 +458,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     dragMode = null;
     panPanel = null;
     sourceDragAnchor = null;
+    movingTileId = null;
+    movingTileOrigin = null;
     lastPointerPoint = null;
 
     if (shell.canvas.hasPointerCapture(event.pointerId)) {
@@ -340,10 +491,32 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
   }
 
   function handleKeyDown(event: KeyboardEvent): void {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) {
+      return;
+    }
+
     if ((event.code === "Digit0" || event.code === "Numpad0") && state.session.hoveredPanel) {
       resetWorkspaceView(state, state.session.hoveredPanel);
       state.session.message = `${state.session.hoveredPanel === "source" ? "Source" : "Output"} view reset.`;
       render();
+      return;
+    }
+
+    const movement =
+      event.code === "ArrowLeft" ? { col: -1, row: 0 } :
+      event.code === "ArrowRight" ? { col: 1, row: 0 } :
+      event.code === "ArrowUp" ? { col: 0, row: -1 } :
+      event.code === "ArrowDown" ? { col: 0, row: 1 } :
+      null;
+
+    if (movement) {
+      const movedTile = moveSelectedOutputTileBy(state, movement.col, movement.row);
+
+      if (movedTile) {
+        event.preventDefault();
+        state.session.message = `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`;
+        render();
+      }
     }
   }
 
@@ -370,6 +543,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.projectFileHandle = null;
         const project = await loadProjectFromUrl("/projects/latest.tilejam.json");
         await loadProjectIntoState(state, project, "Loaded default project.");
+        undoStack.length = 0;
+        redoStack.length = 0;
       } catch {
         await loadSourceImageFromUrl(state, "/sample-source.svg", "sample-source.svg");
         state.project.sourceTileWidth = 32;
@@ -379,6 +554,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.project.outputWidth = 1024;
         state.project.outputHeight = 1024;
         state.session.message = "Loaded fallback sample image with default source/output grid settings.";
+        undoStack.length = 0;
+        redoStack.length = 0;
       }
 
       render();
@@ -386,9 +563,22 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
   };
 }
 
+function createHistoryEntry(state: ProjectState): HistoryEntry {
+  return {
+    project: JSON.parse(JSON.stringify(state.project)) as ProjectState["project"],
+    selectedOutputTileId: state.session.selectedOutputTileId,
+  };
+}
+
+function restoreHistoryEntry(state: ProjectState, entry: HistoryEntry): void {
+  state.project = JSON.parse(JSON.stringify(entry.project)) as ProjectState["project"];
+  state.session.selectedOutputTileId = entry.selectedOutputTileId;
+}
+
 async function loadProjectIntoState(state: ProjectState, project: ProjectState["project"], messagePrefix: string): Promise<void> {
   state.project = project;
   clearSelectionState(state);
+  clearSelectedOutputTile(state);
 
   if (!project.sourceImage) {
     clearSourceImageAsset(state);

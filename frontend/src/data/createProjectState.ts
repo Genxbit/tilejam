@@ -27,6 +27,7 @@ export function createProjectState(): ProjectState {
       sourceSelection: null,
       draftSourceSelection: null,
       hoveredOutputTile: null,
+      selectedOutputTileId: null,
       hoveredPanel: null,
       sourceCamera: {
         zoom: 1,

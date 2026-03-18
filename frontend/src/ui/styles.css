@@ -60,6 +60,8 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  height: 100vh;
+  overflow-y: auto;
   padding: 28px 24px;
   border-left: 1px solid rgba(131, 169, 190, 0.16);
   background: rgba(7, 16, 22, 0.72);
@@ -70,6 +72,35 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.sidebar-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sidebar-tab {
+  min-height: 42px;
+  border: 1px solid rgba(131, 169, 190, 0.22);
+  border-radius: 12px;
+  color: #b8c8d3;
+  background: rgba(9, 17, 25, 0.52);
+}
+
+.sidebar-tab[data-active="true"] {
+  border-color: rgba(119, 177, 209, 0.5);
+  color: #edf4fa;
+  background: rgba(31, 63, 84, 0.88);
+}
+
+.sidebar-tab-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.sidebar-tab-panel[hidden] {
+  display: none;
 }
 
 .field-group {
@@ -126,6 +157,62 @@ textarea {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.editor-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.editor-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.editor-tab {
+  min-height: 40px;
+  border: 1px solid rgba(131, 169, 190, 0.22);
+  border-radius: 12px;
+  color: #b8c8d3;
+  background: rgba(9, 17, 25, 0.52);
+}
+
+.editor-tab[data-active="true"] {
+  border-color: rgba(119, 177, 209, 0.5);
+  color: #edf4fa;
+  background: rgba(31, 63, 84, 0.88);
+}
+
+.editor-tab-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.editor-tab-panel[hidden] {
+  display: none;
+}
+
+.toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.checkbox-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(131, 169, 190, 0.2);
+  border-radius: 14px;
+  background: rgba(9, 17, 25, 0.6);
+  color: #edf4fa;
+}
+
+.checkbox-field input {
+  margin: 0;
 }
 
 .number-field {

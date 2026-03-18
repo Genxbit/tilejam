@@ -76,6 +76,12 @@ function parseTile(value: unknown, index: number): TilePlacement {
     scaleY: readPositiveNumber(value.scaleY, `tiles[${index}].scaleY`),
     flipX: readBoolean(value.flipX, `tiles[${index}].flipX`),
     flipY: readBoolean(value.flipY, `tiles[${index}].flipY`),
+    brightness: readOptionalNumber(value.brightness, 0, `tiles[${index}].brightness`),
+    contrast: readOptionalPositiveNumber(value.contrast, 1, `tiles[${index}].contrast`),
+    saturation: readOptionalPositiveNumber(value.saturation, 1, `tiles[${index}].saturation`),
+    tintColor: readOptionalNullableString(value.tintColor, null, `tiles[${index}].tintColor`),
+    filterMode: readOptionalFilterMode(value.filterMode, "nearest", `tiles[${index}].filterMode`),
+    pixelSnap: readOptionalBoolean(value.pixelSnap, true, `tiles[${index}].pixelSnap`),
     name: readString(value.name, `tiles[${index}].name`),
     tags: readStringArray(value.tags, `tiles[${index}].tags`),
     collision: readString(value.collision, `tiles[${index}].collision`),
@@ -190,9 +196,53 @@ function readPositiveNumber(value: unknown, path: string): number {
   return result;
 }
 
+function readOptionalPositiveNumber(value: unknown, fallback: number, path: string): number {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return readPositiveNumber(value, path);
+}
+
+function readOptionalNumber(value: unknown, fallback: number, path: string): number {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return readNumber(value, path);
+}
+
 function readBoolean(value: unknown, path: string): boolean {
   if (typeof value !== "boolean") {
     throw new Error(`${path} must be a boolean.`);
+  }
+
+  return value;
+}
+
+function readOptionalBoolean(value: unknown, fallback: boolean, path: string): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return readBoolean(value, path);
+}
+
+function readOptionalNullableString(value: unknown, fallback: string | null, path: string): string | null {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return readNullableString(value, path);
+}
+
+function readOptionalFilterMode(value: unknown, fallback: "nearest" | "linear", path: string): "nearest" | "linear" {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (value !== "nearest" && value !== "linear") {
+    throw new Error(`${path} must be "nearest" or "linear".`);
   }
 
   return value;

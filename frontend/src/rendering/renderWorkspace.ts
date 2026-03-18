@@ -1,4 +1,5 @@
 import type { ProjectState } from "../types/project";
+import { getSelectedOutputTile } from "../systems/tileEditorSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
 import { getOutputGridMetrics, getProjectPixelSize, getSourceGridMetrics } from "../systems/tileGridSystem";
 import { getWorkspaceLayout, type OutputViewport, type SourceViewport } from "../systems/workspaceSystem";
@@ -15,6 +16,8 @@ const SELECTION_FILL = "rgba(88, 201, 255, 0.22)";
 const SELECTION_STROKE = "#6be2ff";
 const HOVER_FILL = "rgba(242, 193, 78, 0.18)";
 const PLACEMENT_STROKE = "rgba(255, 214, 122, 0.45)";
+const SELECTED_TILE_STROKE = "#77f1b2";
+const SELECTED_TILE_FILL = "rgba(119, 241, 178, 0.12)";
 const VIEW_HINT = "rgba(198, 215, 229, 0.72)";
 
 export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState): void {
@@ -173,6 +176,7 @@ function drawOutputGrid(
   context.clip();
   drawPlacedTiles(context, state, viewport);
   drawHoveredOutputTile(context, state, viewport);
+  drawSelectedOutputTile(context, state, viewport);
   context.restore();
   context.strokeStyle = GRID_STRONG;
   context.lineWidth = 1.5;
@@ -242,21 +246,24 @@ function drawPlacedTiles(
   for (const tile of state.project.tiles) {
     const cellX = viewport.contentX + tile.destCol * viewport.cellWidth;
     const cellY = viewport.contentY + tile.destRow * viewport.cellHeight;
-    const drawX = cellX + tile.offsetX * viewport.scaleX;
-    const drawY = cellY + tile.offsetY * viewport.scaleY;
-    const drawWidth = tile.sourceRect.w * tile.scaleX * viewport.scaleX;
-    const drawHeight = tile.sourceRect.h * tile.scaleY * viewport.scaleY;
+    const rawDrawX = cellX + tile.offsetX * viewport.scaleX;
+    const rawDrawY = cellY + tile.offsetY * viewport.scaleY;
+    const rawDrawWidth = tile.sourceRect.w * tile.scaleX * viewport.scaleX;
+    const rawDrawHeight = tile.sourceRect.h * tile.scaleY * viewport.scaleY;
+    const drawX = tile.pixelSnap ? Math.round(rawDrawX) : rawDrawX;
+    const drawY = tile.pixelSnap ? Math.round(rawDrawY) : rawDrawY;
+    const drawWidth = tile.pixelSnap ? Math.round(rawDrawWidth) : rawDrawWidth;
+    const drawHeight = tile.pixelSnap ? Math.round(rawDrawHeight) : rawDrawHeight;
 
     context.save();
     context.beginPath();
     context.rect(cellX, cellY, viewport.cellWidth, viewport.cellHeight);
     context.clip();
+    context.filter = buildTileFilter(tile);
+    context.imageSmoothingEnabled = tile.filterMode === "linear" && !tile.pixelSnap;
 
     if (tile.flipX || tile.flipY) {
-      context.translate(
-        tile.flipX ? drawX + drawWidth : 0,
-        tile.flipY ? drawY + drawHeight : 0,
-      );
+      context.translate(drawX + drawWidth / 2, drawY + drawHeight / 2);
       context.scale(tile.flipX ? -1 : 1, tile.flipY ? -1 : 1);
       context.drawImage(
         image,
@@ -264,8 +271,8 @@ function drawPlacedTiles(
         tile.sourceRect.y,
         tile.sourceRect.w,
         tile.sourceRect.h,
-        tile.flipX ? 0 : drawX,
-        tile.flipY ? 0 : drawY,
+        -drawWidth / 2,
+        -drawHeight / 2,
         drawWidth,
         drawHeight,
       );
@@ -283,11 +290,39 @@ function drawPlacedTiles(
       );
     }
 
+    if (tile.tintColor) {
+      context.filter = "none";
+      context.globalCompositeOperation = "source-atop";
+      context.fillStyle = tile.tintColor;
+      context.fillRect(cellX, cellY, viewport.cellWidth, viewport.cellHeight);
+      context.globalCompositeOperation = "source-over";
+    }
+
     context.strokeStyle = PLACEMENT_STROKE;
     context.lineWidth = 1;
     context.strokeRect(cellX + 0.5, cellY + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
     context.restore();
   }
+}
+
+function drawSelectedOutputTile(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  const selectedTile = getSelectedOutputTile(state);
+
+  if (!selectedTile) {
+    return;
+  }
+
+  const x = viewport.contentX + selectedTile.destCol * viewport.cellWidth;
+  const y = viewport.contentY + selectedTile.destRow * viewport.cellHeight;
+  context.fillStyle = SELECTED_TILE_FILL;
+  context.fillRect(x, y, viewport.cellWidth, viewport.cellHeight);
+  context.strokeStyle = SELECTED_TILE_STROKE;
+  context.lineWidth = 2;
+  context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
 }
 
 function drawHoveredOutputTile(
@@ -309,4 +344,9 @@ function drawHoveredOutputTile(
   context.strokeStyle = SELECTION_STROKE;
   context.lineWidth = 1.5;
   context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
+}
+
+function buildTileFilter(tile: ProjectState["project"]["tiles"][number]): string {
+  const brightness = Math.max(0, 1 + tile.brightness);
+  return `brightness(${brightness}) contrast(${tile.contrast}) saturate(${tile.saturation})`;
 }

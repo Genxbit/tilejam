@@ -31,6 +31,7 @@ export type SessionState = {
   sourceSelection: SourceSelection | null;
   draftSourceSelection: SourceSelection | null;
   hoveredOutputTile: GridCoordinate | null;
+  selectedOutputTileId: number | null;
   hoveredPanel: WorkspacePanel | null;
   sourceCamera: CameraState;
   outputCamera: CameraState;
@@ -72,10 +73,18 @@ export type TilePlacement = {
   scaleY: number;
   flipX: boolean;
   flipY: boolean;
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  tintColor: string | null;
+  filterMode: TileFilterMode;
+  pixelSnap: boolean;
   name: string;
   tags: string[];
   collision: string;
 };
+
+export type TileFilterMode = "nearest" | "linear";
 
 export type SourceRect = {
   x: number;
