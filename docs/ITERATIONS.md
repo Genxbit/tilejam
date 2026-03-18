@@ -66,6 +66,9 @@ Implement source grid spacing and target/output grid configuration.
 
 ## Ticket 3: Selection + placement (mouse)
 
+**Status**
+Completed
+
 **Goal**
 Move data from source tilesheet → target tilesheet.
 
@@ -90,6 +93,9 @@ Implement source tile selection and assign the selected tiles to target/output t
 ---
 
 ## Ticket 4: Transform + editor panel (mouse + keyboard)
+
+**Status**
+Completed
 
 **Goal**
 Repair and organize placed target/output tiles.
@@ -125,6 +131,9 @@ Add output tile selection, full editor panel controls, seam-repair adjustments, 
 ---
 
 ## Ticket 5: Export
+
+**Status**
+Completed
 
 **Goal**
 Generate usable output.
