@@ -40,6 +40,9 @@ Set up frontend app with canvas, basic panels, and load/render an image.
 
 ## Ticket 2: Tile grid
 
+**Status**
+Completed
+
 **Goal**
 Add grid system.
 
