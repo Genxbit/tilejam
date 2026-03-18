@@ -1,5 +1,7 @@
 import type { ProjectState } from "../types/project";
 import { getOutputGridMetrics, getProjectIndexRange, getProjectPixelSize, getProjectTileCount, TILE_SIZE_OPTIONS } from "../systems/tileGridSystem";
+import { getAssignedTileCount } from "../systems/tilePlacementSystem";
+import { getVisibleSelection } from "../systems/selectionSystem";
 
 type ShellOptions = {
   root: HTMLElement;
@@ -237,10 +239,17 @@ export function createShell({
     ["Source", state.sourceImageAsset.name ?? state.project.sourceImage ?? "Not loaded"],
     ["Resolution", `${state.sourceImageAsset.width} x ${state.sourceImageAsset.height}`],
     ["Source grid", `${state.project.sourceTileWidth} x ${state.project.sourceTileHeight}`],
+    [
+      "Selection",
+      getVisibleSelection(state)
+        ? `${getVisibleSelection(state)?.columns} x ${getVisibleSelection(state)?.rows} source tiles`
+        : "None",
+    ],
     ["Output tile", `${state.project.tileWidth} x ${state.project.tileHeight}`],
     ["Output grid", `${outputGrid.columns} columns x ${outputGrid.rows} rows`],
     ["Output image", `${outputPixels.width} x ${outputPixels.height}`],
-    ["Tile count", `${getProjectTileCount(state.project)}`],
+    ["Assigned tiles", `${getAssignedTileCount(state)}`],
+    ["Grid capacity", `${getProjectTileCount(state.project)}`],
     ["Tile IDs", getProjectIndexRange(state.project)],
   ].map(([label, value]) => createMetaItem(label, value));
 
@@ -260,13 +269,16 @@ export function createShell({
       items[0].description.textContent = nextState.sourceImageAsset.name ?? nextState.project.sourceImage ?? "Not loaded";
       items[1].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
       items[2].description.textContent = `${nextState.project.sourceTileWidth} x ${nextState.project.sourceTileHeight}`;
-      items[3].description.textContent = `${nextState.project.tileWidth} x ${nextState.project.tileHeight}`;
+      const selection = getVisibleSelection(nextState);
+      items[3].description.textContent = selection ? `${selection.columns} x ${selection.rows} source tiles` : "None";
+      items[4].description.textContent = `${nextState.project.tileWidth} x ${nextState.project.tileHeight}`;
       const nextOutputGrid = getOutputGridMetrics(nextState.project);
-      items[4].description.textContent = `${nextOutputGrid.columns} columns x ${nextOutputGrid.rows} rows`;
+      items[5].description.textContent = `${nextOutputGrid.columns} columns x ${nextOutputGrid.rows} rows`;
       const nextOutputPixels = getProjectPixelSize(nextState.project);
-      items[5].description.textContent = `${nextOutputPixels.width} x ${nextOutputPixels.height}`;
-      items[6].description.textContent = `${getProjectTileCount(nextState.project)}`;
-      items[7].description.textContent = getProjectIndexRange(nextState.project);
+      items[6].description.textContent = `${nextOutputPixels.width} x ${nextOutputPixels.height}`;
+      items[7].description.textContent = `${getAssignedTileCount(nextState)}`;
+      items[8].description.textContent = `${getProjectTileCount(nextState.project)}`;
+      items[9].description.textContent = getProjectIndexRange(nextState.project);
       sourceGridSelect.value = `${nextState.project.sourceTileWidth}`;
       outputTileSelect.value = `${nextState.project.tileWidth}`;
       widthInput.value = `${nextState.project.outputWidth}`;

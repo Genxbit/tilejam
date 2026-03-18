@@ -28,9 +28,38 @@ export type SessionState = {
   message: string | null;
   projectFileName: string | null;
   projectFileHandle: FileSystemFileHandle | null;
+  sourceSelection: SourceSelection | null;
+  draftSourceSelection: SourceSelection | null;
+  hoveredOutputTile: GridCoordinate | null;
+  hoveredPanel: WorkspacePanel | null;
+  sourceCamera: CameraState;
+  outputCamera: CameraState;
 };
 
 export type TileSize = 8 | 16 | 32 | 64;
+
+export type GridCoordinate = {
+  col: number;
+  row: number;
+};
+
+export type WorkspacePanel = "source" | "output";
+
+export type CameraState = {
+  zoom: number;
+  panX: number;
+  panY: number;
+};
+
+export type SourceSelection = {
+  startCol: number;
+  startRow: number;
+  endCol: number;
+  endRow: number;
+  columns: number;
+  rows: number;
+  sourceRect: SourceRect;
+};
 
 export type TilePlacement = {
   id: number;

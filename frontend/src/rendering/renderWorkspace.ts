@@ -1,5 +1,7 @@
 import type { ProjectState } from "../types/project";
+import { getVisibleSelection } from "../systems/selectionSystem";
 import { getOutputGridMetrics, getProjectPixelSize, getSourceGridMetrics } from "../systems/tileGridSystem";
+import { getWorkspaceLayout, type OutputViewport, type SourceViewport } from "../systems/workspaceSystem";
 
 const BACKGROUND = "#12202f";
 const BORDER = "#3e6d89";
@@ -9,6 +11,11 @@ const GRID = "rgba(237, 244, 250, 0.22)";
 const GRID_STRONG = "rgba(125, 173, 199, 0.55)";
 const OUTPUT_FILL = "#101c28";
 const OUTPUT_GRID = "rgba(242, 193, 78, 0.28)";
+const SELECTION_FILL = "rgba(88, 201, 255, 0.22)";
+const SELECTION_STROKE = "#6be2ff";
+const HOVER_FILL = "rgba(242, 193, 78, 0.18)";
+const PLACEMENT_STROKE = "rgba(255, 214, 122, 0.45)";
+const VIEW_HINT = "rgba(198, 215, 229, 0.72)";
 
 export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState): void {
   const parent = canvas.parentElement;
@@ -36,52 +43,51 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
   context.fillRect(0, 0, width, height);
 
   const { image } = state.sourceImageAsset;
-
-  const padding = 24;
-  const gutter = 24;
-  const panelWidth = Math.floor((width - padding * 2 - gutter) / 2);
-  const panelHeight = height - padding * 2;
-  const sourcePanel = { x: padding, y: padding, width: panelWidth, height: panelHeight };
-  const outputPanel = { x: padding + panelWidth + gutter, y: padding, width: panelWidth, height: panelHeight };
+  const layout = getWorkspaceLayout(width, height, state);
+  const { sourcePanel, outputPanel } = layout;
 
   drawPanel(context, sourcePanel);
   drawPanel(context, outputPanel);
-  drawOutputGrid(context, state, outputPanel);
+  drawOutputGrid(context, state, layout.outputViewport);
 
   if (!image) {
     drawEmptyState(context, sourcePanel);
     return;
   }
 
-  const drawWidth = sourcePanel.width - 32;
-  const drawHeight = sourcePanel.height - 32;
-  const scale = Math.min(drawWidth / image.width, drawHeight / image.height);
-  const imageWidth = Math.max(1, Math.floor(image.width * scale));
-  const imageHeight = Math.max(1, Math.floor(image.height * scale));
-  const x = sourcePanel.x + Math.floor((sourcePanel.width - imageWidth) / 2);
-  const y = sourcePanel.y + Math.floor((sourcePanel.height - imageHeight) / 2);
+  const viewport = layout.sourceViewport;
+
+  if (!viewport) {
+    drawEmptyState(context, sourcePanel);
+    return;
+  }
 
   context.fillStyle = EMPTY_PANEL;
-  context.fillRect(x - 8, y - 8, imageWidth + 16, imageHeight + 16);
-  context.drawImage(image, x, y, imageWidth, imageHeight);
-  drawGridOverlay(context, state, x, y, imageWidth, imageHeight, image.width, image.height);
+  context.fillRect(viewport.frame.x - 8, viewport.frame.y - 8, viewport.frame.width + 16, viewport.frame.height + 16);
+  context.save();
+  context.beginPath();
+  context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+  context.clip();
+  context.drawImage(image, viewport.contentX, viewport.contentY, viewport.contentWidth, viewport.contentHeight);
+  drawGridOverlay(context, state, viewport, image.width, image.height);
+  drawSourceSelection(context, state, viewport);
+  context.restore();
   context.strokeStyle = BORDER;
   context.lineWidth = 2;
-  context.strokeRect(x - 8, y - 8, imageWidth + 16, imageHeight + 16);
+  context.strokeRect(viewport.frame.x - 8, viewport.frame.y - 8, viewport.frame.width + 16, viewport.frame.height + 16);
 
   context.fillStyle = LABEL;
   context.font = "12px monospace";
   const label = state.sourceImageAsset.name ?? state.project.sourceImage ?? "image";
   context.fillText(`Source: ${label} · ${image.width} x ${image.height}`, sourcePanel.x + 12, sourcePanel.y + 18);
+  context.fillStyle = VIEW_HINT;
+  context.fillText(`Zoom ${state.session.sourceCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`, sourcePanel.x + 12, sourcePanel.y + sourcePanel.height - 12);
 }
 
 function drawGridOverlay(
   context: CanvasRenderingContext2D,
   state: ProjectState,
-  x: number,
-  y: number,
-  imageWidth: number,
-  imageHeight: number,
+  viewport: SourceViewport,
   sourceWidth: number,
   sourceHeight: number,
 ): void {
@@ -96,37 +102,31 @@ function drawGridOverlay(
     return;
   }
 
-  const cellWidth = imageWidth * (metrics.tileWidth / sourceWidth);
-  const cellHeight = imageHeight * (metrics.tileHeight / sourceHeight);
-
-  context.save();
-  context.beginPath();
-  context.rect(x, y, imageWidth, imageHeight);
-  context.clip();
+  const cellWidth = metrics.tileWidth * viewport.scaleX;
+  const cellHeight = metrics.tileHeight * viewport.scaleY;
 
   context.strokeStyle = GRID;
   context.lineWidth = 1;
 
   for (let column = 1; column < metrics.columns; column += 1) {
-    const lineX = x + Math.round(column * cellWidth) + 0.5;
+    const lineX = viewport.contentX + Math.round(column * cellWidth) + 0.5;
     context.beginPath();
-    context.moveTo(lineX, y);
-    context.lineTo(lineX, y + imageHeight);
+    context.moveTo(lineX, viewport.frame.y);
+    context.lineTo(lineX, viewport.frame.y + viewport.frame.height);
     context.stroke();
   }
 
   for (let row = 1; row < metrics.rows; row += 1) {
-    const lineY = y + Math.round(row * cellHeight) + 0.5;
+    const lineY = viewport.contentY + Math.round(row * cellHeight) + 0.5;
     context.beginPath();
-    context.moveTo(x, lineY);
-    context.lineTo(x + imageWidth, lineY);
+    context.moveTo(viewport.frame.x, lineY);
+    context.lineTo(viewport.frame.x + viewport.frame.width, lineY);
     context.stroke();
   }
 
   context.strokeStyle = GRID_STRONG;
   context.lineWidth = 1.5;
-  context.strokeRect(x + 0.5, y + 0.5, imageWidth - 1, imageHeight - 1);
-  context.restore();
+  context.strokeRect(viewport.frame.x + 0.5, viewport.frame.y + 0.5, viewport.frame.width - 1, viewport.frame.height - 1);
 }
 
 function drawEmptyState(
@@ -152,50 +152,161 @@ function drawPanel(
 function drawOutputGrid(
   context: CanvasRenderingContext2D,
   state: ProjectState,
-  panel: { x: number; y: number; width: number; height: number },
+  viewport: OutputViewport,
 ): void {
   const projectPixels = getProjectPixelSize(state.project);
   const outputGrid = getOutputGridMetrics(state.project);
-  const availableWidth = panel.width - 32;
-  const availableHeight = panel.height - 56;
-  const scale = Math.min(availableWidth / projectPixels.width, availableHeight / projectPixels.height);
-  const gridWidth = Math.max(1, Math.floor(projectPixels.width * scale));
-  const gridHeight = Math.max(1, Math.floor(projectPixels.height * scale));
-  const x = panel.x + Math.floor((panel.width - gridWidth) / 2);
-  const y = panel.y + 32 + Math.floor((panel.height - 32 - gridHeight) / 2);
-  const cellWidth = gridWidth / outputGrid.columns;
-  const cellHeight = gridHeight / outputGrid.rows;
 
   context.fillStyle = LABEL;
   context.font = "12px monospace";
   context.fillText(
     `Output: ${outputGrid.columns} x ${outputGrid.rows} tiles · ${projectPixels.width} x ${projectPixels.height}px`,
-    panel.x + 12,
-    panel.y + 18,
+    viewport.frame.x,
+    viewport.frame.y - 14,
   );
 
   context.fillStyle = OUTPUT_FILL;
-  context.fillRect(x, y, gridWidth, gridHeight);
+  context.fillRect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+  context.save();
+  context.beginPath();
+  context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+  context.clip();
+  drawPlacedTiles(context, state, viewport);
+  drawHoveredOutputTile(context, state, viewport);
+  context.restore();
   context.strokeStyle = GRID_STRONG;
   context.lineWidth = 1.5;
-  context.strokeRect(x + 0.5, y + 0.5, gridWidth - 1, gridHeight - 1);
+  context.strokeRect(viewport.frame.x + 0.5, viewport.frame.y + 0.5, viewport.frame.width - 1, viewport.frame.height - 1);
 
   context.strokeStyle = OUTPUT_GRID;
   context.lineWidth = 1;
 
   for (let column = 1; column < outputGrid.columns; column += 1) {
-    const lineX = x + Math.round(column * cellWidth) + 0.5;
+    const lineX = viewport.contentX + Math.round(column * viewport.cellWidth) + 0.5;
     context.beginPath();
-    context.moveTo(lineX, y);
-    context.lineTo(lineX, y + gridHeight);
+    context.moveTo(lineX, viewport.frame.y);
+    context.lineTo(lineX, viewport.frame.y + viewport.frame.height);
     context.stroke();
   }
 
   for (let row = 1; row < outputGrid.rows; row += 1) {
-    const lineY = y + Math.round(row * cellHeight) + 0.5;
+    const lineY = viewport.contentY + Math.round(row * viewport.cellHeight) + 0.5;
     context.beginPath();
-    context.moveTo(x, lineY);
-    context.lineTo(x + gridWidth, lineY);
+    context.moveTo(viewport.frame.x, lineY);
+    context.lineTo(viewport.frame.x + viewport.frame.width, lineY);
     context.stroke();
   }
+
+  context.fillStyle = VIEW_HINT;
+  context.fillText(
+    `Zoom ${state.session.outputCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`,
+    viewport.frame.x,
+    viewport.frame.y + viewport.frame.height + 16,
+  );
+}
+
+function drawSourceSelection(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: SourceViewport,
+): void {
+  const selection = getVisibleSelection(state);
+
+  if (!selection) {
+    return;
+  }
+
+  const x = viewport.contentX + selection.sourceRect.x * viewport.scaleX;
+  const y = viewport.contentY + selection.sourceRect.y * viewport.scaleY;
+  const width = selection.sourceRect.w * viewport.scaleX;
+  const height = selection.sourceRect.h * viewport.scaleY;
+
+  context.fillStyle = SELECTION_FILL;
+  context.fillRect(x, y, width, height);
+  context.strokeStyle = SELECTION_STROKE;
+  context.lineWidth = 2;
+  context.strokeRect(x + 0.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
+}
+
+function drawPlacedTiles(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  const image = state.sourceImageAsset.image;
+
+  if (!image) {
+    return;
+  }
+
+  for (const tile of state.project.tiles) {
+    const cellX = viewport.contentX + tile.destCol * viewport.cellWidth;
+    const cellY = viewport.contentY + tile.destRow * viewport.cellHeight;
+    const drawX = cellX + tile.offsetX * viewport.scaleX;
+    const drawY = cellY + tile.offsetY * viewport.scaleY;
+    const drawWidth = tile.sourceRect.w * tile.scaleX * viewport.scaleX;
+    const drawHeight = tile.sourceRect.h * tile.scaleY * viewport.scaleY;
+
+    context.save();
+    context.beginPath();
+    context.rect(cellX, cellY, viewport.cellWidth, viewport.cellHeight);
+    context.clip();
+
+    if (tile.flipX || tile.flipY) {
+      context.translate(
+        tile.flipX ? drawX + drawWidth : 0,
+        tile.flipY ? drawY + drawHeight : 0,
+      );
+      context.scale(tile.flipX ? -1 : 1, tile.flipY ? -1 : 1);
+      context.drawImage(
+        image,
+        tile.sourceRect.x,
+        tile.sourceRect.y,
+        tile.sourceRect.w,
+        tile.sourceRect.h,
+        tile.flipX ? 0 : drawX,
+        tile.flipY ? 0 : drawY,
+        drawWidth,
+        drawHeight,
+      );
+    } else {
+      context.drawImage(
+        image,
+        tile.sourceRect.x,
+        tile.sourceRect.y,
+        tile.sourceRect.w,
+        tile.sourceRect.h,
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight,
+      );
+    }
+
+    context.strokeStyle = PLACEMENT_STROKE;
+    context.lineWidth = 1;
+    context.strokeRect(cellX + 0.5, cellY + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
+    context.restore();
+  }
+}
+
+function drawHoveredOutputTile(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  const hoveredTile = state.session.hoveredOutputTile;
+
+  if (!hoveredTile) {
+    return;
+  }
+
+  const x = viewport.contentX + hoveredTile.col * viewport.cellWidth;
+  const y = viewport.contentY + hoveredTile.row * viewport.cellHeight;
+
+  context.fillStyle = HOVER_FILL;
+  context.fillRect(x, y, viewport.cellWidth, viewport.cellHeight);
+  context.strokeStyle = SELECTION_STROKE;
+  context.lineWidth = 1.5;
+  context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
 }

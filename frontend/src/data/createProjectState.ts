@@ -24,6 +24,20 @@ export function createProjectState(): ProjectState {
       message: "The bundled sample image is loaded on startup so the canvas stays immediately visible.",
       projectFileName: null,
       projectFileHandle: null,
+      sourceSelection: null,
+      draftSourceSelection: null,
+      hoveredOutputTile: null,
+      hoveredPanel: null,
+      sourceCamera: {
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+      },
+      outputCamera: {
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+      },
     },
   };
 }
