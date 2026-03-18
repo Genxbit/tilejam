@@ -42,10 +42,12 @@ function parseTilejamProject(value: unknown): TilejamProject {
   return {
     version: readPositiveInteger(value.version, "version"),
     sourceImage: readNullableString(value.sourceImage, "sourceImage"),
+    sourceTileWidth: readOptionalTileSize(value.sourceTileWidth, value.tileWidth, "sourceTileWidth"),
+    sourceTileHeight: readOptionalTileSize(value.sourceTileHeight, value.tileHeight, "sourceTileHeight"),
     tileWidth: readTileSize(value.tileWidth, "tileWidth"),
     tileHeight: readTileSize(value.tileHeight, "tileHeight"),
-    columns: readPositiveInteger(value.columns, "columns"),
-    rows: readPositiveInteger(value.rows, "rows"),
+    outputWidth: readOutputDimension(value.outputWidth, value.columns, value.tileWidth, "outputWidth"),
+    outputHeight: readOutputDimension(value.outputHeight, value.rows, value.tileHeight, "outputHeight"),
     tiles: readTiles(value.tiles),
   };
 }
@@ -101,6 +103,27 @@ function readTileSize(value: unknown, path: string): 8 | 16 | 32 | 64 {
   }
 
   return size;
+}
+
+function readOptionalTileSize(value: unknown, fallbackValue: unknown, path: string): 8 | 16 | 32 | 64 {
+  if (value === undefined) {
+    return readTileSize(fallbackValue, path);
+  }
+
+  return readTileSize(value, path);
+}
+
+function readOutputDimension(
+  value: unknown,
+  fallbackGridCount: unknown,
+  tileSize: unknown,
+  path: string,
+): number {
+  if (value === undefined) {
+    return readPositiveInteger(fallbackGridCount, path.replace("output", "").toLowerCase()) * readTileSize(tileSize, `${path}.tileSize`);
+  }
+
+  return readPositiveInteger(value, path);
 }
 
 function readString(value: unknown, path: string): string {

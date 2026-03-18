@@ -1,9 +1,11 @@
 {
   "version": 1,
-  "sourceImage": "test-tile-dungeon.png",
+  "sourceImage": "test-tile-1.png",
+  "sourceTileWidth": 32,
+  "sourceTileHeight": 32,
   "tileWidth": 32,
   "tileHeight": 32,
-  "columns": 4,
-  "rows": 2,
+  "outputWidth": 1024,
+  "outputHeight": 1024,
   "tiles": []
 }

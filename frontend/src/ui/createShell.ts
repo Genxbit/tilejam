@@ -1,5 +1,5 @@
 import type { ProjectState } from "../types/project";
-import { getProjectIndexRange, getProjectTileCount, TILE_SIZE_OPTIONS } from "../systems/tileGridSystem";
+import { getOutputGridMetrics, getProjectIndexRange, getProjectPixelSize, getProjectTileCount, TILE_SIZE_OPTIONS } from "../systems/tileGridSystem";
 
 type ShellOptions = {
   root: HTMLElement;
@@ -8,7 +8,10 @@ type ShellOptions = {
   onProjectSelected: (file: File) => Promise<void>;
   onOpenProject: () => Promise<boolean>;
   onSaveProject: () => Promise<void>;
-  onTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
+  onSourceGridSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
+  onOutputTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
+  onOutputWidthChanged: (width: number) => void;
+  onOutputHeightChanged: (height: number) => void;
 };
 
 type Shell = {
@@ -23,7 +26,10 @@ export function createShell({
   onProjectSelected,
   onOpenProject,
   onSaveProject,
-  onTileSizeChanged,
+  onSourceGridSizeChanged,
+  onOutputTileSizeChanged,
+  onOutputWidthChanged,
+  onOutputHeightChanged,
 }: ShellOptions): Shell {
   root.innerHTML = "";
 
@@ -52,7 +58,7 @@ export function createShell({
 
   const intro = document.createElement("p");
   intro.className = "panel-copy";
-  intro.textContent = "Load a source image, review its dimensions, and prepare the workspace for grid-based tile editing.";
+  intro.textContent = "Configure the source tilesheet grid and the target/output tilesheet before moving tiles across.";
 
   const inputLabel = document.createElement("label");
   inputLabel.className = "file-input";
@@ -116,40 +122,124 @@ export function createShell({
   actions.className = "panel-actions";
   actions.append(inputLabel, projectInputLabel, saveProjectButton);
 
-  const tileSizeField = document.createElement("label");
-  tileSizeField.className = "field-group";
+  const sourceGridField = document.createElement("label");
+  sourceGridField.className = "field-group";
 
-  const tileSizeLabel = document.createElement("span");
-  tileSizeLabel.className = "field-label";
-  tileSizeLabel.textContent = "Tile size";
+  const sourceGridLabel = document.createElement("span");
+  sourceGridLabel.className = "field-label";
+  sourceGridLabel.textContent = "Source grid";
 
-  const tileSizeSelect = document.createElement("select");
-  tileSizeSelect.className = "tile-size-select";
+  const sourceGridSelect = document.createElement("select");
+  sourceGridSelect.className = "tile-size-select";
+  TILE_SIZE_OPTIONS.forEach((option) => {
+    const optionElement = document.createElement("option");
+    optionElement.value = `${option}`;
+    optionElement.textContent = `${option} x ${option}`;
+    optionElement.selected = option === state.project.sourceTileWidth;
+    sourceGridSelect.append(optionElement);
+  });
+  sourceGridSelect.addEventListener("change", () => {
+    const tileSize = Number.parseInt(sourceGridSelect.value, 10);
+
+    if (tileSize === 8 || tileSize === 16 || tileSize === 32 || tileSize === 64) {
+      onSourceGridSizeChanged(tileSize);
+    }
+  });
+
+  sourceGridField.append(sourceGridLabel, sourceGridSelect);
+
+  const outputTileField = document.createElement("label");
+  outputTileField.className = "field-group";
+
+  const outputTileLabel = document.createElement("span");
+  outputTileLabel.className = "field-label";
+  outputTileLabel.textContent = "Output tile";
+
+  const outputTileSelect = document.createElement("select");
+  outputTileSelect.className = "tile-size-select";
   TILE_SIZE_OPTIONS.forEach((option) => {
     const optionElement = document.createElement("option");
     optionElement.value = `${option}`;
     optionElement.textContent = `${option} x ${option}`;
     optionElement.selected = option === state.project.tileWidth;
-    tileSizeSelect.append(optionElement);
+    outputTileSelect.append(optionElement);
   });
-  tileSizeSelect.addEventListener("change", () => {
-    const tileSize = Number.parseInt(tileSizeSelect.value, 10);
+  outputTileSelect.addEventListener("change", () => {
+    const tileSize = Number.parseInt(outputTileSelect.value, 10);
 
     if (tileSize === 8 || tileSize === 16 || tileSize === 32 || tileSize === 64) {
-      onTileSizeChanged(tileSize);
+      onOutputTileSizeChanged(tileSize);
     }
   });
 
-  tileSizeField.append(tileSizeLabel, tileSizeSelect);
+  outputTileField.append(outputTileLabel, outputTileSelect);
+
+  const outputGridField = document.createElement("div");
+  outputGridField.className = "field-group";
+
+  const outputGridLabel = document.createElement("span");
+  outputGridLabel.className = "field-label";
+  outputGridLabel.textContent = "Output image";
+
+  const outputGridInputs = document.createElement("div");
+  outputGridInputs.className = "grid-inputs";
+
+  const widthField = createLabeledNumberField("Width", state.project.outputWidth, "Output width");
+  const widthInput = widthField.input;
+  widthInput.addEventListener("change", () => {
+    onOutputWidthChanged(Math.max(1, Number.parseInt(widthInput.value, 10) || 1));
+  });
+
+  const heightField = createLabeledNumberField("Height", state.project.outputHeight, "Output height");
+  const heightInput = heightField.input;
+  heightInput.addEventListener("change", () => {
+    onOutputHeightChanged(Math.max(1, Number.parseInt(heightInput.value, 10) || 1));
+  });
+
+  outputGridInputs.append(widthField.field, heightField.field);
+  outputGridField.append(outputGridLabel, outputGridInputs);
+
+  const controls = document.createElement("div");
+  controls.className = "grid-controls";
+
+  const sourceSection = createControlSection("Source Grid", "Choose how the incoming tilesheet is divided.");
+  sourceSection.append(sourceGridField);
+
+  const outputSection = createControlSection("Output Sheet", "Set the exported image size first, then choose tile size.");
+  outputSection.append(outputGridField, outputTileField);
+
+  const derivedGridField = document.createElement("div");
+  derivedGridField.className = "field-group";
+
+  const derivedGridLabel = document.createElement("span");
+  derivedGridLabel.className = "field-label";
+  derivedGridLabel.textContent = "Derived grid";
+
+  const derivedGridValue = document.createElement("div");
+  derivedGridValue.className = "derived-value";
+  const initialGrid = getOutputGridMetrics(state.project);
+  derivedGridValue.textContent = `${initialGrid.columns} columns x ${initialGrid.rows} rows`;
+
+  const derivedGridNote = document.createElement("p");
+  derivedGridNote.className = "field-note";
+  derivedGridNote.textContent = "Calculated automatically from output image size and output tile size.";
+
+  derivedGridField.append(derivedGridLabel, derivedGridValue, derivedGridNote);
+
+  controls.append(sourceSection, outputSection, derivedGridField);
 
   const metadata = document.createElement("dl");
   metadata.className = "meta-grid";
+  const outputPixels = getProjectPixelSize(state.project);
+  const outputGrid = getOutputGridMetrics(state.project);
 
   const items = [
     ["Source", state.sourceImageAsset.name ?? state.project.sourceImage ?? "Not loaded"],
     ["Resolution", `${state.sourceImageAsset.width} x ${state.sourceImageAsset.height}`],
-    ["Tile size", `${state.project.tileWidth} x ${state.project.tileHeight}`],
-    ["Layout", `${state.project.columns} columns x ${state.project.rows} rows`],
+    ["Source grid", `${state.project.sourceTileWidth} x ${state.project.sourceTileHeight}`],
+    ["Output tile", `${state.project.tileWidth} x ${state.project.tileHeight}`],
+    ["Output grid", `${outputGrid.columns} columns x ${outputGrid.rows} rows`],
+    ["Output image", `${outputPixels.width} x ${outputPixels.height}`],
     ["Tile count", `${getProjectTileCount(state.project)}`],
     ["Tile IDs", getProjectIndexRange(state.project)],
   ].map(([label, value]) => createMetaItem(label, value));
@@ -160,7 +250,7 @@ export function createShell({
   notes.className = "panel-note";
   notes.textContent = state.session.message ?? "";
 
-  panel.append(heading, intro, actions, tileSizeField, metadata, notes);
+  panel.append(heading, intro, actions, controls, metadata, notes);
   appShell.append(workspace, panel);
   root.append(appShell);
 
@@ -169,11 +259,19 @@ export function createShell({
     update(nextState) {
       items[0].description.textContent = nextState.sourceImageAsset.name ?? nextState.project.sourceImage ?? "Not loaded";
       items[1].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
-      items[2].description.textContent = `${nextState.project.tileWidth} x ${nextState.project.tileHeight}`;
-      items[3].description.textContent = `${nextState.project.columns} columns x ${nextState.project.rows} rows`;
-      items[4].description.textContent = `${getProjectTileCount(nextState.project)}`;
-      items[5].description.textContent = getProjectIndexRange(nextState.project);
-      tileSizeSelect.value = `${nextState.project.tileWidth}`;
+      items[2].description.textContent = `${nextState.project.sourceTileWidth} x ${nextState.project.sourceTileHeight}`;
+      items[3].description.textContent = `${nextState.project.tileWidth} x ${nextState.project.tileHeight}`;
+      const nextOutputGrid = getOutputGridMetrics(nextState.project);
+      items[4].description.textContent = `${nextOutputGrid.columns} columns x ${nextOutputGrid.rows} rows`;
+      const nextOutputPixels = getProjectPixelSize(nextState.project);
+      items[5].description.textContent = `${nextOutputPixels.width} x ${nextOutputPixels.height}`;
+      items[6].description.textContent = `${getProjectTileCount(nextState.project)}`;
+      items[7].description.textContent = getProjectIndexRange(nextState.project);
+      sourceGridSelect.value = `${nextState.project.sourceTileWidth}`;
+      outputTileSelect.value = `${nextState.project.tileWidth}`;
+      widthInput.value = `${nextState.project.outputWidth}`;
+      heightInput.value = `${nextState.project.outputHeight}`;
+      derivedGridValue.textContent = `${nextOutputGrid.columns} columns x ${nextOutputGrid.rows} rows`;
       notes.textContent = nextState.session.message ?? "";
     },
   };
@@ -187,4 +285,49 @@ function createMetaItem(label: string, value: string) {
   description.textContent = value;
 
   return { term, description };
+}
+
+function createNumberInput(value: number, ariaLabel: string): HTMLInputElement {
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "1";
+  input.step = "1";
+  input.value = `${value}`;
+  input.className = "grid-number-input";
+  input.setAttribute("aria-label", ariaLabel);
+  return input;
+}
+
+function createLabeledNumberField(label: string, value: number, ariaLabel: string): {
+  field: HTMLLabelElement;
+  input: HTMLInputElement;
+} {
+  const field = document.createElement("label");
+  field.className = "number-field";
+
+  const text = document.createElement("span");
+  text.className = "number-field-label";
+  text.textContent = label;
+
+  const input = createNumberInput(value, ariaLabel);
+
+  field.append(text, input);
+
+  return { field, input };
+}
+
+function createControlSection(title: string, description: string): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "control-section";
+
+  const heading = document.createElement("h2");
+  heading.className = "control-title";
+  heading.textContent = title;
+
+  const copy = document.createElement("p");
+  copy.className = "field-note";
+  copy.textContent = description;
+
+  section.append(heading, copy);
+  return section;
 }

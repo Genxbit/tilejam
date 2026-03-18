@@ -74,6 +74,7 @@ Implement source tile selection and assign the selected tiles to target/output t
 
 **Deliverables**
 
+* zoom and pain in source and target grid for easy editing
 * source selection snaps to source grid
 * one or more source tiles can be selected
 * assign selection to target/output tile
@@ -98,10 +99,6 @@ Add per-tile transforms and editor panel controls.
 
 **Deliverables**
 
-* move / nudge (keyboard)
-* scale X / Y
-* flip
-* editor panel for tile properties
 * keyboard shortcuts for editing
 * seam-fixing adjustments inside the target tile
 

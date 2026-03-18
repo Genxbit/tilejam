@@ -7,10 +7,12 @@ export type ProjectState = {
 export type TilejamProject = {
   version: number;
   sourceImage: string | null;
+  sourceTileWidth: TileSize;
+  sourceTileHeight: TileSize;
   tileWidth: TileSize;
   tileHeight: TileSize;
-  columns: number;
-  rows: number;
+  outputWidth: number;
+  outputHeight: number;
   tiles: TilePlacement[];
 };
 

@@ -3,7 +3,7 @@ import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../i
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
 import { clearSourceImageAsset, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
-import { getTileIndex, setUniformTileSize } from "../systems/tileGridSystem";
+import { getOutputGridMetrics, getProjectPixelSize, getProjectIndexRange, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
 import { createShell } from "../ui/createShell";
 
 export function createAppController(root: HTMLElement, state: ProjectState) {
@@ -102,10 +102,28 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
       render();
     },
-    onTileSizeChanged: (tileSize) => {
-      setUniformTileSize(state, tileSize);
-      const lastIndex = getTileIndex(state.project.columns - 1, state.project.rows - 1, state.project.columns);
-      state.session.message = `Tile size set to ${tileSize} x ${tileSize}. Tile IDs remain deterministic from 0 to ${lastIndex}.`;
+    onSourceGridSizeChanged: (tileSize) => {
+      setSourceGridTileSize(state, tileSize);
+      state.session.message = `Source grid set to ${tileSize} x ${tileSize}.`;
+      render();
+    },
+    onOutputTileSizeChanged: (tileSize) => {
+      setOutputTileSize(state, tileSize);
+      const grid = getOutputGridMetrics(state.project);
+      const outputPixels = getProjectPixelSize(state.project);
+      state.session.message = `Output tile set to ${tileSize} x ${tileSize}. Output grid is now ${grid.columns} x ${grid.rows} inside ${outputPixels.width} x ${outputPixels.height}.`;
+      render();
+    },
+    onOutputWidthChanged: (width) => {
+      setOutputImageSize(state, width, state.project.outputHeight);
+      const grid = getOutputGridMetrics(state.project);
+      state.session.message = `Output image width set to ${state.project.outputWidth}. Output grid is ${grid.columns} x ${grid.rows}.`;
+      render();
+    },
+    onOutputHeightChanged: (height) => {
+      setOutputImageSize(state, state.project.outputWidth, height);
+      const grid = getOutputGridMetrics(state.project);
+      state.session.message = `Output image height set to ${state.project.outputHeight}. Output grid is ${grid.columns} x ${grid.rows}.`;
       render();
     },
   });
@@ -131,7 +149,13 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         await loadProjectIntoState(state, project, "Loaded default project.");
       } catch {
         await loadSourceImageFromUrl(state, "/sample-source.svg", "sample-source.svg");
-        state.session.message = "Loaded fallback sample image.";
+        state.project.sourceTileWidth = 32;
+        state.project.sourceTileHeight = 32;
+        state.project.tileWidth = 32;
+        state.project.tileHeight = 32;
+        state.project.outputWidth = 1024;
+        state.project.outputHeight = 1024;
+        state.session.message = "Loaded fallback sample image with default source/output grid settings.";
       }
 
       render();

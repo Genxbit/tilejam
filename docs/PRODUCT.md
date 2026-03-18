@@ -11,7 +11,7 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 1. create or open project
 2. load source tilesheet
 3. set source grid spacing
-4. create or configure target/output tilesheet grid
+4. create or configure target/output image size and tile grid
 5. select one or more source tiles
 6. assign the selection to a target/output tile
 7. adjust target/output tile content (move, scale, flip)

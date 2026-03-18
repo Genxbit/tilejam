@@ -5,10 +5,12 @@ export function createProjectState(): ProjectState {
     project: {
       version: 1,
       sourceImage: null,
+      sourceTileWidth: 32,
+      sourceTileHeight: 32,
       tileWidth: 32,
       tileHeight: 32,
-      columns: 4,
-      rows: 2,
+      outputWidth: 1024,
+      outputHeight: 1024,
       tiles: [],
     },
     sourceImageAsset: {

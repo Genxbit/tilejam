@@ -78,6 +78,12 @@ textarea {
   gap: 8px;
 }
 
+.grid-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
 .field-label {
   font-size: 0.78rem;
   text-transform: uppercase;
@@ -85,9 +91,68 @@ textarea {
   color: #7fa3b8;
 }
 
+.field-note {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #9db3c2;
+}
+
+.control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(131, 169, 190, 0.16);
+  border-radius: 16px;
+  background: rgba(18, 32, 47, 0.72);
+}
+
+.control-title {
+  margin: 0;
+  font-size: 1rem;
+  color: #edf4fa;
+}
+
 .tile-size-select {
   min-height: 44px;
   padding: 0 14px;
+  border: 1px solid rgba(131, 169, 190, 0.35);
+  border-radius: 14px;
+  color: #edf4fa;
+  background: rgba(18, 32, 47, 0.82);
+}
+
+.grid-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.number-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.number-field-label {
+  font-size: 0.82rem;
+  color: #b8c8d3;
+}
+
+.derived-value {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid rgba(131, 169, 190, 0.2);
+  border-radius: 14px;
+  color: #edf4fa;
+  background: rgba(9, 17, 25, 0.6);
+}
+
+.grid-number-input {
+  min-height: 44px;
+  padding: 0 12px;
   border: 1px solid rgba(131, 169, 190, 0.35);
   border-radius: 14px;
   color: #edf4fa;
@@ -173,5 +238,9 @@ textarea {
   .sidebar {
     border-left: 0;
     border-top: 1px solid rgba(131, 169, 190, 0.16);
+  }
+
+  .grid-controls {
+    grid-template-columns: 1fr;
   }
 }

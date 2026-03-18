@@ -23,8 +23,8 @@ Editable source of truth.
 
   "tileWidth": 32,
   "tileHeight": 32,
-  "columns": 4,
-  "rows": 2,
+  "outputWidth": 1024,
+  "outputHeight": 1024,
 
   "tiles": [
     {
@@ -58,6 +58,7 @@ Editable source of truth.
 * `sourceImage` is a string reference, not embedded image data
 * `sourceTileWidth` / `sourceTileHeight` define the source tilesheet grid
 * `tileWidth` / `tileHeight` define the target/output tilesheet grid
+* `outputWidth` / `outputHeight` define the target/output image size
 * `sourceRect` must align to the source grid
 
 ---
@@ -110,6 +111,7 @@ Standard Tiled tileset.
 ## Mapping Rules
 
 * tile id = `col + row * columns`
+* output columns / rows are derived from output image size and target tile size
 * sourceRect not included in export
 * transforms baked into PNG
 * metadata → TSJ properties
