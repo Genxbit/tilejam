@@ -8,12 +8,13 @@ export function assignSelectionToOutputTile(
   destStartRow: number,
 ): number {
   const outputGrid = getOutputGridMetrics(state.project);
+  const placementGrid = getPlacementGrid(state);
   const nextTiles = state.project.tiles.filter((tile) => {
     if (
       tile.destCol >= destStartCol &&
-      tile.destCol < destStartCol + selection.columns &&
+      tile.destCol < destStartCol + selection.columns * placementGrid.columnsPerSourceTile &&
       tile.destRow >= destStartRow &&
-      tile.destRow < destStartRow + selection.rows
+      tile.destRow < destStartRow + selection.rows * placementGrid.rowsPerSourceTile
     ) {
       return false;
     }
@@ -25,25 +26,31 @@ export function assignSelectionToOutputTile(
 
   for (let rowOffset = 0; rowOffset < selection.rows; rowOffset += 1) {
     for (let colOffset = 0; colOffset < selection.columns; colOffset += 1) {
-      const destCol = destStartCol + colOffset;
-      const destRow = destStartRow + rowOffset;
+      for (let subRow = 0; subRow < placementGrid.rowsPerSourceTile; subRow += 1) {
+        for (let subCol = 0; subCol < placementGrid.columnsPerSourceTile; subCol += 1) {
+          const destCol = destStartCol + colOffset * placementGrid.columnsPerSourceTile + subCol;
+          const destRow = destStartRow + rowOffset * placementGrid.rowsPerSourceTile + subRow;
 
-      if (destCol < 0 || destCol >= outputGrid.columns || destRow < 0 || destRow >= outputGrid.rows) {
-        continue;
+          if (destCol < 0 || destCol >= outputGrid.columns || destRow < 0 || destRow >= outputGrid.rows) {
+            continue;
+          }
+
+          nextTiles.push(
+            createTilePlacement(
+              state,
+              selection,
+              colOffset,
+              rowOffset,
+              subCol,
+              subRow,
+              destCol,
+              destRow,
+              outputGrid.columns,
+            ),
+          );
+          placementsAdded += 1;
+        }
       }
-
-      nextTiles.push(
-        createTilePlacement(
-          state,
-          selection,
-          colOffset,
-          rowOffset,
-          destCol,
-          destRow,
-          outputGrid.columns,
-        ),
-      );
-      placementsAdded += 1;
     }
   }
 
@@ -65,40 +72,39 @@ export function assignAllSourceTilesToOutputGrid(state: ProjectState): number {
   }
 
   const outputGrid = getOutputGridMetrics(state.project);
+  const placementGrid = getPlacementGrid(state);
   const sourceGrid = getSourceGridMetrics(
     image.width,
     image.height,
     state.project.sourceTileWidth,
     state.project.sourceTileHeight,
   );
-  const capacity = outputGrid.columns * outputGrid.rows;
   const nextTiles: TilePlacement[] = [];
   let placed = 0;
 
   for (let row = 0; row < sourceGrid.rows; row += 1) {
     for (let col = 0; col < sourceGrid.columns; col += 1) {
-      if (placed >= capacity) {
-        state.project.tiles = nextTiles;
-        return placed;
-      }
+      for (let subRow = 0; subRow < placementGrid.rowsPerSourceTile; subRow += 1) {
+        for (let subCol = 0; subCol < placementGrid.columnsPerSourceTile; subCol += 1) {
+          const destCol = col * placementGrid.columnsPerSourceTile + subCol;
+          const destRow = row * placementGrid.rowsPerSourceTile + subRow;
 
-      const destCol = placed % outputGrid.columns;
-      const destRow = Math.floor(placed / outputGrid.columns);
-      nextTiles.push(
-        createTilePlacementFromSourceRect(
-          state,
-          {
-            x: col * state.project.sourceTileWidth,
-            y: row * state.project.sourceTileHeight,
-            w: state.project.sourceTileWidth,
-            h: state.project.sourceTileHeight,
-          },
-          destCol,
-          destRow,
-          outputGrid.columns,
-        ),
-      );
-      placed += 1;
+          if (destCol >= outputGrid.columns || destRow >= outputGrid.rows) {
+            continue;
+          }
+
+          nextTiles.push(
+            createTilePlacementFromSourceRect(
+              state,
+              getSourceRectForPlacement(state, col, row, subCol, subRow),
+              destCol,
+              destRow,
+              outputGrid.columns,
+            ),
+          );
+          placed += 1;
+        }
+      }
     }
   }
 
@@ -111,18 +117,21 @@ function createTilePlacement(
   selection: SourceSelection,
   colOffset: number,
   rowOffset: number,
+  subCol: number,
+  subRow: number,
   destCol: number,
   destRow: number,
   columns: number,
 ): TilePlacement {
   return createTilePlacementFromSourceRect(
     state,
-    {
-      x: selection.sourceRect.x + colOffset * state.project.sourceTileWidth,
-      y: selection.sourceRect.y + rowOffset * state.project.sourceTileHeight,
-      w: state.project.sourceTileWidth,
-      h: state.project.sourceTileHeight,
-    },
+    getSourceRectForPlacement(
+      state,
+      Math.floor(selection.sourceRect.x / state.project.sourceTileWidth) + colOffset,
+      Math.floor(selection.sourceRect.y / state.project.sourceTileHeight) + rowOffset,
+      subCol,
+      subRow,
+    ),
     destCol,
     destRow,
     columns,
@@ -137,8 +146,8 @@ function createTilePlacementFromSourceRect(
   columns: number,
 ): TilePlacement {
   const id = getTileIndex(destCol, destRow, columns);
-  const offsetX = Math.floor((state.project.tileWidth - state.project.sourceTileWidth) / 2);
-  const offsetY = Math.floor((state.project.tileHeight - state.project.sourceTileHeight) / 2);
+  const offsetX = Math.floor((state.project.tileWidth - sourceRect.w) / 2);
+  const offsetY = Math.floor((state.project.tileHeight - sourceRect.h) / 2);
 
   return {
     id,
@@ -161,5 +170,43 @@ function createTilePlacementFromSourceRect(
     name: `tile_${id}`,
     tags: [],
     collision: "none",
+  };
+}
+
+function getPlacementGrid(state: ProjectState): {
+  columnsPerSourceTile: number;
+  rowsPerSourceTile: number;
+} {
+  const splitColumns = state.project.sourceTileWidth >= state.project.tileWidth
+    && state.project.sourceTileWidth % state.project.tileWidth === 0
+      ? state.project.sourceTileWidth / state.project.tileWidth
+      : 1;
+  const splitRows = state.project.sourceTileHeight >= state.project.tileHeight
+    && state.project.sourceTileHeight % state.project.tileHeight === 0
+      ? state.project.sourceTileHeight / state.project.tileHeight
+      : 1;
+
+  return {
+    columnsPerSourceTile: splitColumns,
+    rowsPerSourceTile: splitRows,
+  };
+}
+
+function getSourceRectForPlacement(
+  state: ProjectState,
+  sourceTileCol: number,
+  sourceTileRow: number,
+  subCol: number,
+  subRow: number,
+): TilePlacement["sourceRect"] {
+  const placementGrid = getPlacementGrid(state);
+  const sourceRectWidth = state.project.sourceTileWidth / placementGrid.columnsPerSourceTile;
+  const sourceRectHeight = state.project.sourceTileHeight / placementGrid.rowsPerSourceTile;
+
+  return {
+    x: sourceTileCol * state.project.sourceTileWidth + subCol * sourceRectWidth,
+    y: sourceTileRow * state.project.sourceTileHeight + subRow * sourceRectHeight,
+    w: sourceRectWidth,
+    h: sourceRectHeight,
   };
 }
