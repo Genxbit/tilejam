@@ -72,6 +72,28 @@ textarea {
   gap: 12px;
 }
 
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7fa3b8;
+}
+
+.tile-size-select {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(131, 169, 190, 0.35);
+  border-radius: 14px;
+  color: #edf4fa;
+  background: rgba(18, 32, 47, 0.82);
+}
+
 .panel-title {
   margin: 0;
   font-size: 2rem;

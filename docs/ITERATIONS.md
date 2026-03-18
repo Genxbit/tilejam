@@ -47,7 +47,7 @@ Implement tile grid with configurable size.
 
 **Deliverables**
 
-* tile size (8 / 16 / 32)
+* tile size (8 / 16 / 32 / 64)
 * grid overlay
 * tile indexing
 

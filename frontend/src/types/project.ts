@@ -7,8 +7,8 @@ export type ProjectState = {
 export type TilejamProject = {
   version: number;
   sourceImage: string | null;
-  tileWidth: 8 | 16 | 32;
-  tileHeight: 8 | 16 | 32;
+  tileWidth: TileSize;
+  tileHeight: TileSize;
   columns: number;
   rows: number;
   tiles: TilePlacement[];
@@ -27,6 +27,8 @@ export type SessionState = {
   projectFileName: string | null;
   projectFileHandle: FileSystemFileHandle | null;
 };
+
+export type TileSize = 8 | 16 | 32 | 64;
 
 export type TilePlacement = {
   id: number;

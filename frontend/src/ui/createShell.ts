@@ -1,4 +1,5 @@
 import type { ProjectState } from "../types/project";
+import { getProjectIndexRange, getProjectTileCount, TILE_SIZE_OPTIONS } from "../systems/tileGridSystem";
 
 type ShellOptions = {
   root: HTMLElement;
@@ -7,6 +8,7 @@ type ShellOptions = {
   onProjectSelected: (file: File) => Promise<void>;
   onOpenProject: () => Promise<boolean>;
   onSaveProject: () => Promise<void>;
+  onTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
 };
 
 type Shell = {
@@ -14,7 +16,15 @@ type Shell = {
   update: (state: ProjectState) => void;
 };
 
-export function createShell({ root, state, onFileSelected, onProjectSelected, onOpenProject, onSaveProject }: ShellOptions): Shell {
+export function createShell({
+  root,
+  state,
+  onFileSelected,
+  onProjectSelected,
+  onOpenProject,
+  onSaveProject,
+  onTileSizeChanged,
+}: ShellOptions): Shell {
   root.innerHTML = "";
 
   const appShell = document.createElement("div");
@@ -106,6 +116,32 @@ export function createShell({ root, state, onFileSelected, onProjectSelected, on
   actions.className = "panel-actions";
   actions.append(inputLabel, projectInputLabel, saveProjectButton);
 
+  const tileSizeField = document.createElement("label");
+  tileSizeField.className = "field-group";
+
+  const tileSizeLabel = document.createElement("span");
+  tileSizeLabel.className = "field-label";
+  tileSizeLabel.textContent = "Tile size";
+
+  const tileSizeSelect = document.createElement("select");
+  tileSizeSelect.className = "tile-size-select";
+  TILE_SIZE_OPTIONS.forEach((option) => {
+    const optionElement = document.createElement("option");
+    optionElement.value = `${option}`;
+    optionElement.textContent = `${option} x ${option}`;
+    optionElement.selected = option === state.project.tileWidth;
+    tileSizeSelect.append(optionElement);
+  });
+  tileSizeSelect.addEventListener("change", () => {
+    const tileSize = Number.parseInt(tileSizeSelect.value, 10);
+
+    if (tileSize === 8 || tileSize === 16 || tileSize === 32 || tileSize === 64) {
+      onTileSizeChanged(tileSize);
+    }
+  });
+
+  tileSizeField.append(tileSizeLabel, tileSizeSelect);
+
   const metadata = document.createElement("dl");
   metadata.className = "meta-grid";
 
@@ -114,6 +150,8 @@ export function createShell({ root, state, onFileSelected, onProjectSelected, on
     ["Resolution", `${state.sourceImageAsset.width} x ${state.sourceImageAsset.height}`],
     ["Tile size", `${state.project.tileWidth} x ${state.project.tileHeight}`],
     ["Layout", `${state.project.columns} columns x ${state.project.rows} rows`],
+    ["Tile count", `${getProjectTileCount(state.project)}`],
+    ["Tile IDs", getProjectIndexRange(state.project)],
   ].map(([label, value]) => createMetaItem(label, value));
 
   items.forEach((item) => metadata.append(item.term, item.description));
@@ -122,7 +160,7 @@ export function createShell({ root, state, onFileSelected, onProjectSelected, on
   notes.className = "panel-note";
   notes.textContent = state.session.message ?? "";
 
-  panel.append(heading, intro, actions, metadata, notes);
+  panel.append(heading, intro, actions, tileSizeField, metadata, notes);
   appShell.append(workspace, panel);
   root.append(appShell);
 
@@ -133,6 +171,9 @@ export function createShell({ root, state, onFileSelected, onProjectSelected, on
       items[1].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
       items[2].description.textContent = `${nextState.project.tileWidth} x ${nextState.project.tileHeight}`;
       items[3].description.textContent = `${nextState.project.columns} columns x ${nextState.project.rows} rows`;
+      items[4].description.textContent = `${getProjectTileCount(nextState.project)}`;
+      items[5].description.textContent = getProjectIndexRange(nextState.project);
+      tileSizeSelect.value = `${nextState.project.tileWidth}`;
       notes.textContent = nextState.session.message ?? "";
     },
   };

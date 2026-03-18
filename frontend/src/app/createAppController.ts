@@ -3,6 +3,7 @@ import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../i
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
 import { clearSourceImageAsset, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
+import { getTileIndex, setUniformTileSize } from "../systems/tileGridSystem";
 import { createShell } from "../ui/createShell";
 
 export function createAppController(root: HTMLElement, state: ProjectState) {
@@ -99,6 +100,12 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.message = `Project save failed: ${message}`;
       }
 
+      render();
+    },
+    onTileSizeChanged: (tileSize) => {
+      setUniformTileSize(state, tileSize);
+      const lastIndex = getTileIndex(state.project.columns - 1, state.project.rows - 1, state.project.columns);
+      state.session.message = `Tile size set to ${tileSize} x ${tileSize}. Tile IDs remain deterministic from 0 to ${lastIndex}.`;
       render();
     },
   });

@@ -10,7 +10,7 @@ Tilejam is a tool for converting messy or AI-generated images into clean, grid-a
 
 1. create or open project
 2. load source image
-3. set tile size (8 / 16 / 32)
+3. set tile size (8 / 16 / 32 / 64)
 4. select source region
 5. assign to tile
 6. adjust (move, scale, flip)

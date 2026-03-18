@@ -93,11 +93,11 @@ function parseSourceRect(value: unknown, path: string): SourceRect {
   };
 }
 
-function readTileSize(value: unknown, path: string): 8 | 16 | 32 {
+function readTileSize(value: unknown, path: string): 8 | 16 | 32 | 64 {
   const size = readNumber(value, path);
 
-  if (size !== 8 && size !== 16 && size !== 32) {
-    throw new Error(`${path} must be 8, 16, or 32.`);
+  if (size !== 8 && size !== 16 && size !== 32 && size !== 64) {
+    throw new Error(`${path} must be 8, 16, 32, or 64.`);
   }
 
   return size;
