@@ -34,6 +34,7 @@ Set up frontend app with canvas, basic panels, and load/render an image.
 * app runs
 * layout resizes without breaking
 * image visible
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
 
 ---
 
@@ -54,6 +55,7 @@ Implement tile grid with configurable size.
 **Validation**
 
 * grid aligns correctly
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
 
 ---
 
@@ -75,6 +77,7 @@ Implement mouse selection and assign to grid tiles.
 
 * tile shows selected region
 * mouse interactions are correct
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
 
 ---
 
@@ -99,6 +102,7 @@ Add per-tile transforms and editor panel controls.
 * transforms apply correctly
 * keyboard input works
 * panel updates state
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
 
 ---
 
@@ -119,6 +123,7 @@ Export tileset PNG and TSJ.
 
 * PNG correct
 * TSJ loads in Tiled
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
 
 ---
 
@@ -139,3 +144,4 @@ Complete save/load behavior for full editor state.
 **Validation**
 
 * project restores state correctly
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
