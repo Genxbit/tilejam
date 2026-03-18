@@ -75,7 +75,8 @@ export function moveTileToCell(state: ProjectState, tileId: number, destCol: num
   const outputGrid = getOutputGridMetrics(state.project);
   const clampedCol = clamp(destCol, 0, outputGrid.columns - 1);
   const clampedRow = clamp(destRow, 0, outputGrid.rows - 1);
-  const tile = state.project.tiles.find((entry) => entry.id === tileId);
+  const tileIndex = state.project.tiles.findIndex((entry) => entry.id === tileId);
+  const tile = tileIndex >= 0 ? state.project.tiles[tileIndex] : undefined;
 
   if (!tile) {
     return null;
@@ -85,21 +86,22 @@ export function moveTileToCell(state: ProjectState, tileId: number, destCol: num
     return tile;
   }
 
-  const occupant = state.project.tiles.find(
-    (entry) => entry.id !== tileId && entry.destCol === clampedCol && entry.destRow === clampedRow,
+  state.project.tiles = state.project.tiles.filter(
+    (entry, index) => index === tileIndex || entry.destCol !== clampedCol || entry.destRow !== clampedRow,
   );
 
-  if (occupant) {
-    occupant.destCol = tile.destCol;
-    occupant.destRow = tile.destRow;
+  const nextTile = state.project.tiles.find((entry) => entry.id === tileId);
+
+  if (!nextTile) {
+    return null;
   }
 
-  tile.destCol = clampedCol;
-  tile.destRow = clampedRow;
+  nextTile.destCol = clampedCol;
+  nextTile.destRow = clampedRow;
   reindexTiles(state);
-  state.session.selectedOutputTileId = tile.id;
+  state.session.selectedOutputTileId = nextTile.id;
 
-  return tile;
+  return nextTile;
 }
 
 function reindexTiles(state: ProjectState): void {
