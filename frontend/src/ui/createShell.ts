@@ -201,22 +201,29 @@ export function createShell({
     await onSaveWorkingImage();
   });
 
-  const actions = document.createElement("div");
-  actions.className = "panel-actions";
-  actions.append(inputLabel, projectInputLabel, saveProjectButton, workingImageInputLabel, saveWorkingImageButton);
-
-  const actionsSection = createControlSection("Files", "Open sources, projects, and the current working tilesheet.");
-  actionsSection.append(actions);
-
   const historyActions = document.createElement("div");
   historyActions.className = "panel-actions";
   const undoButton = createActionButton("Undo", onUndo);
   const redoButton = createActionButton("Redo", onRedo);
+  historyActions.append(projectInputLabel, saveProjectButton, undoButton, redoButton);
+
+  const topActionsSection = createControlSection("Project", "Open or save the full editable project, then step backward or forward through the current session.");
+  topActionsSection.append(historyActions);
+
+  const fileActions = document.createElement("div");
+  fileActions.className = "panel-actions";
+  fileActions.append(inputLabel, workingImageInputLabel, saveWorkingImageButton);
+
+  const actionsSection = createControlSection("Files", "Open sources and the current working tilesheet.");
+  actionsSection.append(fileActions);
+
+  const editingActions = document.createElement("div");
+  editingActions.className = "panel-actions";
   const copyAllButton = createActionButton("Copy All Tiles", onCopyAllTiles);
-  historyActions.append(undoButton, redoButton, copyAllButton);
+  editingActions.append(copyAllButton);
 
   const historySection = createControlSection("Editing", "Quick actions for the current tilesheet editing session.");
-  historySection.append(historyActions);
+  historySection.append(editingActions);
 
   const exportActions = document.createElement("div");
   exportActions.className = "panel-actions";
@@ -587,7 +594,7 @@ export function createShell({
   notes.className = "panel-note";
   notes.textContent = state.session.message ?? "";
 
-  panel.append(heading, intro, sidebarTabs, tilesheetPanel, tilePanel, scenePanel, notes);
+  panel.append(heading, intro, topActionsSection, sidebarTabs, tilesheetPanel, tilePanel, scenePanel, notes);
   appShell.append(workspace, panel);
   root.append(appShell);
 
