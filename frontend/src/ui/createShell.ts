@@ -15,6 +15,7 @@ type ShellOptions = {
   onWorkingImageSelected: (file: File) => Promise<void>;
   onOpenWorkingImage: () => Promise<boolean>;
   onSaveWorkingImage: () => Promise<void>;
+  onNewTilesheet: () => void;
   onExportTsj: () => Promise<void>;
   onSceneSelected: (file: File) => Promise<void>;
   onOpenScene: () => Promise<boolean>;
@@ -44,6 +45,7 @@ type ShellOptions = {
   onUndo: () => void;
   onRedo: () => void;
   onCopyAllTiles: () => void;
+  onClearAllTiles: () => void;
 };
 
 type SelectedTilePatch = {
@@ -84,6 +86,7 @@ export function createShell({
   onWorkingImageSelected,
   onOpenWorkingImage,
   onSaveWorkingImage,
+  onNewTilesheet,
   onExportTsj,
   onSceneSelected,
   onOpenScene,
@@ -105,6 +108,7 @@ export function createShell({
   onUndo,
   onRedo,
   onCopyAllTiles,
+  onClearAllTiles,
 }: ShellOptions): Shell {
   root.innerHTML = "";
 
@@ -243,7 +247,8 @@ export function createShell({
 
   const fileActions = document.createElement("div");
   fileActions.className = "panel-actions";
-  fileActions.append(inputLabel, workingImageInputLabel, saveWorkingImageButton);
+  const newTilesheetButton = createActionButton("New", onNewTilesheet);
+  fileActions.append(inputLabel, workingImageInputLabel, saveWorkingImageButton, newTilesheetButton);
 
   const actionsSection = createControlSection("Files", "Open sources and the current working tilesheet.");
   actionsSection.append(fileActions);
@@ -251,9 +256,10 @@ export function createShell({
   const editingActions = document.createElement("div");
   editingActions.className = "panel-actions";
   const copyAllButton = createActionButton("Copy All Tiles", onCopyAllTiles);
-  editingActions.append(copyAllButton);
+  const clearAllTilesButton = createActionButton("Clear All", onClearAllTiles);
+  editingActions.append(copyAllButton, clearAllTilesButton);
 
-  const historySection = createControlSection("Editing", "Quick actions for the current tilesheet editing session.");
+  const historySection = createControlSection("Editing", "Quick actions for the current working tilesheet.");
   historySection.append(editingActions);
 
   const exportActions = document.createElement("div");

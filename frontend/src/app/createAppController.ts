@@ -4,6 +4,7 @@ import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../i
 import { loadSceneFile, loadSceneFromHandle, saveSceneToHandle, saveSceneWithPicker } from "../io/sceneFile";
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
+import { createProjectState } from "../data/createProjectState";
 import { clearSelectedOutputTile, deleteSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
 import { addSceneLayer, deleteSelectedSceneCell, ensureScene, moveActiveSceneLayerBy, moveSceneCellTo, moveSelectedSceneCellBy, placeSelectionIntoScene, resizeScene, selectSceneCell, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
@@ -241,6 +242,21 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.message = `Working PNG save failed: ${message}`;
       }
 
+      renderAll();
+    },
+    onNewTilesheet: () => {
+      recordHistory();
+      const freshState = createProjectState();
+      state.project.workingImage = null;
+      state.project.tiles = [];
+      state.session.workingImageFileName = null;
+      state.session.workingImageFileHandle = null;
+      state.session.selectedOutputTileId = null;
+      state.session.hoveredOutputTile = null;
+      clearSelectionState(state);
+      state.session.outputCamera = { ...freshState.session.outputCamera };
+      state.session.message = "Started a new blank working tilesheet. Source image and grid settings were kept.";
+      bumpRenderRevision();
       renderAll();
     },
     onExportTsj: async () => {
@@ -530,6 +546,27 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.message = `Copied ${placed} source tile${placed === 1 ? "" : "s"} into the output grid.`;
       }
 
+      renderAll();
+    },
+    onClearAllTiles: () => {
+      recordHistory();
+
+      if (state.project.tiles.length < 1) {
+        undoStack.pop();
+        state.session.message = "There are no placed tiles to clear.";
+        renderAll();
+        return;
+      }
+
+      const clearedCount = state.project.tiles.length;
+      state.project.tiles = [];
+      state.session.selectedOutputTileId = null;
+      state.session.hoveredOutputTile = null;
+      state.project.workingImage = null;
+      state.session.workingImageFileName = null;
+      state.session.workingImageFileHandle = null;
+      bumpRenderRevision();
+      state.session.message = `Cleared ${clearedCount} placed tile${clearedCount === 1 ? "" : "s"} from the working tilesheet.`;
       renderAll();
     },
   });
