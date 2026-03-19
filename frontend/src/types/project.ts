@@ -47,6 +47,7 @@ export type SessionState = {
   selectedSceneCell: GridCoordinate | null;
   hoveredPanel: WorkspacePanel | null;
   tilePreviewMode: TilePreviewMode;
+  showSceneGrid: boolean;
   sourceCamera: CameraState;
   outputCamera: CameraState;
   sourceImageAssetCache: Record<string, CachedSourceImageAsset>;

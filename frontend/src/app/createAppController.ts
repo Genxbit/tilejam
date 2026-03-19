@@ -566,6 +566,11 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = `Moved scene layer ${layer.name} ${delta < 0 ? "up" : "down"} in the stack.`;
       renderAll();
     },
+    onSceneGridVisibilityChanged: (visible) => {
+      state.session.showSceneGrid = visible;
+      state.session.message = visible ? "Scene editing grid shown." : "Scene preview enabled.";
+      renderCanvas();
+    },
     onSelectedTileUpdated: (patch) => {
       recordHistory();
       const tile = updateSelectedOutputTile(state, patch);

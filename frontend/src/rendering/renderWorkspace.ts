@@ -259,9 +259,15 @@ function drawOutputGrid(
   context.beginPath();
   context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
   context.clip();
-  drawHoveredOutputTile(context, state, viewport);
+  const isScenePreview = state.session.activeWorkspaceMode === "scene" && !state.session.showSceneGrid;
+
+  if (!isScenePreview) {
+    drawHoveredOutputTile(context, state, viewport);
+  }
   if (state.session.activeWorkspaceMode === "scene") {
-    drawSelectedSceneCell(context, state, viewport);
+    if (!isScenePreview) {
+      drawSelectedSceneCell(context, state, viewport);
+    }
   } else {
     drawSelectedOutputTile(context, state, viewport);
   }
@@ -270,6 +276,18 @@ function drawOutputGrid(
   context.lineWidth = 1.5;
   context.strokeRect(viewport.frame.x + 0.5, viewport.frame.y + 0.5, viewport.frame.width - 1, viewport.frame.height - 1);
   drawTilePreview(context, state, viewport);
+
+  const shouldDrawGrid = state.session.activeWorkspaceMode !== "scene" || state.session.showSceneGrid;
+
+  if (!shouldDrawGrid) {
+    context.fillStyle = VIEW_HINT;
+    context.fillText(
+      `Zoom ${state.session.outputCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`,
+      viewport.frame.x,
+      viewport.frame.y + viewport.frame.height + 16,
+    );
+    return;
+  }
 
   context.strokeStyle = OUTPUT_GRID;
   context.lineWidth = 1;
@@ -384,16 +402,18 @@ function drawPlacedTiles(
       continue;
     }
 
+    const cellRect = getAlignedCellRect(viewport, tile.destCol, tile.destRow);
+
     drawTileIntoRect(
       context,
       image,
       tile,
-      viewport.contentX + tile.destCol * viewport.cellWidth,
-      viewport.contentY + tile.destRow * viewport.cellHeight,
+      cellRect.x,
+      cellRect.y,
       state.project.tileWidth,
       state.project.tileHeight,
-      viewport.scaleX,
-      viewport.scaleY,
+      cellRect.width / state.project.tileWidth,
+      cellRect.height / state.project.tileHeight,
     );
   }
 }
@@ -474,16 +494,18 @@ function drawTileInstance(
     return;
   }
 
+  const cellRect = getAlignedCellRect(viewport, col, row, layerOffsetX, layerOffsetY);
+
   drawTileIntoRect(
     context,
     image,
     tile,
-    viewport.contentX + col * viewport.cellWidth + layerOffsetX,
-    viewport.contentY + row * viewport.cellHeight + layerOffsetY,
+    cellRect.x,
+    cellRect.y,
     state.project.tileWidth,
     state.project.tileHeight,
-    viewport.scaleX,
-    viewport.scaleY,
+    cellRect.width / state.project.tileWidth,
+    cellRect.height / state.project.tileHeight,
   );
 }
 
@@ -700,4 +722,24 @@ function getDisplayFileLabel(value: string): string {
   const normalized = value.replace(/\\/g, "/");
   const segments = normalized.split("/");
   return segments[segments.length - 1] || value;
+}
+
+function getAlignedCellRect(
+  viewport: OutputViewport,
+  col: number,
+  row: number,
+  offsetX = 0,
+  offsetY = 0,
+): { x: number; y: number; width: number; height: number } {
+  const startX = Math.round(viewport.contentX + col * viewport.cellWidth + offsetX);
+  const endX = Math.round(viewport.contentX + (col + 1) * viewport.cellWidth + offsetX);
+  const startY = Math.round(viewport.contentY + row * viewport.cellHeight + offsetY);
+  const endY = Math.round(viewport.contentY + (row + 1) * viewport.cellHeight + offsetY);
+
+  return {
+    x: startX,
+    y: startY,
+    width: Math.max(1, endX - startX),
+    height: Math.max(1, endY - startY),
+  };
 }

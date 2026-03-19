@@ -43,6 +43,7 @@ export function createProjectState(): ProjectState {
       selectedSceneCell: null,
       hoveredPanel: null,
       tilePreviewMode: "none",
+      showSceneGrid: false,
       sourceCamera: {
         zoom: 1,
         panX: 0,

@@ -50,6 +50,7 @@ type ShellOptions = {
     parallaxY?: number;
   }) => void;
   onSceneLayerMoved: (delta: -1 | 1) => void;
+  onSceneGridVisibilityChanged: (visible: boolean) => void;
   onSelectedTileUpdated: (patch: SelectedTilePatch) => void;
   onNudgeSelectedTile: (deltaX: number, deltaY: number) => Promise<void>;
   onSetSelectedTileFitMode: (fitMode: TileFitMode) => void;
@@ -138,6 +139,7 @@ export function createShell({
   onSceneLayerAdded,
   onSceneLayerUpdated,
   onSceneLayerMoved,
+  onSceneGridVisibilityChanged,
   onSelectedTileUpdated,
   onNudgeSelectedTile,
   onSetSelectedTileFitMode,
@@ -154,6 +156,24 @@ export function createShell({
   onClearAllTiles,
 }: ShellOptions): Shell {
   root.innerHTML = "";
+
+  const appFrame = document.createElement("div");
+  appFrame.className = "app-frame";
+
+  const topBar = document.createElement("header");
+  topBar.className = "top-bar";
+
+  const topBarBrand = document.createElement("div");
+  topBarBrand.className = "top-bar-brand";
+
+  const topBarTitle = document.createElement("h1");
+  topBarTitle.className = "top-bar-title";
+  topBarTitle.textContent = "Tilejam";
+
+  const topBarProject = document.createElement("p");
+  topBarProject.className = "top-bar-project";
+  topBarProject.textContent = `Project: ${getDisplayFileLabel(state.session.projectFileName ?? "unsaved")}`;
+  topBarBrand.append(topBarTitle, topBarProject);
 
   const appShell = document.createElement("div");
   appShell.className = "app-shell";
@@ -278,17 +298,11 @@ export function createShell({
   });
 
   const historyActions = document.createElement("div");
-  historyActions.className = "panel-actions";
+  historyActions.className = "top-bar-actions";
   const undoButton = createActionButton("Undo", onUndo);
   const redoButton = createActionButton("Redo", onRedo);
   historyActions.append(projectInputButton, saveProjectButton, undoButton, redoButton);
-
-  const topActionsSection = createControlSection("Project", "Open or save the full editable project, then step backward or forward through the current session.");
-  const projectFileNote = document.createElement("p");
-  projectFileNote.className = "field-note";
-  projectFileNote.textContent = `Current project: ${getDisplayFileLabel(state.session.projectFileName ?? "unsaved")}`;
-  topActionsSection.append(projectFileNote);
-  topActionsSection.append(historyActions);
+  topBar.append(topBarBrand, historyActions);
 
   const fileActions = document.createElement("div");
   fileActions.className = "panel-actions";
@@ -969,8 +983,19 @@ export function createShell({
     ? `Scene grid is ${state.project.scene.width} x ${state.project.scene.height}. Visible layers are drawn on top of each other in order, and the selected layer is the one you edit.`
     : "Create or open a scene to begin placing tiles.";
 
+  const sceneGridToggle = createCheckboxField("Preview", !state.session.showSceneGrid, (checked) => {
+    onSceneGridVisibilityChanged(!checked);
+  });
+  const sceneGridField = document.createElement("div");
+  sceneGridField.className = "number-field";
+  const sceneGridLabel = document.createElement("span");
+  sceneGridLabel.className = "number-field-label";
+  sceneGridLabel.textContent = "Scene preview";
+  sceneGridField.append(sceneGridLabel, sceneGridToggle);
+
   sceneSection.append(
     sceneActions,
+    sceneGridField,
     sceneSizeInputs,
     sceneTilesetField,
     sceneLayerRow,
@@ -1003,15 +1028,16 @@ export function createShell({
   notes.className = "panel-note";
   notes.textContent = state.session.message ?? "";
 
-  panel.append(heading, intro, topActionsSection, sidebarTabs, tilesheetPanel, tilePanel, scenePanel, notes);
+  panel.append(heading, intro, sidebarTabs, tilesheetPanel, tilePanel, scenePanel, notes);
   appShell.append(workspace, panel);
-  root.append(appShell);
+  appFrame.append(topBar, appShell);
+  root.append(appFrame);
 
   return {
     canvas,
     update(nextState) {
       const scrollTop = panel.scrollTop;
-      projectFileNote.textContent = `Current project: ${getDisplayFileLabel(nextState.session.projectFileName ?? "unsaved")}`;
+      topBarProject.textContent = `Project: ${getDisplayFileLabel(nextState.session.projectFileName ?? "unsaved")}`;
       items[0].description.textContent = nextState.sourceImageAsset.name ?? nextState.project.sourceImage ?? "Not loaded";
       items[1].description.textContent = getDisplayFileLabel(nextState.session.workingImageFileName ?? nextState.project.workingImage ?? "Not loaded");
       items[2].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
@@ -1047,6 +1073,7 @@ export function createShell({
       sceneLayerOffsetYField.input.value = `${nextSceneLayer?.offsetY ?? 0}`;
       sceneLayerParallaxXField.input.value = `${nextSceneLayer?.parallaxX ?? 1}`;
       sceneLayerParallaxYField.input.value = `${nextSceneLayer?.parallaxY ?? 1}`;
+      (sceneGridToggle.querySelector("input") as HTMLInputElement).checked = !nextState.session.showSceneGrid;
       sceneLayerSelect.replaceChildren();
       for (const layer of nextState.project.scene?.layers ?? []) {
         const option = document.createElement("option");

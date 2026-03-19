@@ -335,3 +335,38 @@ Extend the tile editor with advanced repair tools for positioning, fitting, crop
 * edge extend behaves as a one-shot repair action instead of a persistent live effect
 * controls fit naturally in the tile editor panel and remain usable without excessive scrolling or confusion
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 11: UX shell + scene grid visibility
+
+**Status**
+Completed
+
+**Goal**
+Improve access to project actions and make scene validation easier.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Move project-level actions into a persistent top horizontal bar, and add a scene option to show or hide the grid overlay.
+
+**Deliverables**
+
+* move project actions from the right panel into a top horizontal bar that is always visible
+* keep project actions easy to access regardless of active sidebar tab
+* preserve the current editor-panel structure for tilesheet, tile, and scene editing
+* add a scene editor checkbox to toggle scene grid visibility
+* scene rendering respects the grid visibility setting without affecting scene data
+
+**Validation**
+
+* project actions remain available at all times in the top bar
+* the new top bar fits naturally with the existing layout and does not reduce editor usability
+* scene grid can be shown or hidden immediately while editing
+* grid visibility toggle helps validate the scene appearance without changing saved scene content
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
