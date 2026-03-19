@@ -63,6 +63,30 @@ export function toggleOutputTileSelectionAtCell(state: ProjectState, col: number
   return tile;
 }
 
+export function selectOutputTileRectangle(
+  state: ProjectState,
+  anchorCol: number,
+  anchorRow: number,
+  currentCol: number,
+  currentRow: number,
+): TilePlacement[] {
+  const startCol = Math.min(anchorCol, currentCol);
+  const endCol = Math.max(anchorCol, currentCol);
+  const startRow = Math.min(anchorRow, currentRow);
+  const endRow = Math.max(anchorRow, currentRow);
+  const selectedTiles = state.project.tiles.filter((tile) =>
+    tile.destCol >= startCol
+    && tile.destCol <= endCol
+    && tile.destRow >= startRow
+    && tile.destRow <= endRow,
+  );
+
+  state.session.selectedOutputTileIds = selectedTiles.map((tile) => tile.id);
+  state.session.selectedOutputTileId = selectedTiles[0]?.id ?? null;
+
+  return selectedTiles;
+}
+
 export function clearSelectedOutputTile(state: ProjectState): void {
   state.session.selectedOutputTileId = null;
   state.session.selectedOutputTileIds = [];

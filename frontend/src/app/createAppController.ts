@@ -16,9 +16,9 @@ import {
   nudgeSelectedOutputTile,
   rotateSelectedOutputTileByQuarterTurns,
   selectOutputTileAtCell,
+  selectOutputTileRectangle,
   setSelectedOutputTileFitMode,
   snapSelectedOutputTileToEdges,
-  toggleOutputTileSelectionAtCell,
   trimSelectedOutputTileTransparentBounds,
   updateSelectedOutputTile,
 } from "../systems/tileEditorSystem";
@@ -995,13 +995,17 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
     if (!state.session.sourceSelection) {
       if (event.shiftKey) {
-        const selectedTile = toggleOutputTileSelectionAtCell(state, outputHit.col, outputHit.row);
-        const selectedCount = state.session.selectedOutputTileIds.length;
-        state.session.message = selectedTile
-          ? `Added tile ${selectedTile.id} to selection. ${selectedCount} tile${selectedCount === 1 ? "" : "s"} selected.`
-          : selectedCount > 0
-            ? `${selectedCount} tile${selectedCount === 1 ? "" : "s"} selected.`
-            : "Selection cleared.";
+        const anchorTile = getSelectedOutputTile(state);
+        const selectedTiles = selectOutputTileRectangle(
+          state,
+          anchorTile?.destCol ?? outputHit.col,
+          anchorTile?.destRow ?? outputHit.row,
+          outputHit.col,
+          outputHit.row,
+        );
+        state.session.message = selectedTiles.length > 0
+          ? `Selected ${selectedTiles.length} tile${selectedTiles.length === 1 ? "" : "s"} in a rectangle.`
+          : "No placed tiles inside the selected rectangle.";
         renderAll();
         return;
       }
