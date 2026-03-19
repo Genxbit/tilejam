@@ -3,6 +3,13 @@ import { getSourceImageForRef } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics } from "../systems/tileGridSystem";
 
 export async function exportTilesetPng(state: ProjectState, filename = "tileset.png"): Promise<{ missingTileCount: number }> {
+  const { blob, missingTileCount } = await renderTilesetPngBlob(state);
+  downloadBlob(blob, filename);
+
+  return { missingTileCount };
+}
+
+export async function renderTilesetPngBlob(state: ProjectState): Promise<{ blob: Blob; missingTileCount: number }> {
   const canvas = document.createElement("canvas");
   canvas.width = state.project.outputWidth;
   canvas.height = state.project.outputHeight;
@@ -28,12 +35,99 @@ export async function exportTilesetPng(state: ProjectState, filename = "tileset.
   }
 
   const blob = await canvasToBlob(canvas, "image/png");
-  downloadBlob(blob, filename);
+
+  return { blob, missingTileCount };
+}
+
+export async function saveTilesetPngToHandle(
+  handle: FileSystemFileHandle,
+  state: ProjectState,
+): Promise<{ missingTileCount: number }> {
+  const { blob, missingTileCount } = await renderTilesetPngBlob(state);
+  const writable = await handle.createWritable();
+
+  try {
+    await writable.write(blob);
+  } finally {
+    await writable.close();
+  }
 
   return { missingTileCount };
 }
 
+export async function saveTilesetPngWithPicker(
+  state: ProjectState,
+  suggestedName = "tileset.png",
+): Promise<{ handle: FileSystemFileHandle | null; missingTileCount: number }> {
+  if (!window.showSaveFilePicker) {
+    const { missingTileCount } = await exportTilesetPng(state, suggestedName);
+    return { handle: null, missingTileCount };
+  }
+
+  const handle = await window.showSaveFilePicker({
+    excludeAcceptAllOption: false,
+    suggestedName,
+    types: [
+      {
+        description: "PNG image",
+        accept: {
+          "image/png": [".png"],
+        },
+      },
+    ],
+  });
+
+  const { missingTileCount } = await saveTilesetPngToHandle(handle, state);
+  return { handle, missingTileCount };
+}
+
 export function exportTilesetTsj(state: ProjectState, filename = "tileset.tsj"): void {
+  const blob = createTsjBlob(state, filename);
+  downloadBlob(blob, filename);
+}
+
+export async function saveTilesetTsjToHandle(
+  handle: FileSystemFileHandle,
+  state: ProjectState,
+  filename = "tileset.tsj",
+): Promise<void> {
+  const blob = createTsjBlob(state, filename);
+  const writable = await handle.createWritable();
+
+  try {
+    await writable.write(blob);
+  } finally {
+    await writable.close();
+  }
+}
+
+export async function saveTilesetTsjWithPicker(
+  state: ProjectState,
+  suggestedName = "tileset.tsj",
+): Promise<FileSystemFileHandle | null> {
+  if (!window.showSaveFilePicker) {
+    exportTilesetTsj(state, suggestedName);
+    return null;
+  }
+
+  const handle = await window.showSaveFilePicker({
+    excludeAcceptAllOption: false,
+    suggestedName,
+    types: [
+      {
+        description: "TSJ tileset",
+        accept: {
+          "application/json": [".tsj"],
+        },
+      },
+    ],
+  });
+
+  await saveTilesetTsjToHandle(handle, state, suggestedName);
+  return handle;
+}
+
+function createTsjBlob(state: ProjectState, filename: string): Blob {
   const outputGrid = getOutputGridMetrics(state.project);
   const tsj = {
     name: filename.replace(/\.tsj$/i, ""),
@@ -56,8 +150,7 @@ export function exportTilesetTsj(state: ProjectState, filename = "tileset.tsj"):
     })),
   };
 
-  const blob = new Blob([JSON.stringify(tsj, null, 2)], { type: "application/json" });
-  downloadBlob(blob, filename);
+  return new Blob([JSON.stringify(tsj, null, 2)], { type: "application/json" });
 }
 
 function drawExportTile(

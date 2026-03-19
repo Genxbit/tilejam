@@ -16,7 +16,6 @@ const OUTPUT_GRID = "rgba(242, 193, 78, 0.28)";
 const SELECTION_FILL = "rgba(88, 201, 255, 0.22)";
 const SELECTION_STROKE = "#6be2ff";
 const HOVER_FILL = "rgba(242, 193, 78, 0.18)";
-const PLACEMENT_STROKE = "rgba(255, 214, 122, 0.45)";
 const SELECTED_TILE_STROKE = "#77f1b2";
 const SELECTED_TILE_FILL = "rgba(119, 241, 178, 0.12)";
 const VIEW_HINT = "rgba(198, 215, 229, 0.72)";
@@ -416,10 +415,6 @@ function drawPlacedTiles(
       context.fillRect(cellX, cellY, viewport.cellWidth, viewport.cellHeight);
       context.globalCompositeOperation = "source-over";
     }
-
-    context.strokeStyle = PLACEMENT_STROKE;
-    context.lineWidth = 1;
-    context.strokeRect(cellX + 0.5, cellY + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
     context.restore();
   }
 }

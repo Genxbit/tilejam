@@ -18,6 +18,7 @@ Editable source of truth.
 {
   "version": 1,
   "sourceImage": "source.png",
+  "workingImage": "working.png",
   "sourceTileWidth": 32,
   "sourceTileHeight": 32,
 
@@ -62,6 +63,7 @@ Editable source of truth.
 * defines full output
 * transforms applied at export
 * `sourceImage` is a string reference, not embedded image data
+* `workingImage` is an optional string reference to the current working/output PNG
 * `sourceTileWidth` / `sourceTileHeight` define the source tilesheet grid
 * `tileWidth` / `tileHeight` define the target/output tilesheet grid
 * `outputWidth` / `outputHeight` define the target/output image size
@@ -79,6 +81,14 @@ Generated from project.
 * tile size fixed
 * no overlap
 * optional extrusion
+
+Working/output PNG may also be loaded back into Tilejam.
+
+When loaded for editing:
+
+* it is sliced into output-grid tiles
+* each output cell becomes an editable tile
+* the loaded PNG becomes the source reference for those reconstructed tiles
 
 ---
 

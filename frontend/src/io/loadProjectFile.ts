@@ -44,6 +44,7 @@ function parseTilejamProject(value: unknown): TilejamProject {
   return {
     version: readPositiveInteger(value.version, "version"),
     sourceImage,
+    workingImage: readOptionalNullableString(value.workingImage, null, "workingImage"),
     sourceTileWidth: readOptionalTileSize(value.sourceTileWidth, value.tileWidth, "sourceTileWidth"),
     sourceTileHeight: readOptionalTileSize(value.sourceTileHeight, value.tileHeight, "sourceTileHeight"),
     tileWidth: readTileSize(value.tileWidth, "tileWidth"),

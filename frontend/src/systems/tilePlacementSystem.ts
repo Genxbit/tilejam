@@ -112,6 +112,61 @@ export function assignAllSourceTilesToOutputGrid(state: ProjectState): number {
   return placed;
 }
 
+export function rebuildTilesFromWorkingSheet(
+  state: ProjectState,
+  workingImageRef: string,
+  imageWidth: number,
+  imageHeight: number,
+): number {
+  if (imageWidth % state.project.tileWidth !== 0 || imageHeight % state.project.tileHeight !== 0) {
+    throw new Error(
+      `Working image size ${imageWidth} x ${imageHeight} must be divisible by output tile size ${state.project.tileWidth} x ${state.project.tileHeight}.`,
+    );
+  }
+
+  state.project.outputWidth = imageWidth;
+  state.project.outputHeight = imageHeight;
+
+  const outputGrid = getOutputGridMetrics(state.project);
+  const nextTiles: TilePlacement[] = [];
+
+  for (let destRow = 0; destRow < outputGrid.rows; destRow += 1) {
+    for (let destCol = 0; destCol < outputGrid.columns; destCol += 1) {
+      const id = getTileIndex(destCol, destRow, outputGrid.columns);
+      nextTiles.push({
+        id,
+        destCol,
+        destRow,
+        sourceImageRef: workingImageRef,
+        sourceRect: {
+          x: destCol * state.project.tileWidth,
+          y: destRow * state.project.tileHeight,
+          w: state.project.tileWidth,
+          h: state.project.tileHeight,
+        },
+        offsetX: 0,
+        offsetY: 0,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+        brightness: 0,
+        contrast: 1,
+        saturation: 1,
+        tintColor: null,
+        filterMode: "nearest",
+        pixelSnap: true,
+        name: `tile_${id}`,
+        tags: [],
+        collision: "none",
+      });
+    }
+  }
+
+  state.project.tiles = nextTiles;
+  return nextTiles.length;
+}
+
 function createTilePlacement(
   state: ProjectState,
   selection: SourceSelection,

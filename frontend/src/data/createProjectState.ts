@@ -5,6 +5,7 @@ export function createProjectState(): ProjectState {
     project: {
       version: 1,
       sourceImage: null,
+      workingImage: null,
       sourceTileWidth: 32,
       sourceTileHeight: 32,
       tileWidth: 32,
@@ -24,6 +25,8 @@ export function createProjectState(): ProjectState {
       message: "The bundled sample image is loaded on startup so the canvas stays immediately visible.",
       projectFileName: null,
       projectFileHandle: null,
+      workingImageFileName: null,
+      workingImageFileHandle: null,
       sourceSelection: null,
       draftSourceSelection: null,
       hoveredOutputTile: null,

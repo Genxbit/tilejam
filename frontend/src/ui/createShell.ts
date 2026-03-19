@@ -11,7 +11,9 @@ type ShellOptions = {
   onProjectSelected: (file: File) => Promise<void>;
   onOpenProject: () => Promise<boolean>;
   onSaveProject: () => Promise<void>;
-  onExportPng: () => Promise<void>;
+  onWorkingImageSelected: (file: File) => Promise<void>;
+  onOpenWorkingImage: () => Promise<boolean>;
+  onSaveWorkingImage: () => Promise<void>;
   onExportTsj: () => Promise<void>;
   onSourceGridSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
   onOutputTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
@@ -59,7 +61,9 @@ export function createShell({
   onProjectSelected,
   onOpenProject,
   onSaveProject,
-  onExportPng,
+  onWorkingImageSelected,
+  onOpenWorkingImage,
+  onSaveWorkingImage,
   onExportTsj,
   onSourceGridSizeChanged,
   onOutputTileSizeChanged,
@@ -103,7 +107,7 @@ export function createShell({
 
   const inputLabel = document.createElement("label");
   inputLabel.className = "file-input";
-  inputLabel.textContent = "Choose image";
+  inputLabel.textContent = "Open source";
 
   const input = document.createElement("input");
   input.type = "file";
@@ -159,9 +163,47 @@ export function createShell({
     await onSaveProject();
   });
 
+  const workingImageInputLabel = document.createElement("label");
+  workingImageInputLabel.className = "file-input file-input-secondary";
+  workingImageInputLabel.textContent = "Open tilesheet";
+
+  const workingImageInput = document.createElement("input");
+  workingImageInput.type = "file";
+  workingImageInput.accept = "image/png,image/*";
+  workingImageInput.addEventListener("change", async () => {
+    const file = workingImageInput.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    await onWorkingImageSelected(file);
+    workingImageInput.value = "";
+  });
+
+  workingImageInputLabel.append(workingImageInput);
+
+  workingImageInputLabel.addEventListener("click", async (event) => {
+    event.preventDefault();
+
+    const handled = await onOpenWorkingImage();
+
+    if (!handled) {
+      workingImageInput.click();
+    }
+  });
+
+  const saveWorkingImageButton = document.createElement("button");
+  saveWorkingImageButton.type = "button";
+  saveWorkingImageButton.className = "file-input file-input-secondary";
+  saveWorkingImageButton.textContent = "Save tilesheet";
+  saveWorkingImageButton.addEventListener("click", async () => {
+    await onSaveWorkingImage();
+  });
+
   const actions = document.createElement("div");
   actions.className = "panel-actions";
-  actions.append(inputLabel, projectInputLabel, saveProjectButton);
+  actions.append(inputLabel, projectInputLabel, saveProjectButton, workingImageInputLabel, saveWorkingImageButton);
 
   const historyActions = document.createElement("div");
   historyActions.className = "panel-actions";
@@ -172,9 +214,8 @@ export function createShell({
 
   const exportActions = document.createElement("div");
   exportActions.className = "panel-actions";
-  const exportPngButton = createAsyncActionButton("Export PNG", onExportPng);
   const exportTsjButton = createAsyncActionButton("Export TSJ", onExportTsj);
-  exportActions.append(exportPngButton, exportTsjButton);
+  exportActions.append(exportTsjButton);
 
   const sourceGridField = document.createElement("label");
   sourceGridField.className = "field-group";
@@ -467,6 +508,7 @@ export function createShell({
 
   const items = [
     ["Source", state.sourceImageAsset.name ?? state.project.sourceImage ?? "Not loaded"],
+    ["Working PNG", state.project.workingImage ?? "Not loaded"],
     ["Resolution", `${state.sourceImageAsset.width} x ${state.sourceImageAsset.height}`],
     ["Source grid", `${state.project.sourceTileWidth} x ${state.project.sourceTileHeight}`],
     [
@@ -525,20 +567,21 @@ export function createShell({
     update(nextState) {
       const scrollTop = panel.scrollTop;
       items[0].description.textContent = nextState.sourceImageAsset.name ?? nextState.project.sourceImage ?? "Not loaded";
-      items[1].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
-      items[2].description.textContent = `${nextState.project.sourceTileWidth} x ${nextState.project.sourceTileHeight}`;
+      items[1].description.textContent = nextState.project.workingImage ?? "Not loaded";
+      items[2].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
+      items[3].description.textContent = `${nextState.project.sourceTileWidth} x ${nextState.project.sourceTileHeight}`;
       const selection = getVisibleSelection(nextState);
-      items[3].description.textContent = selection ? `${selection.columns} x ${selection.rows} source tiles` : "None";
-      items[4].description.textContent = `${nextState.project.tileWidth} x ${nextState.project.tileHeight}`;
+      items[4].description.textContent = selection ? `${selection.columns} x ${selection.rows} source tiles` : "None";
+      items[5].description.textContent = `${nextState.project.tileWidth} x ${nextState.project.tileHeight}`;
       const nextOutputGrid = getOutputGridMetrics(nextState.project);
-      items[5].description.textContent = `${nextOutputGrid.columns} columns x ${nextOutputGrid.rows} rows`;
+      items[6].description.textContent = `${nextOutputGrid.columns} columns x ${nextOutputGrid.rows} rows`;
       const nextOutputPixels = getProjectPixelSize(nextState.project);
-      items[6].description.textContent = `${nextOutputPixels.width} x ${nextOutputPixels.height}`;
-      items[7].description.textContent = `${getAssignedTileCount(nextState)}`;
-      items[8].description.textContent = `${getProjectTileCount(nextState.project)}`;
-      items[9].description.textContent = getProjectIndexRange(nextState.project);
+      items[7].description.textContent = `${nextOutputPixels.width} x ${nextOutputPixels.height}`;
+      items[8].description.textContent = `${getAssignedTileCount(nextState)}`;
+      items[9].description.textContent = `${getProjectTileCount(nextState.project)}`;
+      items[10].description.textContent = getProjectIndexRange(nextState.project);
       const nextSelectedTile = getSelectedOutputTile(nextState);
-      items[10].description.textContent = nextSelectedTile ? `${nextSelectedTile.id}` : "None";
+      items[11].description.textContent = nextSelectedTile ? `${nextSelectedTile.id}` : "None";
       sourceGridSelect.value = `${nextState.project.sourceTileWidth}`;
       outputTileSelect.value = `${nextState.project.tileWidth}`;
       widthInput.value = `${nextState.project.outputWidth}`;

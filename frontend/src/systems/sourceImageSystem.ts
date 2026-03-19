@@ -5,18 +5,36 @@ export async function loadSourceImageFromUrl(
   url: string,
   name: string,
 ): Promise<void> {
-  const image = await loadImage(url);
-  cacheSourceImage(state, name, image, null);
+  await loadImageAssetFromUrl(state, url, name);
   setActiveSourceImage(state, name);
 }
 
 export async function loadSourceImageFromFile(state: ProjectState, file: File): Promise<void> {
+  const name = await loadImageAssetFromFile(state, file);
+  setActiveSourceImage(state, name);
+}
+
+export async function loadImageAssetFromUrl(
+  state: ProjectState,
+  url: string,
+  name: string,
+): Promise<string> {
+  const image = await loadImage(url);
+  cacheSourceImage(state, name, image, null);
+  return name;
+}
+
+export async function loadImageAssetFromFile(
+  state: ProjectState,
+  file: File,
+  name = file.name,
+): Promise<string> {
   const objectUrl = URL.createObjectURL(file);
 
   try {
     const image = await loadImage(objectUrl);
-    cacheSourceImage(state, file.name, image, objectUrl);
-    setActiveSourceImage(state, file.name);
+    cacheSourceImage(state, name, image, objectUrl);
+    return name;
   } catch (error) {
     URL.revokeObjectURL(objectUrl);
     throw error;

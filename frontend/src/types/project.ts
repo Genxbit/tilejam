@@ -7,6 +7,7 @@ export type ProjectState = {
 export type TilejamProject = {
   version: number;
   sourceImage: string | null;
+  workingImage: string | null;
   sourceTileWidth: TileSize;
   sourceTileHeight: TileSize;
   tileWidth: TileSize;
@@ -28,6 +29,8 @@ export type SessionState = {
   message: string | null;
   projectFileName: string | null;
   projectFileHandle: FileSystemFileHandle | null;
+  workingImageFileName: string | null;
+  workingImageFileHandle: FileSystemFileHandle | null;
   sourceSelection: SourceSelection | null;
   draftSourceSelection: SourceSelection | null;
   hoveredOutputTile: GridCoordinate | null;

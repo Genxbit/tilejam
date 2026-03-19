@@ -156,6 +156,9 @@ Export tileset PNG and TSJ.
 
 ## Ticket 6: Project save/load
 
+**Status**
+Completed
+
 **Goal**
 Harden working-sheet persistence.
 

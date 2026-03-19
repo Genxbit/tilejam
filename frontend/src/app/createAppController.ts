@@ -1,12 +1,12 @@
 import type { ProjectState } from "../types/project";
-import { exportTilesetPng, exportTilesetTsj } from "../io/exportTileset";
+import { saveTilesetPngToHandle, saveTilesetPngWithPicker, saveTilesetTsjWithPicker } from "../io/exportTileset";
 import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
 import { clearSelectedOutputTile, deleteSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
-import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile } from "../systems/tilePlacementSystem";
+import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
-import { clearSourceImageAsset, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
+import { clearSourceImageAsset, loadImageAssetFromFile, loadImageAssetFromUrl, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, normalizeProjectTilesToGrid, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
 import {
   getCanvasPoint,
@@ -24,6 +24,8 @@ type HistoryEntry = {
   project: ProjectState["project"];
   selectedOutputTileId: number | null;
 };
+
+const HISTORY_LIMIT = 40;
 
 export function createAppController(root: HTMLElement, state: ProjectState) {
   let resizeObserver: ResizeObserver | null = null;
@@ -140,16 +142,97 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
       renderAll();
     },
-    onExportPng: async () => {
+    onWorkingImageSelected: async (file) => {
       try {
-        const filename = getExportFilename(state, "png");
-        const result = await exportTilesetPng(state, filename);
-        state.session.message = result.missingTileCount > 0
-          ? `Exported ${filename}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
-          : `Exported ${filename}.`;
+        recordHistory();
+        await loadWorkingImageIntoState(state, file, null);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown PNG export error.";
-        state.session.message = `PNG export failed: ${message}`;
+        undoStack.pop();
+        const message = error instanceof Error ? error.message : "Unknown working PNG import error.";
+        state.session.message = `Working PNG import failed: ${message}`;
+      }
+
+      renderAll();
+    },
+    onOpenWorkingImage: async () => {
+      if (!window.showOpenFilePicker) {
+        return false;
+      }
+
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          excludeAcceptAllOption: false,
+          multiple: false,
+          types: [
+            {
+              description: "PNG image",
+              accept: {
+                "image/png": [".png"],
+              },
+            },
+          ],
+        });
+
+        if (!handle) {
+          return true;
+        }
+
+        const file = await handle.getFile();
+        recordHistory();
+        await loadWorkingImageIntoState(state, file, handle);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return true;
+        }
+
+        undoStack.pop();
+        const message = error instanceof Error ? error.message : "Unknown working PNG open error.";
+        state.session.message = `Working PNG open failed: ${message}`;
+      }
+
+      renderAll();
+      return true;
+    },
+    onSaveWorkingImage: async () => {
+      try {
+        const suggestedName = getWorkingImageFilename(state);
+
+        if (state.session.workingImageFileHandle) {
+          const result = await saveTilesetPngToHandle(state.session.workingImageFileHandle, state);
+          const fileName = state.session.workingImageFileName ?? suggestedName;
+          state.project.workingImage = fileName;
+          state.session.message = result.missingTileCount > 0
+            ? `Saved working PNG to ${fileName}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
+            : `Saved working PNG to ${fileName}.`;
+          renderAll();
+          return;
+        }
+
+        const result = await saveTilesetPngWithPicker(state, suggestedName);
+
+        if (result.handle) {
+          state.session.workingImageFileHandle = result.handle;
+          state.session.workingImageFileName = suggestedName;
+          state.project.workingImage = suggestedName;
+          state.session.message = result.missingTileCount > 0
+            ? `Saved working PNG to ${suggestedName}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
+            : `Saved working PNG to ${suggestedName}.`;
+          renderAll();
+          return;
+        }
+
+        state.session.workingImageFileName = suggestedName;
+        state.project.workingImage = suggestedName;
+        state.session.message = result.missingTileCount > 0
+          ? `Downloaded working PNG as ${suggestedName}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
+          : `Downloaded working PNG as ${suggestedName}. Browser file overwrite is not supported here.`;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "Unknown working PNG save error.";
+        state.session.message = `Working PNG save failed: ${message}`;
       }
 
       renderAll();
@@ -157,9 +240,15 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     onExportTsj: async () => {
       try {
         const filename = getExportFilename(state, "tsj");
-        exportTilesetTsj(state, filename);
-        state.session.message = `Exported ${filename}.`;
+        const handle = await saveTilesetTsjWithPicker(state, filename);
+        state.session.message = handle
+          ? `Saved ${filename}.`
+          : `Downloaded ${filename}. Browser file overwrite is not supported here.`;
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
         const message = error instanceof Error ? error.message : "Unknown TSJ export error.";
         state.session.message = `TSJ export failed: ${message}`;
       }
@@ -286,6 +375,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
   function recordHistory(): void {
     undoStack.push(createHistoryEntry(state));
+    if (undoStack.length > HISTORY_LIMIT) {
+      undoStack.splice(0, undoStack.length - HISTORY_LIMIT);
+    }
     redoStack.length = 0;
   }
 
@@ -712,6 +804,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.project.tileHeight = 32;
         state.project.outputWidth = 1024;
         state.project.outputHeight = 1024;
+        state.project.workingImage = null;
         state.session.message = "Loaded fallback sample image with default source/output grid settings.";
         bumpRenderRevision();
         undoStack.length = 0;
@@ -742,23 +835,69 @@ function getExportFilename(state: ProjectState, extension: "png" | "tsj"): strin
   return `${baseName || "tileset"}.${extension}`;
 }
 
+function getWorkingImageFilename(state: ProjectState): string {
+  const existingName = state.session.workingImageFileName ?? state.project.workingImage;
+
+  if (existingName) {
+    return existingName.replace(/\.[^.]+$/i, ".png");
+  }
+
+  return getExportFilename(state, "png");
+}
+
 
 async function loadProjectIntoState(state: ProjectState, project: ProjectState["project"], messagePrefix: string): Promise<void> {
   state.project = project;
   clearSelectionState(state);
   clearSelectedOutputTile(state);
+  state.session.workingImageFileName = project.workingImage;
+  state.session.workingImageFileHandle = null;
+
+  const resolutionMessages: string[] = [];
 
   if (!project.sourceImage) {
     clearSourceImageAsset(state);
-    state.session.message = `${messagePrefix} No source image reference was included.`;
-    return;
+    resolutionMessages.push("No source image reference was included.");
+  } else {
+    try {
+      await loadSourceImageFromUrl(state, project.sourceImage, project.sourceImage);
+      resolutionMessages.push(`Source image resolved from ${project.sourceImage}.`);
+    } catch {
+      clearSourceImageAsset(state);
+      resolutionMessages.push(`Source image "${project.sourceImage}" could not be resolved automatically. Use "Choose image" to relink it.`);
+    }
   }
 
-  try {
-    await loadSourceImageFromUrl(state, project.sourceImage, project.sourceImage);
-    state.session.message = `${messagePrefix} Source image resolved from ${project.sourceImage}.`;
-  } catch {
-    clearSourceImageAsset(state);
-    state.session.message = `${messagePrefix} Source image "${project.sourceImage}" could not be resolved automatically. Use "Choose image" to relink it.`;
+  if (project.workingImage && project.workingImage !== project.sourceImage) {
+    try {
+      await loadImageAssetFromUrl(state, project.workingImage, project.workingImage);
+      resolutionMessages.push(`Working PNG resolved from ${project.workingImage}.`);
+    } catch {
+      resolutionMessages.push(`Working PNG "${project.workingImage}" could not be resolved automatically. Use "Open working PNG" to relink it.`);
+    }
   }
+
+  state.session.message = `${messagePrefix} ${resolutionMessages.join(" ")}`.trim();
+}
+
+async function loadWorkingImageIntoState(
+  state: ProjectState,
+  file: File,
+  handle: FileSystemFileHandle | null,
+): Promise<void> {
+  const workingImageRef = await loadImageAssetFromFile(state, file, file.name);
+  const asset = state.session.sourceImageAssetCache[workingImageRef];
+
+  if (!asset) {
+    throw new Error("Working PNG could not be cached.");
+  }
+
+  clearSelectionState(state);
+  clearSelectedOutputTile(state);
+  state.project.workingImage = workingImageRef;
+  state.session.workingImageFileName = file.name;
+  state.session.workingImageFileHandle = handle;
+  const tileCount = rebuildTilesFromWorkingSheet(state, workingImageRef, asset.width, asset.height);
+  state.session.renderRevision += 1;
+  state.session.message = `Loaded working PNG ${file.name} and reconstructed ${tileCount} editable output tile${tileCount === 1 ? "" : "s"}.`;
 }
