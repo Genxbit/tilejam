@@ -5,7 +5,23 @@ import { loadSceneFile, loadSceneFromHandle, loadSceneFromUrl, saveSceneToHandle
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
 import { createProjectState } from "../data/createProjectState";
-import { clearSelectedOutputTile, deleteSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
+import {
+  alignSelectedOutputTile,
+  clearSelectedOutputTile,
+  deleteSelectedOutputTile,
+  getSelectedOutputTile,
+  getSelectedOutputTiles,
+  moveSelectedOutputTileBy,
+  moveTileToCell,
+  nudgeSelectedOutputTile,
+  rotateSelectedOutputTileByQuarterTurns,
+  selectOutputTileAtCell,
+  setSelectedOutputTileFitMode,
+  snapSelectedOutputTileToEdges,
+  toggleOutputTileSelectionAtCell,
+  trimSelectedOutputTileTransparentBounds,
+  updateSelectedOutputTile,
+} from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
 import { addSceneLayer, clearSceneLayers, deleteSelectedSceneCell, ensureScene, moveActiveSceneLayerBy, moveSceneCellTo, moveSelectedSceneCellBy, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
@@ -17,7 +33,9 @@ import {
   loadSourceImageFromFile,
   loadSourceImageFromFileWithRef,
   loadSourceImageFromUrl,
+  getSourceImageForRef,
 } from "../systems/sourceImageSystem";
+import { renderTileCanvas } from "../systems/tileRenderSystem";
 import { getOutputGridMetrics, getProjectPixelSize, normalizeProjectTilesToGrid, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
 import {
   getCanvasPoint,
@@ -34,6 +52,7 @@ import { createShell } from "../ui/createShell";
 type HistoryEntry = {
   project: ProjectState["project"];
   selectedOutputTileId: number | null;
+  selectedOutputTileIds: number[];
   selectedSceneCell: ProjectState["session"]["selectedSceneCell"];
   activeSceneLayerId: number | null;
 };
@@ -271,6 +290,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.workingImageFileName = null;
       state.session.workingImageFileHandle = null;
       state.session.selectedOutputTileId = null;
+      state.session.selectedOutputTileIds = [];
       state.session.hoveredOutputTile = null;
       clearSelectionState(state);
       state.session.outputCamera = { ...freshState.session.outputCamera };
@@ -561,6 +581,205 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = `Updated tile ${tile.id} at ${tile.destCol}, ${tile.destRow}.`;
       renderAll();
     },
+    onNudgeSelectedTile: async (deltaX, deltaY) => {
+      recordHistory();
+      const selectedTiles = getSelectedOutputTiles(state);
+
+      if (selectedTiles.length > 1) {
+        const shiftedCount = await bakeSelectedTilesGroupShift(state, selectedTiles, deltaX, deltaY);
+
+        if (shiftedCount < 1) {
+          undoStack.pop();
+          state.session.message = "Select output tiles with resolved images before shifting the group.";
+          renderAll();
+          return;
+        }
+
+        bumpRenderRevision();
+        state.session.message = `Shifted ${shiftedCount} selected tiles as one group by ${deltaX}, ${deltaY}.`;
+        renderAll();
+        return;
+      }
+
+      const tile = nudgeSelectedOutputTile(state, deltaX, deltaY);
+
+      if (!tile) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before nudging it.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Nudged tile ${tile.id} by ${deltaX}, ${deltaY}.`;
+      renderAll();
+    },
+    onSetSelectedTileFitMode: (fitMode) => {
+      recordHistory();
+      const tile = setSelectedOutputTileFitMode(state, fitMode);
+
+      if (!tile) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before changing fit mode.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Set tile ${tile.id} fit mode to ${fitMode}.`;
+      renderAll();
+    },
+    onAlignSelectedTile: (anchorX, anchorY) => {
+      recordHistory();
+      const tile = alignSelectedOutputTile(state, anchorX, anchorY);
+
+      if (!tile) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before aligning it.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Aligned tile ${tile.id} to ${anchorX}/${anchorY}.`;
+      renderAll();
+    },
+    onSnapSelectedTileToEdges: () => {
+      recordHistory();
+      const tile = snapSelectedOutputTileToEdges(state);
+
+      if (!tile) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before snapping it.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Snapped tile ${tile.id} to the nearest tile edges.`;
+      renderAll();
+    },
+    onBakeSelectedTileEdgeExtend: async () => {
+      recordHistory();
+      const selectedTiles = getSelectedOutputTiles(state);
+
+      if (selectedTiles.length < 1) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before baking edge extend.";
+        renderAll();
+        return;
+      }
+
+      let bakedCount = 0;
+
+      for (const tile of selectedTiles) {
+        const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+        if (!image) {
+          continue;
+        }
+
+        const bakedCanvas = renderTileCanvas(
+          image,
+          tile,
+          state.project.tileWidth,
+          state.project.tileHeight,
+          { applyEdgeExtend: true },
+        );
+
+        if (!bakedCanvas) {
+          continue;
+        }
+
+        const ref = `runtime:edge-extend:${Date.now()}:${tile.id}:${Math.random().toString(36).slice(2, 8)}`;
+        await loadImageAssetFromUrl(state, bakedCanvas.toDataURL("image/png"), ref);
+
+        tile.sourceImageRef = ref;
+        tile.sourceRect = {
+          x: 0,
+          y: 0,
+          w: state.project.tileWidth,
+          h: state.project.tileHeight,
+        };
+        tile.offsetX = 0;
+        tile.offsetY = 0;
+        tile.scaleX = 1;
+        tile.scaleY = 1;
+        tile.fitMode = "manual";
+        tile.anchorX = "center";
+        tile.anchorY = "center";
+        tile.cropLeft = 0;
+        tile.cropRight = 0;
+        tile.cropTop = 0;
+        tile.cropBottom = 0;
+        tile.clampToTile = true;
+        tile.edgeStretchLeft = 0;
+        tile.edgeStretchRight = 0;
+        tile.edgeStretchTop = 0;
+        tile.edgeStretchBottom = 0;
+        tile.edgeExtend = false;
+        tile.fillExposedColor = null;
+        tile.flipX = false;
+        tile.flipY = false;
+        tile.rotationQuarterTurns = 0;
+        tile.brightness = 0;
+        tile.contrast = 1;
+        tile.saturation = 1;
+        tile.tintColor = null;
+        tile.filterMode = "nearest";
+        tile.pixelSnap = true;
+        bakedCount += 1;
+      }
+
+      if (bakedCount < 1) {
+        undoStack.pop();
+        state.session.message = "Could not bake edge extend because the selected tile images were unavailable.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = bakedCount > 1
+        ? `Baked edge extend into ${bakedCount} selected tiles.`
+        : `Baked edge extend into tile ${selectedTiles[0]?.id ?? ""}.`;
+      renderAll();
+    },
+    onRotateSelectedTile: (delta) => {
+      recordHistory();
+      const tile = rotateSelectedOutputTileByQuarterTurns(state, delta);
+
+      if (!tile) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before rotating it.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Rotated tile ${tile.id} by ${delta > 0 ? "90" : "-90"} degrees.`;
+      renderAll();
+    },
+    onTrimSelectedTileTransparent: () => {
+      recordHistory();
+      const tile = getSelectedOutputTile(state);
+      const image = tile ? (getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image) : null;
+
+      if (!tile || !image) {
+        undoStack.pop();
+        state.session.message = "Select an output tile with a resolved image before trimming transparency.";
+        renderAll();
+        return;
+      }
+
+      trimSelectedOutputTileTransparentBounds(state, image);
+      bumpRenderRevision();
+      state.session.message = `Trimmed transparent edges for tile ${tile.id}.`;
+      renderAll();
+    },
+    onTilePreviewModeChanged: (previewMode) => {
+      state.session.tilePreviewMode = previewMode;
+      renderAll();
+    },
     onClearSelectedTile: () => {
       recordHistory();
       const deletedTile = deleteSelectedOutputTile(state);
@@ -612,6 +831,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       const clearedCount = state.project.tiles.length;
       state.project.tiles = [];
       state.session.selectedOutputTileId = null;
+      state.session.selectedOutputTileIds = [];
       state.session.hoveredOutputTile = null;
       state.project.workingImage = null;
       state.session.workingImageFileName = null;
@@ -769,6 +989,18 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     }
 
     if (!state.session.sourceSelection) {
+      if (event.shiftKey) {
+        const selectedTile = toggleOutputTileSelectionAtCell(state, outputHit.col, outputHit.row);
+        const selectedCount = state.session.selectedOutputTileIds.length;
+        state.session.message = selectedTile
+          ? `Added tile ${selectedTile.id} to selection. ${selectedCount} tile${selectedCount === 1 ? "" : "s"} selected.`
+          : selectedCount > 0
+            ? `${selectedCount} tile${selectedCount === 1 ? "" : "s"} selected.`
+            : "Selection cleared.";
+        renderAll();
+        return;
+      }
+
       const selectedTile = selectOutputTileAtCell(state, outputHit.col, outputHit.row);
       if (selectedTile) {
         activePointerId = event.pointerId;
@@ -1092,7 +1324,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
         if (movedTile) {
           event.preventDefault();
-          state.session.message = `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`;
+          const selectedCount = state.session.selectedOutputTileIds.length || (state.session.selectedOutputTileId !== null ? 1 : 0);
+          state.session.message = selectedCount > 1
+            ? `Moved ${selectedCount} selected tiles.`
+            : `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`;
           renderAll();
         }
 
@@ -1140,7 +1375,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         return;
       }
 
-      const tile = state.project.tiles.find((entry) => entry.id === state.session.selectedOutputTileId) ?? null;
+      const tile = getSelectedOutputTile(state);
+      const selectedCount = getSelectedOutputTiles(state).length;
 
       if (!tile) {
         return;
@@ -1156,7 +1392,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       }
 
       bumpRenderRevision();
-      state.session.message = `Cleared tile ${deletedTile.id} from ${deletedTile.destCol}, ${deletedTile.destRow}.`;
+      state.session.message = selectedCount > 1
+        ? `Cleared ${selectedCount} selected tiles.`
+        : `Cleared tile ${deletedTile.id} from ${deletedTile.destCol}, ${deletedTile.destRow}.`;
       renderAll();
     }
   }
@@ -1213,6 +1451,7 @@ function createHistoryEntry(state: ProjectState): HistoryEntry {
   return {
     project: JSON.parse(JSON.stringify(state.project)) as ProjectState["project"],
     selectedOutputTileId: state.session.selectedOutputTileId,
+    selectedOutputTileIds: [...state.session.selectedOutputTileIds],
     selectedSceneCell: state.session.selectedSceneCell ? { ...state.session.selectedSceneCell } : null,
     activeSceneLayerId: state.session.activeSceneLayerId,
   };
@@ -1221,6 +1460,7 @@ function createHistoryEntry(state: ProjectState): HistoryEntry {
 function restoreHistoryEntry(state: ProjectState, entry: HistoryEntry): void {
   state.project = JSON.parse(JSON.stringify(entry.project)) as ProjectState["project"];
   state.session.selectedOutputTileId = entry.selectedOutputTileId;
+  state.session.selectedOutputTileIds = [...entry.selectedOutputTileIds];
   state.session.selectedSceneCell = entry.selectedSceneCell ? { ...entry.selectedSceneCell } : null;
   state.session.activeSceneLayerId = entry.activeSceneLayerId;
   normalizeProjectTilesToGrid(state);
@@ -1230,6 +1470,134 @@ function getExportFilename(state: ProjectState, extension: "png" | "tsj"): strin
   const projectName = state.session.projectFileName ?? "latest.tilejam.json";
   const baseName = projectName.replace(/(?:\.tilejam)?\.json$/i, "");
   return `${baseName || "tileset"}.${extension}`;
+}
+
+async function bakeSelectedTilesGroupShift(
+  state: ProjectState,
+  selectedTiles: ProjectState["project"]["tiles"],
+  deltaX: number,
+  deltaY: number,
+): Promise<number> {
+  if (selectedTiles.length < 1) {
+    return 0;
+  }
+
+  const minCol = Math.min(...selectedTiles.map((tile) => tile.destCol));
+  const maxCol = Math.max(...selectedTiles.map((tile) => tile.destCol));
+  const minRow = Math.min(...selectedTiles.map((tile) => tile.destRow));
+  const maxRow = Math.max(...selectedTiles.map((tile) => tile.destRow));
+  const columns = maxCol - minCol + 1;
+  const rows = maxRow - minRow + 1;
+  const groupCanvas = document.createElement("canvas");
+  groupCanvas.width = columns * state.project.tileWidth;
+  groupCanvas.height = rows * state.project.tileHeight;
+  const groupContext = groupCanvas.getContext("2d");
+
+  if (!groupContext) {
+    return 0;
+  }
+
+  groupContext.clearRect(0, 0, groupCanvas.width, groupCanvas.height);
+
+  for (const tile of selectedTiles) {
+    const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+    if (!image) {
+      continue;
+    }
+
+    const renderedTile = renderTileCanvas(image, tile, state.project.tileWidth, state.project.tileHeight);
+
+    if (!renderedTile) {
+      continue;
+    }
+
+    groupContext.drawImage(
+      renderedTile,
+      (tile.destCol - minCol) * state.project.tileWidth,
+      (tile.destRow - minRow) * state.project.tileHeight,
+    );
+  }
+
+  const shiftedCanvas = document.createElement("canvas");
+  shiftedCanvas.width = groupCanvas.width;
+  shiftedCanvas.height = groupCanvas.height;
+  const shiftedContext = shiftedCanvas.getContext("2d");
+
+  if (!shiftedContext) {
+    return 0;
+  }
+
+  shiftedContext.clearRect(0, 0, shiftedCanvas.width, shiftedCanvas.height);
+  shiftedContext.drawImage(groupCanvas, deltaX, deltaY);
+
+  let shiftedCount = 0;
+
+  for (const tile of selectedTiles) {
+    const tileCanvas = document.createElement("canvas");
+    tileCanvas.width = state.project.tileWidth;
+    tileCanvas.height = state.project.tileHeight;
+    const tileContext = tileCanvas.getContext("2d");
+
+    if (!tileContext) {
+      continue;
+    }
+
+    const sourceX = (tile.destCol - minCol) * state.project.tileWidth;
+    const sourceY = (tile.destRow - minRow) * state.project.tileHeight;
+    tileContext.clearRect(0, 0, tileCanvas.width, tileCanvas.height);
+    tileContext.drawImage(
+      shiftedCanvas,
+      sourceX,
+      sourceY,
+      state.project.tileWidth,
+      state.project.tileHeight,
+      0,
+      0,
+      state.project.tileWidth,
+      state.project.tileHeight,
+    );
+
+    const ref = `runtime:group-shift:${Date.now()}:${tile.id}:${Math.random().toString(36).slice(2, 8)}`;
+    await loadImageAssetFromUrl(state, tileCanvas.toDataURL("image/png"), ref);
+    tile.sourceImageRef = ref;
+    tile.sourceRect = {
+      x: 0,
+      y: 0,
+      w: state.project.tileWidth,
+      h: state.project.tileHeight,
+    };
+    tile.offsetX = 0;
+    tile.offsetY = 0;
+    tile.scaleX = 1;
+    tile.scaleY = 1;
+    tile.fitMode = "manual";
+    tile.anchorX = "center";
+    tile.anchorY = "center";
+    tile.cropLeft = 0;
+    tile.cropRight = 0;
+    tile.cropTop = 0;
+    tile.cropBottom = 0;
+    tile.clampToTile = true;
+    tile.edgeStretchLeft = 0;
+    tile.edgeStretchRight = 0;
+    tile.edgeStretchTop = 0;
+    tile.edgeStretchBottom = 0;
+    tile.edgeExtend = false;
+    tile.fillExposedColor = null;
+    tile.flipX = false;
+    tile.flipY = false;
+    tile.rotationQuarterTurns = 0;
+    tile.brightness = 0;
+    tile.contrast = 1;
+    tile.saturation = 1;
+    tile.tintColor = null;
+    tile.filterMode = "nearest";
+    tile.pixelSnap = true;
+    shiftedCount += 1;
+  }
+
+  return shiftedCount;
 }
 
 function getDisplayFileName(path: string | null): string | null {

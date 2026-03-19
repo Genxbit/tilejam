@@ -32,6 +32,7 @@ export function setOutputImageSize(state: ProjectState, width: number, height: n
 export function normalizeProjectTilesToGrid(state: ProjectState): number {
   const outputGrid = getOutputGridMetrics(state.project);
   const selectedTile = state.project.tiles.find((tile) => tile.id === state.session.selectedOutputTileId) ?? null;
+  const selectedTiles = state.project.tiles.filter((tile) => state.session.selectedOutputTileIds.includes(tile.id));
   const dedupedTiles = new Map<string, typeof state.project.tiles[number]>();
   let droppedCount = 0;
 
@@ -63,6 +64,18 @@ export function normalizeProjectTilesToGrid(state: ProjectState): number {
     && selectedTile.destRow < outputGrid.rows
       ? getTileIndex(selectedTile.destCol, selectedTile.destRow, outputGrid.columns)
       : null;
+  state.session.selectedOutputTileIds = selectedTiles
+    .filter((tile) =>
+      tile.destCol >= 0
+      && tile.destCol < outputGrid.columns
+      && tile.destRow >= 0
+      && tile.destRow < outputGrid.rows,
+    )
+    .map((tile) => getTileIndex(tile.destCol, tile.destRow, outputGrid.columns));
+
+  if (state.session.selectedOutputTileId !== null && !state.session.selectedOutputTileIds.includes(state.session.selectedOutputTileId)) {
+    state.session.selectedOutputTileIds.unshift(state.session.selectedOutputTileId);
+  }
 
   return droppedCount;
 }

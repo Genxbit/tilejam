@@ -43,8 +43,10 @@ export type SessionState = {
   draftSourceSelection: SourceSelection | null;
   hoveredOutputTile: GridCoordinate | null;
   selectedOutputTileId: number | null;
+  selectedOutputTileIds: number[];
   selectedSceneCell: GridCoordinate | null;
   hoveredPanel: WorkspacePanel | null;
+  tilePreviewMode: TilePreviewMode;
   sourceCamera: CameraState;
   outputCamera: CameraState;
   sourceImageAssetCache: Record<string, CachedSourceImageAsset>;
@@ -87,8 +89,23 @@ export type TilePlacement = {
   offsetY: number;
   scaleX: number;
   scaleY: number;
+  fitMode: TileFitMode;
+  anchorX: TileAnchorX;
+  anchorY: TileAnchorY;
+  cropLeft: number;
+  cropRight: number;
+  cropTop: number;
+  cropBottom: number;
+  clampToTile: boolean;
+  edgeStretchLeft: number;
+  edgeStretchRight: number;
+  edgeStretchTop: number;
+  edgeStretchBottom: number;
+  edgeExtend: boolean;
+  fillExposedColor: string | null;
   flipX: boolean;
   flipY: boolean;
+  rotationQuarterTurns: 0 | 1 | 2 | 3;
   brightness: number;
   contrast: number;
   saturation: number;
@@ -101,6 +118,10 @@ export type TilePlacement = {
 };
 
 export type TileFilterMode = "nearest" | "linear";
+export type TileFitMode = "manual" | "stretch" | "contain";
+export type TileAnchorX = "left" | "center" | "right";
+export type TileAnchorY = "top" | "center" | "bottom";
+export type TilePreviewMode = "none" | "repeat" | "neighbors";
 
 export type CachedSourceImageAsset = {
   image: HTMLImageElement;

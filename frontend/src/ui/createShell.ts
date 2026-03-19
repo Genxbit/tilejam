@@ -1,5 +1,13 @@
-import type { ProjectState, TileFilterMode, WorkspaceMode } from "../types/project";
-import { getSelectedOutputTile } from "../systems/tileEditorSystem";
+import type {
+  ProjectState,
+  TileAnchorX,
+  TileAnchorY,
+  TileFilterMode,
+  TileFitMode,
+  TilePreviewMode,
+  WorkspaceMode,
+} from "../types/project";
+import { getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
 import { getOutputGridMetrics, getProjectIndexRange, getProjectPixelSize, getProjectTileCount, TILE_SIZE_OPTIONS } from "../systems/tileGridSystem";
 import { getAssignedTileCount } from "../systems/tilePlacementSystem";
 import { getActiveSceneLayer } from "../systems/sceneSystem";
@@ -43,6 +51,14 @@ type ShellOptions = {
   }) => void;
   onSceneLayerMoved: (delta: -1 | 1) => void;
   onSelectedTileUpdated: (patch: SelectedTilePatch) => void;
+  onNudgeSelectedTile: (deltaX: number, deltaY: number) => Promise<void>;
+  onSetSelectedTileFitMode: (fitMode: TileFitMode) => void;
+  onAlignSelectedTile: (anchorX: TileAnchorX, anchorY: TileAnchorY) => void;
+  onSnapSelectedTileToEdges: () => void;
+  onBakeSelectedTileEdgeExtend: () => Promise<void>;
+  onRotateSelectedTile: (delta: 1 | -1) => void;
+  onTrimSelectedTileTransparent: () => void;
+  onTilePreviewModeChanged: (previewMode: TilePreviewMode) => void;
   onClearSelectedTile: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -57,8 +73,23 @@ type SelectedTilePatch = {
   offsetY?: number;
   scaleX?: number;
   scaleY?: number;
+  fitMode?: TileFitMode;
+  anchorX?: TileAnchorX;
+  anchorY?: TileAnchorY;
+  cropLeft?: number;
+  cropRight?: number;
+  cropTop?: number;
+  cropBottom?: number;
+  clampToTile?: boolean;
+  edgeStretchLeft?: number;
+  edgeStretchRight?: number;
+  edgeStretchTop?: number;
+  edgeStretchBottom?: number;
+  edgeExtend?: boolean;
+  fillExposedColor?: string | null;
   flipX?: boolean;
   flipY?: boolean;
+  rotationQuarterTurns?: 0 | 1 | 2 | 3;
   brightness?: number;
   contrast?: number;
   saturation?: number;
@@ -75,7 +106,7 @@ type Shell = {
   update: (state: ProjectState) => void;
 };
 
-type EditorTab = "layout" | "visual" | "meta";
+type EditorTab = "layout" | "fit" | "preview" | "visual" | "meta";
 type SidebarTab = "tilesheet" | "tile" | "scene";
 
 export function createShell({
@@ -108,6 +139,14 @@ export function createShell({
   onSceneLayerUpdated,
   onSceneLayerMoved,
   onSelectedTileUpdated,
+  onNudgeSelectedTile,
+  onSetSelectedTileFitMode,
+  onAlignSelectedTile,
+  onSnapSelectedTileToEdges,
+  onBakeSelectedTileEdgeExtend,
+  onRotateSelectedTile,
+  onTrimSelectedTileTransparent,
+  onTilePreviewModeChanged,
   onClearSelectedTile,
   onUndo,
   onRedo,
@@ -417,6 +456,7 @@ export function createShell({
   derivedGridField.append(derivedGridLabel, derivedGridValue, derivedGridNote);
 
   const selectedTile = getSelectedOutputTile(state);
+  const selectedTiles = getSelectedOutputTiles(state);
   const selectedSceneLayer = getActiveSceneLayer(state);
   let activeSidebarTab: SidebarTab = state.session.activeWorkspaceMode === "scene" ? "scene" : "tilesheet";
   const editorSection = createControlSection(
@@ -426,12 +466,14 @@ export function createShell({
   let activeEditorTab: EditorTab = "layout";
   const editorEmpty = document.createElement("p");
   editorEmpty.className = "field-note";
-  editorEmpty.textContent = selectedTile ? "" : "No output tile selected yet.";
+  editorEmpty.textContent = selectedTile ? "" : "No output tile selected yet. Hold Shift and click to build a multi-selection.";
 
   const selectedTileSummary = document.createElement("div");
   selectedTileSummary.className = "derived-value";
-  selectedTileSummary.textContent = selectedTile
-    ? `Tile ${selectedTile.id} at ${selectedTile.destCol}, ${selectedTile.destRow}`
+  selectedTileSummary.textContent = selectedTiles.length > 1
+    ? `${selectedTiles.length} tiles selected · primary ${selectedTile?.id ?? "none"}`
+    : selectedTile
+      ? `Tile ${selectedTile.id} at ${selectedTile.destCol}, ${selectedTile.destRow}`
     : "No selection";
 
   const editorActions = document.createElement("div");
@@ -443,12 +485,18 @@ export function createShell({
   const editorTabs = document.createElement("div");
   editorTabs.className = "editor-tabs";
   const layoutTab = createEditorTabButton("Layout");
+  const fitTab = createEditorTabButton("Fit");
+  const previewTab = createEditorTabButton("Preview");
   const visualTab = createEditorTabButton("Visual");
   const metaTab = createEditorTabButton("Meta");
-  editorTabs.append(layoutTab, visualTab, metaTab);
+  editorTabs.append(layoutTab, fitTab, previewTab, visualTab, metaTab);
 
   const layoutPanel = document.createElement("div");
   layoutPanel.className = "editor-tab-panel";
+  const fitPanel = document.createElement("div");
+  fitPanel.className = "editor-tab-panel";
+  const previewPanel = document.createElement("div");
+  previewPanel.className = "editor-tab-panel";
   const visualPanel = document.createElement("div");
   visualPanel.className = "editor-tab-panel";
   const metaPanel = document.createElement("div");
@@ -489,6 +537,149 @@ export function createShell({
     onSelectedTileUpdated({ scaleY: Math.max(0.1, Number.parseFloat(scaleYField.input.value) || 1) });
   });
   scaleInputs.append(scaleXField.field, scaleYField.field);
+
+  const nudgeActions = document.createElement("div");
+  nudgeActions.className = "panel-actions";
+  nudgeActions.append(
+    createAsyncActionButton("Left", async () => { await onNudgeSelectedTile(-1, 0); }),
+    createAsyncActionButton("Right", async () => { await onNudgeSelectedTile(1, 0); }),
+    createAsyncActionButton("Up", async () => { await onNudgeSelectedTile(0, -1); }),
+    createAsyncActionButton("Down", async () => { await onNudgeSelectedTile(0, 1); }),
+  );
+
+  const cropInputs = document.createElement("div");
+  cropInputs.className = "grid-inputs";
+  const cropLeftField = createLabeledNumberField("Crop L", selectedTile?.cropLeft ?? 0, "Crop left", 0, 1);
+  const cropRightField = createLabeledNumberField("Crop R", selectedTile?.cropRight ?? 0, "Crop right", 0, 1);
+  const cropTopField = createLabeledNumberField("Crop T", selectedTile?.cropTop ?? 0, "Crop top", 0, 1);
+  const cropBottomField = createLabeledNumberField("Crop B", selectedTile?.cropBottom ?? 0, "Crop bottom", 0, 1);
+  cropLeftField.input.addEventListener("change", () => { onSelectedTileUpdated({ cropLeft: Math.max(0, Number.parseInt(cropLeftField.input.value, 10) || 0) }); });
+  cropRightField.input.addEventListener("change", () => { onSelectedTileUpdated({ cropRight: Math.max(0, Number.parseInt(cropRightField.input.value, 10) || 0) }); });
+  cropTopField.input.addEventListener("change", () => { onSelectedTileUpdated({ cropTop: Math.max(0, Number.parseInt(cropTopField.input.value, 10) || 0) }); });
+  cropBottomField.input.addEventListener("change", () => { onSelectedTileUpdated({ cropBottom: Math.max(0, Number.parseInt(cropBottomField.input.value, 10) || 0) }); });
+  cropInputs.append(cropLeftField.field, cropRightField.field, cropTopField.field, cropBottomField.field);
+
+  const stretchInputs = document.createElement("div");
+  stretchInputs.className = "grid-inputs";
+  const edgeStretchLeftField = createLabeledNumberField("Stretch L", selectedTile?.edgeStretchLeft ?? 0, "Stretch left", undefined, 1);
+  const edgeStretchRightField = createLabeledNumberField("Stretch R", selectedTile?.edgeStretchRight ?? 0, "Stretch right", undefined, 1);
+  const edgeStretchTopField = createLabeledNumberField("Stretch T", selectedTile?.edgeStretchTop ?? 0, "Stretch top", undefined, 1);
+  const edgeStretchBottomField = createLabeledNumberField("Stretch B", selectedTile?.edgeStretchBottom ?? 0, "Stretch bottom", undefined, 1);
+  edgeStretchLeftField.input.addEventListener("change", () => { onSelectedTileUpdated({ edgeStretchLeft: Number.parseFloat(edgeStretchLeftField.input.value) || 0 }); });
+  edgeStretchRightField.input.addEventListener("change", () => { onSelectedTileUpdated({ edgeStretchRight: Number.parseFloat(edgeStretchRightField.input.value) || 0 }); });
+  edgeStretchTopField.input.addEventListener("change", () => { onSelectedTileUpdated({ edgeStretchTop: Number.parseFloat(edgeStretchTopField.input.value) || 0 }); });
+  edgeStretchBottomField.input.addEventListener("change", () => { onSelectedTileUpdated({ edgeStretchBottom: Number.parseFloat(edgeStretchBottomField.input.value) || 0 }); });
+  stretchInputs.append(edgeStretchLeftField.field, edgeStretchRightField.field, edgeStretchTopField.field, edgeStretchBottomField.field);
+
+  const repairOptions = document.createElement("div");
+  repairOptions.className = "grid-inputs";
+  const fillExposedField = document.createElement("label");
+  fillExposedField.className = "field-group";
+  const fillExposedLabel = document.createElement("span");
+  fillExposedLabel.className = "field-label";
+  fillExposedLabel.textContent = "Fill exposed";
+  const fillExposedInput = document.createElement("input");
+  fillExposedInput.type = "text";
+  fillExposedInput.className = "grid-number-input";
+  fillExposedInput.placeholder = "#000000";
+  fillExposedInput.value = selectedTile?.fillExposedColor ?? "";
+  fillExposedInput.addEventListener("change", () => {
+    const value = fillExposedInput.value.trim();
+    onSelectedTileUpdated({ fillExposedColor: value.length > 0 ? value : null });
+  });
+  fillExposedField.append(fillExposedLabel, fillExposedInput);
+
+  const edgeExtendField = document.createElement("div");
+  edgeExtendField.className = "number-field";
+  const edgeExtendLabel = document.createElement("span");
+  edgeExtendLabel.className = "number-field-label";
+  edgeExtendLabel.textContent = "Gap repair";
+  const edgeExtendButton = createAsyncActionButton("Bake Edge Extend", onBakeSelectedTileEdgeExtend);
+  edgeExtendField.append(edgeExtendLabel, edgeExtendButton);
+  repairOptions.append(fillExposedField, edgeExtendField);
+
+  const fitActions = document.createElement("div");
+  fitActions.className = "panel-actions";
+  fitActions.append(
+    createActionButton("Manual", () => { onSetSelectedTileFitMode("manual"); }),
+    createActionButton("Stretch", () => { onSetSelectedTileFitMode("stretch"); }),
+    createActionButton("Contain", () => { onSetSelectedTileFitMode("contain"); }),
+    createActionButton("Trim Transparent", onTrimSelectedTileTransparent),
+  );
+
+  const anchorField = document.createElement("div");
+  anchorField.className = "grid-inputs";
+  const anchorXField = document.createElement("label");
+  anchorXField.className = "field-group";
+  const anchorXLabel = document.createElement("span");
+  anchorXLabel.className = "field-label";
+  anchorXLabel.textContent = "Anchor X";
+  const anchorXSelect = document.createElement("select");
+  anchorXSelect.className = "tile-size-select";
+  ["left", "center", "right"].forEach((value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    anchorXSelect.append(option);
+  });
+  anchorXSelect.value = selectedTile?.anchorX ?? "center";
+  anchorXField.append(anchorXLabel, anchorXSelect);
+  const anchorYField = document.createElement("label");
+  anchorYField.className = "field-group";
+  const anchorYLabel = document.createElement("span");
+  anchorYLabel.className = "field-label";
+  anchorYLabel.textContent = "Anchor Y";
+  const anchorYSelect = document.createElement("select");
+  anchorYSelect.className = "tile-size-select";
+  ["top", "center", "bottom"].forEach((value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    anchorYSelect.append(option);
+  });
+  anchorYSelect.value = selectedTile?.anchorY ?? "center";
+  anchorYField.append(anchorYLabel, anchorYSelect);
+  anchorField.append(anchorXField, anchorYField);
+
+  const anchorActions = document.createElement("div");
+  anchorActions.className = "panel-actions";
+  anchorActions.append(
+    createActionButton("Apply Anchor", () => {
+      onAlignSelectedTile(anchorXSelect.value as TileAnchorX, anchorYSelect.value as TileAnchorY);
+    }),
+    createActionButton("Edge Snap", onSnapSelectedTileToEdges),
+    createActionButton("Rotate -90", () => { onRotateSelectedTile(-1); }),
+    createActionButton("Rotate +90", () => { onRotateSelectedTile(1); }),
+  );
+
+  const previewField = document.createElement("label");
+  previewField.className = "field-group";
+  const previewLabel = document.createElement("span");
+  previewLabel.className = "field-label";
+  previewLabel.textContent = "Preview mode";
+  const previewSelect = document.createElement("select");
+  previewSelect.className = "tile-size-select";
+  [
+    ["none", "None"],
+    ["repeat", "Repeat"],
+    ["neighbors", "Neighbors"],
+  ].forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    previewSelect.append(option);
+  });
+  previewSelect.value = state.session.tilePreviewMode;
+  previewSelect.addEventListener("change", () => {
+    if (previewSelect.value === "none" || previewSelect.value === "repeat" || previewSelect.value === "neighbors") {
+      onTilePreviewModeChanged(previewSelect.value);
+    }
+  });
+  previewField.append(previewLabel, previewSelect);
+
+  const previewNote = document.createElement("p");
+  previewNote.className = "field-note";
+  previewNote.textContent = "Preview is shown on the canvas for the selected tile.";
 
   const colorInputs = document.createElement("div");
   colorInputs.className = "grid-inputs";
@@ -555,7 +746,10 @@ export function createShell({
   const pixelSnapToggle = createCheckboxField("Pixel snap", selectedTile?.pixelSnap ?? true, (checked) => {
     onSelectedTileUpdated({ pixelSnap: checked });
   });
-  toggleRow.append(flipXToggle, flipYToggle, pixelSnapToggle);
+  const clampToggle = createCheckboxField("Clamp to tile", selectedTile?.clampToTile ?? true, (checked) => {
+    onSelectedTileUpdated({ clampToTile: checked });
+  });
+  toggleRow.append(flipXToggle, flipYToggle, pixelSnapToggle, clampToggle);
 
   const metadataInputs = document.createElement("div");
   metadataInputs.className = "editor-stack";
@@ -577,25 +771,35 @@ export function createShell({
   });
   metadataInputs.append(nameField.field, tagsField.field, collisionField.field);
 
-  layoutPanel.append(tileCellInputs, offsetInputs, scaleInputs, toggleRow);
+  layoutPanel.append(tileCellInputs, offsetInputs, scaleInputs, nudgeActions, toggleRow);
+  fitPanel.append(fitActions, anchorField, anchorActions, cropInputs, stretchInputs, repairOptions);
+  previewPanel.append(previewField, previewNote);
   visualPanel.append(colorInputs, filterField, tintField);
   metaPanel.append(metadataInputs);
 
-  editorSection.append(selectedTileSummary, editorActions, editorEmpty, editorTabs, layoutPanel, visualPanel, metaPanel);
+  editorSection.append(selectedTileSummary, editorActions, editorEmpty, editorTabs, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
 
   layoutTab.addEventListener("click", () => {
     activeEditorTab = "layout";
-    syncEditorTabState(activeEditorTab, layoutTab, visualTab, metaTab, layoutPanel, visualPanel, metaPanel);
+    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
+  });
+  fitTab.addEventListener("click", () => {
+    activeEditorTab = "fit";
+    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
+  });
+  previewTab.addEventListener("click", () => {
+    activeEditorTab = "preview";
+    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
   });
   visualTab.addEventListener("click", () => {
     activeEditorTab = "visual";
-    syncEditorTabState(activeEditorTab, layoutTab, visualTab, metaTab, layoutPanel, visualPanel, metaPanel);
+    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
   });
   metaTab.addEventListener("click", () => {
     activeEditorTab = "meta";
-    syncEditorTabState(activeEditorTab, layoutTab, visualTab, metaTab, layoutPanel, visualPanel, metaPanel);
+    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
   });
-  syncEditorTabState(activeEditorTab, layoutTab, visualTab, metaTab, layoutPanel, visualPanel, metaPanel);
+  syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
 
   const metadata = document.createElement("dl");
   metadata.className = "meta-grid";
@@ -823,6 +1027,10 @@ export function createShell({
       items[9].description.textContent = `${getProjectTileCount(nextState.project)}`;
       items[10].description.textContent = getProjectIndexRange(nextState.project);
       const nextSelectedTile = getSelectedOutputTile(nextState);
+      const nextSelectedTiles = getSelectedOutputTiles(nextState);
+      previewSelect.value = nextState.session.tilePreviewMode;
+      anchorXSelect.value = nextSelectedTile?.anchorX ?? "center";
+      anchorYSelect.value = nextSelectedTile?.anchorY ?? "center";
       items[11].description.textContent = nextSelectedTile ? `${nextSelectedTile.id}` : "None";
       sourceGridSelect.value = `${nextState.project.sourceTileWidth}`;
       outputTileSelect.value = `${nextState.project.tileWidth}`;
@@ -854,6 +1062,7 @@ export function createShell({
       syncSelectedTileEditor(
         nextSelectedTile,
         {
+          selectionCount: nextSelectedTiles.length,
           summary: selectedTileSummary,
           clearButton: clearTileButton,
           empty: editorEmpty,
@@ -863,11 +1072,23 @@ export function createShell({
           offsetYInput: offsetYField.input,
           scaleXInput: scaleXField.input,
           scaleYInput: scaleYField.input,
+          cropLeftInput: cropLeftField.input,
+          cropRightInput: cropRightField.input,
+          cropTopInput: cropTopField.input,
+          cropBottomInput: cropBottomField.input,
+          edgeStretchLeftInput: edgeStretchLeftField.input,
+          edgeStretchRightInput: edgeStretchRightField.input,
+          edgeStretchTopInput: edgeStretchTopField.input,
+          edgeStretchBottomInput: edgeStretchBottomField.input,
+          fillExposedInput,
+          anchorXSelect,
+          anchorYSelect,
           brightnessInput: brightnessField.input,
           contrastInput: contrastField.input,
           saturationInput: saturationField.input,
           filterSelect,
           tintInput,
+          clampToTileInput: clampToggle.querySelector("input") as HTMLInputElement,
           flipXInput: flipXToggle.querySelector("input") as HTMLInputElement,
           flipYInput: flipYToggle.querySelector("input") as HTMLInputElement,
           pixelSnapInput: pixelSnapToggle.querySelector("input") as HTMLInputElement,
@@ -1009,16 +1230,24 @@ function createEditorTabButton(label: string): HTMLButtonElement {
 function syncEditorTabState(
   activeTab: EditorTab,
   layoutTab: HTMLButtonElement,
+  fitTab: HTMLButtonElement,
+  previewTab: HTMLButtonElement,
   visualTab: HTMLButtonElement,
   metaTab: HTMLButtonElement,
   layoutPanel: HTMLDivElement,
+  fitPanel: HTMLDivElement,
+  previewPanel: HTMLDivElement,
   visualPanel: HTMLDivElement,
   metaPanel: HTMLDivElement,
 ): void {
   layoutTab.dataset.active = activeTab === "layout" ? "true" : "false";
+  fitTab.dataset.active = activeTab === "fit" ? "true" : "false";
+  previewTab.dataset.active = activeTab === "preview" ? "true" : "false";
   visualTab.dataset.active = activeTab === "visual" ? "true" : "false";
   metaTab.dataset.active = activeTab === "meta" ? "true" : "false";
   layoutPanel.hidden = activeTab !== "layout";
+  fitPanel.hidden = activeTab !== "fit";
+  previewPanel.hidden = activeTab !== "preview";
   visualPanel.hidden = activeTab !== "visual";
   metaPanel.hidden = activeTab !== "meta";
 }
@@ -1043,6 +1272,7 @@ function syncSidebarTabState(
 function syncSelectedTileEditor(
   tile: ReturnType<typeof getSelectedOutputTile>,
   controls: {
+    selectionCount: number;
     summary: HTMLDivElement;
     clearButton: HTMLButtonElement;
     empty: HTMLParagraphElement;
@@ -1052,11 +1282,23 @@ function syncSelectedTileEditor(
     offsetYInput: HTMLInputElement;
     scaleXInput: HTMLInputElement;
     scaleYInput: HTMLInputElement;
+    cropLeftInput: HTMLInputElement;
+    cropRightInput: HTMLInputElement;
+    cropTopInput: HTMLInputElement;
+    cropBottomInput: HTMLInputElement;
+    edgeStretchLeftInput: HTMLInputElement;
+    edgeStretchRightInput: HTMLInputElement;
+    edgeStretchTopInput: HTMLInputElement;
+    edgeStretchBottomInput: HTMLInputElement;
+    fillExposedInput: HTMLInputElement;
+    anchorXSelect: HTMLSelectElement;
+    anchorYSelect: HTMLSelectElement;
     brightnessInput: HTMLInputElement;
     contrastInput: HTMLInputElement;
     saturationInput: HTMLInputElement;
     filterSelect: HTMLSelectElement;
     tintInput: HTMLInputElement;
+    clampToTileInput: HTMLInputElement;
     flipXInput: HTMLInputElement;
     flipYInput: HTMLInputElement;
     pixelSnapInput: HTMLInputElement;
@@ -1072,11 +1314,23 @@ function syncSelectedTileEditor(
     controls.offsetYInput,
     controls.scaleXInput,
     controls.scaleYInput,
+    controls.cropLeftInput,
+    controls.cropRightInput,
+    controls.cropTopInput,
+    controls.cropBottomInput,
+    controls.edgeStretchLeftInput,
+    controls.edgeStretchRightInput,
+    controls.edgeStretchTopInput,
+    controls.edgeStretchBottomInput,
+    controls.fillExposedInput,
+    controls.anchorXSelect,
+    controls.anchorYSelect,
     controls.brightnessInput,
     controls.contrastInput,
     controls.saturationInput,
     controls.filterSelect,
     controls.tintInput,
+    controls.clampToTileInput,
     controls.flipXInput,
     controls.flipYInput,
     controls.pixelSnapInput,
@@ -1088,27 +1342,43 @@ function syncSelectedTileEditor(
   if (!tile) {
     controls.summary.textContent = "No selection";
     controls.clearButton.disabled = true;
-    controls.empty.textContent = "No output tile selected yet.";
+    controls.empty.textContent = "No output tile selected yet. Hold Shift and click to build a multi-selection.";
     for (const input of inputs) {
       input.disabled = true;
     }
     return;
   }
 
-  controls.summary.textContent = `Tile ${tile.id} at ${tile.destCol}, ${tile.destRow}`;
+  controls.summary.textContent = controls.selectionCount > 1
+    ? `${controls.selectionCount} tiles selected · primary ${tile.id} at ${tile.destCol}, ${tile.destRow}`
+    : `Tile ${tile.id} at ${tile.destCol}, ${tile.destRow}`;
   controls.clearButton.disabled = false;
-  controls.empty.textContent = "";
+  controls.empty.textContent = controls.selectionCount > 1
+    ? "Batch edits apply to all selected tiles. Use nudge to shift the whole group together. Tile position, local offset, and name stay primary-tile only."
+    : "";
   controls.tileColInput.value = `${tile.destCol}`;
   controls.tileRowInput.value = `${tile.destRow}`;
   controls.offsetXInput.value = `${tile.offsetX}`;
   controls.offsetYInput.value = `${tile.offsetY}`;
   controls.scaleXInput.value = `${tile.scaleX}`;
   controls.scaleYInput.value = `${tile.scaleY}`;
+  controls.cropLeftInput.value = `${tile.cropLeft}`;
+  controls.cropRightInput.value = `${tile.cropRight}`;
+  controls.cropTopInput.value = `${tile.cropTop}`;
+  controls.cropBottomInput.value = `${tile.cropBottom}`;
+  controls.edgeStretchLeftInput.value = `${tile.edgeStretchLeft}`;
+  controls.edgeStretchRightInput.value = `${tile.edgeStretchRight}`;
+  controls.edgeStretchTopInput.value = `${tile.edgeStretchTop}`;
+  controls.edgeStretchBottomInput.value = `${tile.edgeStretchBottom}`;
+  controls.fillExposedInput.value = tile.fillExposedColor ?? "";
+  controls.anchorXSelect.value = tile.anchorX;
+  controls.anchorYSelect.value = tile.anchorY;
   controls.brightnessInput.value = `${tile.brightness}`;
   controls.contrastInput.value = `${tile.contrast}`;
   controls.saturationInput.value = `${tile.saturation}`;
   controls.filterSelect.value = tile.filterMode;
   controls.tintInput.value = tile.tintColor ?? "";
+  controls.clampToTileInput.checked = tile.clampToTile;
   controls.flipXInput.checked = tile.flipX;
   controls.flipYInput.checked = tile.flipY;
   controls.pixelSnapInput.checked = tile.pixelSnap;
@@ -1119,6 +1389,11 @@ function syncSelectedTileEditor(
   for (const input of inputs) {
     input.disabled = false;
   }
+  controls.tileColInput.disabled = controls.selectionCount > 1;
+  controls.tileRowInput.disabled = controls.selectionCount > 1;
+  controls.offsetXInput.disabled = controls.selectionCount > 1;
+  controls.offsetYInput.disabled = controls.selectionCount > 1;
+  controls.nameInput.disabled = controls.selectionCount > 1;
 }
 
 function createControlSection(title: string, description: string): HTMLElement {

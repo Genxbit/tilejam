@@ -288,7 +288,7 @@ Update project persistence so `.tilejam.json` stores only a scene-file reference
 ## Ticket 10: Advanced tile repair tools
 
 **Status**
-Planned
+Completed
 
 **Goal**
 Add precision tile-repair tools for aligning, fitting, cropping, and seam-checking AI-generated tiles.
@@ -305,7 +305,7 @@ Extend the tile editor with advanced repair tools for positioning, fitting, crop
 **Deliverables**
 
 * nudge image by 1px steps
-* free offset inside tile
+* free offset inside tile for single-tile editing
 * per-side crop: left, right, top, bottom
 * clamp to tile bounds
 * fit to tile: stretch
@@ -316,8 +316,13 @@ Extend the tile editor with advanced repair tools for positioning, fitting, crop
 * flip X and Y
 * rotate in 90 degree steps
 * trim transparent bounds
+* fill exposed area
+* edge extend as a bake-once repair action
 * repeat preview
 * neighbor preview
+* multi-select output tiles with Shift-click
+* batch apply tile-repair edits to selected tiles
+* group nudge/shift for multi-selection to preserve internal seams
 * organize advanced repair tools into a smart tile editor layout with clear grouping and progressive disclosure
 
 **Validation**
@@ -325,5 +330,8 @@ Extend the tile editor with advanced repair tools for positioning, fitting, crop
 * all edits are visible in the tile preview and output sheet
 * controls are serializable in project data where applicable
 * seam-check previews help evaluate tiling correctness
+* multi-select edits apply consistently across the whole selection
+* group nudge preserves seams between selected tiles
+* edge extend behaves as a one-shot repair action instead of a persistent live effect
 * controls fit naturally in the tile editor panel and remain usable without excessive scrolling or confusion
 * matches architecture rules in `docs/TECH_WORKFLOW.md`

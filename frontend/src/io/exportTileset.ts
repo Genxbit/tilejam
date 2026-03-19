@@ -1,5 +1,6 @@
 import type { ProjectState, TilePlacement } from "../types/project";
 import { getSourceImageForRef } from "../systems/sourceImageSystem";
+import { drawTileIntoRect } from "../systems/tileRenderSystem";
 import { getOutputGridMetrics } from "../systems/tileGridSystem";
 
 export async function exportTilesetPng(state: ProjectState, filename = "tileset.png"): Promise<{ missingTileCount: number }> {
@@ -161,62 +162,7 @@ function drawExportTile(
   tileWidth: number,
   tileHeight: number,
 ): void {
-  const cellX = tile.destCol * tileWidth;
-  const cellY = tile.destRow * tileHeight;
-  const drawX = tile.pixelSnap ? Math.round(cellX + tile.offsetX) : cellX + tile.offsetX;
-  const drawY = tile.pixelSnap ? Math.round(cellY + tile.offsetY) : cellY + tile.offsetY;
-  const drawWidth = tile.pixelSnap ? Math.round(tile.sourceRect.w * tile.scaleX) : tile.sourceRect.w * tile.scaleX;
-  const drawHeight = tile.pixelSnap ? Math.round(tile.sourceRect.h * tile.scaleY) : tile.sourceRect.h * tile.scaleY;
-
-  context.save();
-  context.beginPath();
-  context.rect(cellX, cellY, tileWidth, tileHeight);
-  context.clip();
-  context.filter = buildTileFilter(tile);
-  context.imageSmoothingEnabled = tile.filterMode === "linear" && !tile.pixelSnap;
-
-  if (tile.flipX || tile.flipY) {
-    context.translate(drawX + drawWidth / 2, drawY + drawHeight / 2);
-    context.scale(tile.flipX ? -1 : 1, tile.flipY ? -1 : 1);
-    context.drawImage(
-      image,
-      tile.sourceRect.x,
-      tile.sourceRect.y,
-      tile.sourceRect.w,
-      tile.sourceRect.h,
-      -drawWidth / 2,
-      -drawHeight / 2,
-      drawWidth,
-      drawHeight,
-    );
-  } else {
-    context.drawImage(
-      image,
-      tile.sourceRect.x,
-      tile.sourceRect.y,
-      tile.sourceRect.w,
-      tile.sourceRect.h,
-      drawX,
-      drawY,
-      drawWidth,
-      drawHeight,
-    );
-  }
-
-  if (tile.tintColor) {
-    context.filter = "none";
-    context.globalCompositeOperation = "source-atop";
-    context.fillStyle = tile.tintColor;
-    context.fillRect(cellX, cellY, tileWidth, tileHeight);
-    context.globalCompositeOperation = "source-over";
-  }
-
-  context.restore();
-}
-
-function buildTileFilter(tile: TilePlacement): string {
-  const brightness = Math.max(0, 1 + tile.brightness);
-  return `brightness(${brightness}) contrast(${tile.contrast}) saturate(${tile.saturation})`;
+  drawTileIntoRect(context, image, tile, tile.destCol * tileWidth, tile.destRow * tileHeight, tileWidth, tileHeight);
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string): Promise<Blob> {

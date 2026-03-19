@@ -95,7 +95,9 @@ export function moveHoveredOutputTileBy(state: ProjectState, deltaCol: number, d
   const hoveredTile = state.session.hoveredOutputTile;
   const selectedTile = state.session.selectedOutputTileId !== null
     ? state.project.tiles.find((tile) => tile.id === state.session.selectedOutputTileId) ?? null
-    : null;
+    : state.session.selectedOutputTileIds.length > 0
+      ? state.project.tiles.find((tile) => tile.id === state.session.selectedOutputTileIds[0]) ?? null
+      : null;
   const currentCol = hoveredTile?.col ?? selectedTile?.destCol ?? 0;
   const currentRow = hoveredTile?.row ?? selectedTile?.destRow ?? 0;
   const nextTile = {

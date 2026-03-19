@@ -39,8 +39,10 @@ export function createProjectState(): ProjectState {
       draftSourceSelection: null,
       hoveredOutputTile: null,
       selectedOutputTileId: null,
+      selectedOutputTileIds: [],
       selectedSceneCell: null,
       hoveredPanel: null,
+      tilePreviewMode: "none",
       sourceCamera: {
         zoom: 1,
         panX: 0,
