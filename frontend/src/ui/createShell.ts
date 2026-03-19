@@ -628,7 +628,14 @@ export function createShell({
   );
   const sceneActions = document.createElement("div");
   sceneActions.className = "panel-actions";
-  sceneActions.append(sceneInputLabel, saveSceneButton);
+  const sceneTilesheetButton = createAsyncActionButton("Open tilesheet", async () => {
+    const handled = await onOpenWorkingImage();
+
+    if (!handled) {
+      workingImageInput.click();
+    }
+  });
+  sceneActions.append(sceneTilesheetButton, sceneInputLabel, saveSceneButton);
 
   const sceneSizeInputs = document.createElement("div");
   sceneSizeInputs.className = "grid-inputs";

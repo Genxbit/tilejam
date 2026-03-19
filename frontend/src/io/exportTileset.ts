@@ -129,13 +129,14 @@ export async function saveTilesetTsjWithPicker(
 
 function createTsjBlob(state: ProjectState, filename: string): Blob {
   const outputGrid = getOutputGridMetrics(state.project);
+  const imageName = filename.replace(/\.tsj$/i, ".png");
   const tsj = {
     name: filename.replace(/\.tsj$/i, ""),
     tilewidth: state.project.tileWidth,
     tileheight: state.project.tileHeight,
     tilecount: outputGrid.columns * outputGrid.rows,
     columns: outputGrid.columns,
-    image: "tileset.png",
+    image: imageName,
     imagewidth: state.project.outputWidth,
     imageheight: state.project.outputHeight,
     margin: 0,

@@ -271,8 +271,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
         state.session.selectedSceneCell = null;
         state.session.activeWorkspaceMode = "scene";
+        const tilesheetResolution = await resolveSceneTilesheetIfPossible(state);
         bumpRenderRevision();
-        state.session.message = `Loaded scene: ${file.name}.`;
+        state.session.message = `Loaded scene: ${file.name}.${tilesheetResolution ? ` ${tilesheetResolution}` : ""}`;
       } catch (error) {
         undoStack.pop();
         const message = error instanceof Error ? error.message : "Unknown TMJ import error.";
@@ -312,8 +313,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
         state.session.selectedSceneCell = null;
         state.session.activeWorkspaceMode = "scene";
+        const tilesheetResolution = await resolveSceneTilesheetIfPossible(state);
         bumpRenderRevision();
-        state.session.message = `Loaded scene: ${file.name}.`;
+        state.session.message = `Loaded scene: ${file.name}.${tilesheetResolution ? ` ${tilesheetResolution}` : ""}`;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return true;
@@ -1205,4 +1207,36 @@ async function loadWorkingImageIntoState(
   const tileCount = rebuildTilesFromWorkingSheet(state, workingImageRef, asset.width, asset.height);
   state.session.renderRevision += 1;
   state.session.message = `Loaded working PNG ${file.name} and reconstructed ${tileCount} editable output tile${tileCount === 1 ? "" : "s"}.`;
+}
+
+async function resolveSceneTilesheetIfPossible(state: ProjectState): Promise<string | null> {
+  const scene = state.project.scene;
+
+  if (!scene) {
+    return null;
+  }
+
+  const expectedWorkingImage = scene.tilesetSource.replace(/\.tsj$/i, ".png");
+  const currentWorkingImage = state.session.workingImageFileName ?? state.project.workingImage;
+
+  if (currentWorkingImage === expectedWorkingImage && state.project.tiles.length > 0) {
+    return `Using current tilesheet ${currentWorkingImage}.`;
+  }
+
+  try {
+    const workingImageRef = await loadImageAssetFromUrl(state, expectedWorkingImage, expectedWorkingImage);
+    const asset = state.session.sourceImageAssetCache[workingImageRef];
+
+    if (!asset) {
+      return `Scene references ${scene.tilesetSource}. Open ${expectedWorkingImage} manually to render it here.`;
+    }
+
+    state.project.workingImage = workingImageRef;
+    state.session.workingImageFileName = workingImageRef;
+    state.session.workingImageFileHandle = null;
+    rebuildTilesFromWorkingSheet(state, workingImageRef, asset.width, asset.height);
+    return `Resolved tilesheet from ${expectedWorkingImage}.`;
+  } catch {
+    return `Scene references ${scene.tilesetSource}. Open ${expectedWorkingImage} manually to render it here.`;
+  }
 }

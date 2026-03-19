@@ -60,13 +60,14 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
   const layout = getWorkspaceLayout(width, height, state);
   const { sourcePanel, outputPanel } = layout;
   const cache = getRenderCache(canvas);
+  const hasScenePalette = !(state.session.activeWorkspaceMode === "scene" && state.project.tiles.length < 1);
 
   drawPanel(context, sourcePanel);
   drawPanel(context, outputPanel);
   drawOutputGrid(context, state, layout.outputViewport, cache);
 
-  if (!layout.sourceViewport) {
-    drawEmptyState(context, sourcePanel);
+  if (!layout.sourceViewport || !hasScenePalette) {
+    drawEmptyState(context, state, sourcePanel);
     return;
   }
 
@@ -202,10 +203,22 @@ function drawGridOverlay(
 
 function drawEmptyState(
   context: CanvasRenderingContext2D,
+  state: ProjectState,
   panel: { x: number; y: number; width: number; height: number },
 ): void {
   context.fillStyle = LABEL;
   context.font = "16px monospace";
+
+  if (state.session.activeWorkspaceMode === "scene" && state.project.scene) {
+    const expectedTilesheet = state.project.scene.tilesetSource.replace(/\.tsj$/i, ".png");
+    context.fillText("Tilesheet missing for scene.", panel.x + 16, panel.y + 28);
+    context.font = "14px monospace";
+    context.fillStyle = VIEW_HINT;
+    context.fillText(`Expected: ${expectedTilesheet}`, panel.x + 16, panel.y + 56);
+    context.fillText("Use Open tilesheet to continue.", panel.x + 16, panel.y + 80);
+    return;
+  }
+
   context.fillText("Load a source or working tilesheet to begin.", panel.x + 16, panel.y + 28);
 }
 
@@ -635,6 +648,10 @@ function getOutputPanelLabel(
 }
 
 function getWorkingTilesheetLabel(state: ProjectState): string {
+  if (state.session.activeWorkspaceMode === "scene" && state.project.scene && !state.project.workingImage && !state.session.workingImageFileName) {
+    return state.project.scene.tilesetSource.replace(/\.tsj$/i, ".png");
+  }
+
   return state.session.workingImageFileName
     ?? state.project.workingImage
     ?? "unsaved";
