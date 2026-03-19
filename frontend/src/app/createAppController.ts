@@ -7,7 +7,7 @@ import { renderWorkspace } from "../rendering/renderWorkspace";
 import { createProjectState } from "../data/createProjectState";
 import { clearSelectedOutputTile, deleteSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
-import { addSceneLayer, deleteSelectedSceneCell, ensureScene, moveActiveSceneLayerBy, moveSceneCellTo, moveSelectedSceneCellBy, placeSelectionIntoScene, resizeScene, selectSceneCell, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
+import { addSceneLayer, clearSceneLayers, deleteSelectedSceneCell, ensureScene, moveActiveSceneLayerBy, moveSceneCellTo, moveSelectedSceneCellBy, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import {
   clearSourceImageAsset,
@@ -401,6 +401,34 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.message = `Scene save failed: ${message}`;
       }
 
+      renderAll();
+    },
+    onNewScene: () => {
+      recordHistory();
+      const scene = resetScene(state);
+      syncSceneTilesetSourceToDefault(state);
+      state.project.sceneFile = null;
+      state.session.sceneFileName = null;
+      state.session.sceneFileHandle = null;
+      state.session.activeWorkspaceMode = "scene";
+      bumpRenderRevision();
+      state.session.message = `Started a new blank scene (${scene.width} x ${scene.height}).`;
+      renderAll();
+    },
+    onClearScene: () => {
+      recordHistory();
+      const clearedCount = clearSceneLayers(state);
+
+      if (clearedCount < 1) {
+        undoStack.pop();
+        state.session.message = "There are no placed scene tiles to clear.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.activeWorkspaceMode = "scene";
+      state.session.message = `Cleared ${clearedCount} scene tile${clearedCount === 1 ? "" : "s"} across the current scene.`;
       renderAll();
     },
     onWorkspaceModeChanged: (mode) => {

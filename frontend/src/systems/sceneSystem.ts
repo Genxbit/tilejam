@@ -5,17 +5,7 @@ const FIRST_GID = 1;
 
 export function ensureScene(state: ProjectState): SceneMapState {
   if (!state.project.scene) {
-    const grid = getOutputGridMetrics(state.project);
-    state.project.scene = {
-      width: Math.max(1, grid.columns),
-      height: Math.max(1, grid.rows),
-      tileWidth: state.project.tileWidth,
-      tileHeight: state.project.tileHeight,
-      tilesetSource: "tileset.tsj",
-      layers: [
-        createSceneLayer(1, "ground", Math.max(1, grid.columns), Math.max(1, grid.rows)),
-      ],
-    };
+    state.project.scene = createDefaultScene(state);
   }
 
   if (!state.project.scene.layers.some((layer) => layer.id === state.session.activeSceneLayerId)) {
@@ -23,6 +13,53 @@ export function ensureScene(state: ProjectState): SceneMapState {
   }
 
   return state.project.scene;
+}
+
+export function createDefaultScene(state: ProjectState, width?: number, height?: number): SceneMapState {
+  const grid = getOutputGridMetrics(state.project);
+  const sceneWidth = Math.max(1, width ?? grid.columns);
+  const sceneHeight = Math.max(1, height ?? grid.rows);
+
+  return {
+    width: sceneWidth,
+    height: sceneHeight,
+    tileWidth: state.project.tileWidth,
+    tileHeight: state.project.tileHeight,
+    tilesetSource: "tileset.tsj",
+    layers: [
+      createSceneLayer(1, "ground", sceneWidth, sceneHeight),
+    ],
+  };
+}
+
+export function resetScene(state: ProjectState): SceneMapState {
+  const existingScene = state.project.scene;
+  const scene = createDefaultScene(
+    state,
+    existingScene?.width,
+    existingScene?.height,
+  );
+  state.project.scene = scene;
+  state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+  state.session.selectedSceneCell = null;
+  return scene;
+}
+
+export function clearSceneLayers(state: ProjectState): number {
+  const scene = ensureScene(state);
+  let clearedCount = 0;
+
+  for (const layer of scene.layers) {
+    for (let index = 0; index < layer.data.length; index += 1) {
+      if (layer.data[index] !== 0) {
+        layer.data[index] = 0;
+        clearedCount += 1;
+      }
+    }
+  }
+
+  state.session.selectedSceneCell = null;
+  return clearedCount;
 }
 
 export function resizeScene(state: ProjectState, width: number, height: number): SceneMapState {

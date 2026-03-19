@@ -20,6 +20,8 @@ type ShellOptions = {
   onSceneSelected: (file: File) => Promise<void>;
   onOpenScene: () => Promise<boolean>;
   onSaveScene: () => Promise<void>;
+  onNewScene: () => void;
+  onClearScene: () => void;
   onWorkspaceModeChanged: (mode: WorkspaceMode) => void;
   onSourceGridSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
   onOutputTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
@@ -91,6 +93,8 @@ export function createShell({
   onSceneSelected,
   onOpenScene,
   onSaveScene,
+  onNewScene,
+  onClearScene,
   onWorkspaceModeChanged,
   onSourceGridSizeChanged,
   onOutputTileSizeChanged,
@@ -655,7 +659,9 @@ export function createShell({
       workingImageInput.click();
     }
   });
-  sceneActions.append(sceneTilesheetButton, sceneInputLabel, saveSceneButton);
+  const newSceneButton = createActionButton("New", onNewScene);
+  const clearSceneButton = createActionButton("Clear All", onClearScene);
+  sceneActions.append(sceneTilesheetButton, sceneInputLabel, saveSceneButton, newSceneButton, clearSceneButton);
 
   const sceneSizeInputs = document.createElement("div");
   sceneSizeInputs.className = "grid-inputs";
