@@ -5,7 +5,7 @@ import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from 
 import { renderWorkspace } from "../rendering/renderWorkspace";
 import { clearSelectedOutputTile, deleteSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile } from "../systems/tilePlacementSystem";
-import { clearSelectionState, commitDraftSourceSelection, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
+import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import { clearSourceImageAsset, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, normalizeProjectTilesToGrid, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
 import {
@@ -596,12 +596,61 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       null;
 
     if (movement) {
-      const movedTile = moveSelectedOutputTileBy(state, movement.col, movement.row);
-
-      if (movedTile) {
+      if (event.altKey && state.session.hoveredPanel) {
         event.preventDefault();
-        state.session.message = `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`;
-        renderAll();
+        const layout = getWorkspaceLayout(shell.canvas.width, shell.canvas.height, state);
+        const viewport = state.session.hoveredPanel === "source" ? layout.sourceViewport : layout.outputViewport;
+
+        if (!viewport) {
+          return;
+        }
+
+        const stepX = state.session.hoveredPanel === "source"
+          ? state.project.sourceTileWidth * viewport.scaleX
+          : state.project.tileWidth * viewport.scaleX;
+        const stepY = state.session.hoveredPanel === "source"
+          ? state.project.sourceTileHeight * viewport.scaleY
+          : state.project.tileHeight * viewport.scaleY;
+
+        panWorkspacePanel(
+          state,
+          state.session.hoveredPanel,
+          -movement.col * stepX,
+          -movement.row * stepY,
+          layout,
+        );
+        state.session.message = `${state.session.hoveredPanel === "source" ? "Source" : "Output"} view panned.`;
+        renderCanvas();
+        return;
+      }
+
+      if (event.shiftKey) {
+        const movedTile = moveSelectedOutputTileBy(state, movement.col, movement.row);
+
+        if (movedTile) {
+          event.preventDefault();
+          state.session.message = `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`;
+          renderAll();
+        }
+
+        return;
+      }
+
+      if (state.session.hoveredPanel) {
+        event.preventDefault();
+
+        if (state.session.hoveredPanel === "source") {
+          const selection = moveSourceSelectionBy(state, movement.col, movement.row);
+
+          if (selection) {
+            state.session.message = `Source selection moved to ${selection.startCol}, ${selection.startRow}.`;
+            renderCanvas();
+          }
+        } else {
+          const tile = moveHoveredOutputTileBy(state, movement.col, movement.row);
+          state.session.message = `Output target moved to ${tile.col}, ${tile.row}.`;
+          renderCanvas();
+        }
       }
 
       return;
@@ -692,6 +741,7 @@ function getExportFilename(state: ProjectState, extension: "png" | "tsj"): strin
   const baseName = projectName.replace(/(?:\.tilejam)?\.json$/i, "");
   return `${baseName || "tileset"}.${extension}`;
 }
+
 
 async function loadProjectIntoState(state: ProjectState, project: ProjectState["project"], messagePrefix: string): Promise<void> {
   state.project = project;

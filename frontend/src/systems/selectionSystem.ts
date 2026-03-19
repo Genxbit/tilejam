@@ -1,4 +1,5 @@
 import type { GridCoordinate, ProjectState, SourceSelection, TilejamProject } from "../types/project";
+import { getOutputGridMetrics, getSourceGridMetrics } from "./tileGridSystem";
 
 export function createSourceSelection(
   project: TilejamProject,
@@ -57,4 +58,60 @@ export function setHoveredOutputTile(state: ProjectState, tile: GridCoordinate |
 
 export function getVisibleSelection(state: ProjectState): SourceSelection | null {
   return state.session.draftSourceSelection ?? state.session.sourceSelection;
+}
+
+export function moveSourceSelectionBy(state: ProjectState, deltaCol: number, deltaRow: number): SourceSelection | null {
+  const image = state.sourceImageAsset.image;
+
+  if (!image) {
+    return null;
+  }
+
+  const currentSelection = getVisibleSelection(state) ?? createSourceSelection(
+    state.project,
+    { col: 0, row: 0 },
+    { col: 0, row: 0 },
+  );
+  const sourceGrid = getSourceGridMetrics(
+    image.width,
+    image.height,
+    state.project.sourceTileWidth,
+    state.project.sourceTileHeight,
+  );
+  const maxStartCol = Math.max(0, sourceGrid.columns - currentSelection.columns);
+  const maxStartRow = Math.max(0, sourceGrid.rows - currentSelection.rows);
+  const nextStartCol = clamp(currentSelection.startCol + deltaCol, 0, maxStartCol);
+  const nextStartRow = clamp(currentSelection.startRow + deltaRow, 0, maxStartRow);
+  const nextEndCol = nextStartCol + currentSelection.columns - 1;
+  const nextEndRow = nextStartRow + currentSelection.rows - 1;
+  const nextSelection = createSourceSelection(
+    state.project,
+    { col: nextStartCol, row: nextStartRow },
+    { col: nextEndCol, row: nextEndRow },
+  );
+
+  state.session.sourceSelection = nextSelection;
+  state.session.draftSourceSelection = null;
+  return nextSelection;
+}
+
+export function moveHoveredOutputTileBy(state: ProjectState, deltaCol: number, deltaRow: number): GridCoordinate {
+  const outputGrid = getOutputGridMetrics(state.project);
+  const hoveredTile = state.session.hoveredOutputTile;
+  const selectedTile = state.session.selectedOutputTileId !== null
+    ? state.project.tiles.find((tile) => tile.id === state.session.selectedOutputTileId) ?? null
+    : null;
+  const currentCol = hoveredTile?.col ?? selectedTile?.destCol ?? 0;
+  const currentRow = hoveredTile?.row ?? selectedTile?.destRow ?? 0;
+  const nextTile = {
+    col: clamp(currentCol + deltaCol, 0, outputGrid.columns - 1),
+    row: clamp(currentRow + deltaRow, 0, outputGrid.rows - 1),
+  };
+
+  state.session.hoveredOutputTile = nextTile;
+  return nextTile;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
