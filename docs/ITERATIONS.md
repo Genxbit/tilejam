@@ -216,3 +216,69 @@ Add scene editing with TMJ load/save using the selected/current tilesheet as the
 * scene placement uses the current tilesheet tile IDs correctly
 * scene editing stays grid-aligned and deterministic
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 8: PNG-first project persistence cleanup
+
+**Status**
+Completed
+
+**Goal**
+Align project save/load with the PNG-first working tilesheet model.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Update project persistence so the working tilesheet is rebuilt from the saved PNG instead of duplicating baked tile placement in `.tilejam.json`.
+
+**Deliverables**
+
+* project load rebuilds editable output tiles from `workingImage`
+* project save stops duplicating baked working-sheet tile placement in `.tilejam.json`
+* legacy project files with `tiles[]` remain readable for compatibility
+* relative project asset references resolve correctly from the project location when possible
+* project and tilesheet naming stay visible and consistent in the UI
+
+**Validation**
+
+* reopening a project restores the working tilesheet from the saved PNG
+* `.tilejam.json` and working PNG no longer drift as separate competing truths
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 9: Scene reference cleanup
+
+**Status**
+Planned
+
+**Goal**
+Make TMJ the source of truth for scenes and remove embedded scene duplication from `.tilejam.json`.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Update project persistence so `.tilejam.json` stores only a scene-file reference, while TMJ remains the source of truth for scene content.
+
+**Deliverables**
+
+* add `sceneFile` reference to project persistence
+* stop writing embedded `scene` map data into `.tilejam.json`
+* project load can relink and open the referenced TMJ when available
+* project save/load keeps scene filename visible and consistent in the UI
+
+**Validation**
+
+* `.tilejam.json` no longer contains embedded TMJ layer data
+* reopening a project can restore the current scene from the referenced TMJ
+* TMJ remains the only source of truth for scene content
+* matches architecture rules in `docs/TECH_WORKFLOW.md`

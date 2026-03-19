@@ -130,7 +130,8 @@ Rule of thumb:
 * working/output PNG is a first-class artifact
 * loading a working PNG must reconstruct editable output-grid tiles
 * working PNG is visual truth for ongoing editing
-* project JSON may preserve richer edit state than PNG alone
+* project JSON should avoid duplicating baked tile placement when that state can be reconstructed from the working PNG
+* if the working PNG is missing, project load should surface that clearly and require relinking instead of silently restoring duplicate tile data
 
 **Scene**
 
@@ -139,6 +140,8 @@ Rule of thumb:
 * TMJ load/save lives in `io/`
 * scene placement, selection, and editing logic live in scene systems
 * scene state should not be mixed into tilesheet-only systems
+* TMJ should be the source of truth for scene content
+* project JSON should store at most a scene-file reference, not the embedded scene map
 
 **TileGrid**
 
@@ -183,9 +186,8 @@ Serializable project state must fully describe:
 * source image
 * working image
 * grid
-* tile assignments
-* transforms
-* per-tile visual repair parameters
+* scene file reference
+* any extra metadata that is not recoverable from the baked working PNG
 
 No hidden state.
 
@@ -230,6 +232,7 @@ Working-sheet save/load rules:
 
 * saving working PNG is an IO/export concern
 * loading working PNG must slice it into output-grid tiles for continued editing
+* project load should rebuild working-sheet editing state from the saved working PNG
 * undo/redo should stay short and session-local, not act as long-term persistence
 
 Scene rules:
@@ -237,6 +240,7 @@ Scene rules:
 * TMJ load/save is an IO concern
 * scene rendering stays derived from scene state
 * scene editing should mirror the source/target editing model where helpful
+* `.tilejam.json` should not duplicate TMJ layer data
 * scene interoperability must follow `docs/FORMATS.md`
 
 ---
@@ -257,7 +261,7 @@ Prepare for later:
 
 ## Project File
 
-`.tilejam.json` is the editable source of truth.
+`.tilejam.json` is the editable project container around the PNG-first working-sheet workflow.
 
 It must match `docs/FORMATS.md`.
 

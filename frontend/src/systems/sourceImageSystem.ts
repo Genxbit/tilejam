@@ -14,6 +14,42 @@ export async function loadSourceImageFromFile(state: ProjectState, file: File): 
   setActiveSourceImage(state, name);
 }
 
+export async function loadSourceImageFromFileWithRef(
+  state: ProjectState,
+  file: File,
+  reference: string,
+): Promise<void> {
+  await loadImageAssetFromFile(state, file, reference);
+  setActiveSourceImage(state, reference);
+}
+
+export function ensureActiveSourceImageFromProject(state: ProjectState): void {
+  const projectRef = state.project.sourceImage;
+
+  if (!projectRef) {
+    return;
+  }
+
+  if (state.session.sourceImageAssetCache[projectRef]) {
+    setActiveSourceImage(state, projectRef);
+    return;
+  }
+
+  const refBasename = getBasename(projectRef);
+  const matchingKey = Object.keys(state.session.sourceImageAssetCache).find((key) => getBasename(key) === refBasename);
+
+  if (matchingKey) {
+    setActiveSourceImage(state, matchingKey);
+    state.project.sourceImage = projectRef;
+  }
+}
+
+function getBasename(value: string): string {
+  const normalized = value.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+  return segments[segments.length - 1] || value;
+}
+
 export async function loadImageAssetFromUrl(
   state: ProjectState,
   url: string,
@@ -42,7 +78,6 @@ export async function loadImageAssetFromFile(
 }
 
 export function clearSourceImageAsset(state: ProjectState): void {
-  state.project.sourceImage = null;
   state.sourceImageAsset.image = null;
   state.sourceImageAsset.name = null;
   state.sourceImageAsset.width = 0;
@@ -56,6 +91,64 @@ export function getSourceImageForRef(state: ProjectState, sourceImageRef: string
   }
 
   return state.session.sourceImageAssetCache[sourceImageRef]?.image ?? null;
+}
+
+export function getResolvedSourceImageAsset(state: ProjectState): {
+  image: HTMLImageElement | null;
+  name: string | null;
+  width: number;
+  height: number;
+} {
+  if (state.sourceImageAsset.image) {
+    return {
+      image: state.sourceImageAsset.image,
+      name: state.sourceImageAsset.name,
+      width: state.sourceImageAsset.width,
+      height: state.sourceImageAsset.height,
+    };
+  }
+
+  const projectRef = state.project.sourceImage;
+
+  if (!projectRef) {
+    return {
+      image: null,
+      name: null,
+      width: 0,
+      height: 0,
+    };
+  }
+
+  const directAsset = state.session.sourceImageAssetCache[projectRef];
+
+  if (directAsset) {
+    return {
+      image: directAsset.image,
+      name: directAsset.name,
+      width: directAsset.width,
+      height: directAsset.height,
+    };
+  }
+
+  const refBasename = getBasename(projectRef);
+  const matchingKey = Object.keys(state.session.sourceImageAssetCache).find((key) => getBasename(key) === refBasename);
+  const matchingAsset = matchingKey ? state.session.sourceImageAssetCache[matchingKey] : null;
+
+  if (matchingAsset) {
+    return {
+      image: matchingAsset.image,
+      name: projectRef,
+      width: matchingAsset.width,
+      height: matchingAsset.height,
+    };
+  }
+
+  return {
+    image: null,
+    name: projectRef,
+    width: 0,
+    height: 0,
+  };
 }
 
 function setActiveSourceImage(state: ProjectState, name: string): void {

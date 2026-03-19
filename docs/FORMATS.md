@@ -5,7 +5,7 @@
 Tilejam uses:
 
 * project format → editing
-* tileset PNG → final output
+* tileset PNG → working and final output
 * TSJ → standard metadata
 * TMJ → scene format
 
@@ -13,47 +13,21 @@ Tilejam uses:
 
 ## Project Format (`.tilejam.json`)
 
-Editable source of truth.
+Editable project state around the current working tilesheet.
 
 ```json
 {
   "version": 1,
   "sourceImage": "source.png",
   "workingImage": "working.png",
+  "sceneFile": "level1.tmj",
   "sourceTileWidth": 32,
   "sourceTileHeight": 32,
 
   "tileWidth": 32,
   "tileHeight": 32,
   "outputWidth": 1024,
-  "outputHeight": 1024,
-
-  "tiles": [
-    {
-      "id": 0,
-      "destCol": 0,
-      "destRow": 0,
-
-      "sourceRect": { "x": 100, "y": 50, "w": 36, "h": 34 },
-
-      "offsetX": -2,
-      "offsetY": 1,
-      "scaleX": 1,
-      "scaleY": 1,
-      "flipX": false,
-      "flipY": false,
-      "brightness": 0,
-      "contrast": 1,
-      "saturation": 1,
-      "tintColor": null,
-      "filterMode": "nearest",
-      "pixelSnap": true,
-
-      "name": "tile_name",
-      "tags": ["tag1", "tag2"],
-      "collision": "none"
-    }
-  ]
+  "outputHeight": 1024
 }
 ```
 
@@ -61,22 +35,22 @@ Editable source of truth.
 
 * fully serializable
 * no hidden state
-* defines full output
-* transforms applied at export
 * `sourceImage` is a string reference, not embedded image data
 * `workingImage` is an optional string reference to the current working/output PNG
+* `sceneFile` is an optional string reference to the current TMJ scene file
 * `sourceTileWidth` / `sourceTileHeight` define the source tilesheet grid
 * `tileWidth` / `tileHeight` define the target/output tilesheet grid
 * `outputWidth` / `outputHeight` define the target/output image size
-* `sourceRect` must align to the source grid
-* per-tile seam-repair parameters must be stored explicitly in `tiles[]`
-* moving a tile between output cells updates `destCol` / `destRow`
+* opening the project should rebuild editable output cells from `workingImage`
+* project JSON should not duplicate baked working-sheet tile placement data
+* if `workingImage` is missing or cannot be resolved, the project cannot fully restore tilesheet editing until the PNG is relinked
+* project JSON should reference TMJ scene files instead of embedding full scene data
 
 ---
 
 ## Tileset PNG
 
-Generated from project.
+Working and export artifact.
 
 * strict grid
 * tile size fixed
@@ -90,6 +64,7 @@ When loaded for editing:
 * it is sliced into output-grid tiles
 * each output cell becomes an editable tile
 * the loaded PNG becomes the source reference for those reconstructed tiles
+* reconstructed output tiles are the editable working state for that session
 
 ---
 
@@ -181,12 +156,9 @@ Standard Tiled JSON map.
 
 * tile id = `col + row * columns`
 * output columns / rows are derived from output image size and target tile size
-* sourceRect not included in export
-* transforms baked into PNG
-* visual correction parameters baked into PNG
-* metadata → TSJ properties
-* copied source content is centered in the target tile before transforms
-* filtering and pixel snapping affect rendering/export, not TSJ metadata
+* working-sheet tile geometry is reconstructed from the loaded working PNG and output grid
+* transforms and visual corrections are baked into PNG
+* metadata exported to TSJ must come from the current reconstructed working tiles
 * scene tile placement maps selected tilesheet tile IDs into TMJ layer data
 * TMJ `firstgid` + local tilesheet tile id determine stored scene cell values
 
@@ -194,7 +166,7 @@ Standard Tiled JSON map.
 
 ## Design Rules
 
-* project = editable
+* project = editable project state
 * PNG = visual truth
 * TSJ = interoperability
 * TMJ = scene interoperability

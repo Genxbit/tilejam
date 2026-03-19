@@ -1,4 +1,4 @@
-import type { SourceRect, TilePlacement, TilejamProject } from "../types/project";
+import type { TilejamProject } from "../types/project";
 import { parseSceneJson } from "./sceneJsonShared";
 
 export async function loadProjectFile(file: File): Promise<TilejamProject> {
@@ -32,7 +32,7 @@ export async function loadProjectFromUrl(url: string): Promise<TilejamProject> {
 }
 
 export function serializeProject(project: TilejamProject): string {
-  return JSON.stringify(project, null, 2);
+  return JSON.stringify(createPersistedProject(project), null, 2);
 }
 
 function parseTilejamProject(value: unknown): TilejamProject {
@@ -52,59 +52,51 @@ function parseTilejamProject(value: unknown): TilejamProject {
     tileHeight: readTileSize(value.tileHeight, "tileHeight"),
     outputWidth: readOutputDimension(value.outputWidth, value.columns, value.tileWidth, "outputWidth"),
     outputHeight: readOutputDimension(value.outputHeight, value.rows, value.tileHeight, "outputHeight"),
-    tiles: readTiles(value.tiles, sourceImage),
+    tiles: [],
     scene: value.scene === undefined || value.scene === null ? null : parseSceneJson(value.scene, "scene"),
   };
 }
 
-function readTiles(value: unknown, defaultSourceImage: string | null): TilePlacement[] {
-  if (!Array.isArray(value)) {
-    throw new Error("tiles must be an array.");
-  }
-
-  return value.map((entry, index) => parseTile(entry, index, defaultSourceImage));
-}
-
-function parseTile(value: unknown, index: number, defaultSourceImage: string | null): TilePlacement {
-  if (!isRecord(value)) {
-    throw new Error(`tiles[${index}] must be an object.`);
-  }
-
-  return {
-    id: readNonNegativeInteger(value.id, `tiles[${index}].id`),
-    destCol: readNonNegativeInteger(value.destCol, `tiles[${index}].destCol`),
-    destRow: readNonNegativeInteger(value.destRow, `tiles[${index}].destRow`),
-    sourceImageRef: readOptionalNullableString(value.sourceImageRef, defaultSourceImage, `tiles[${index}].sourceImageRef`),
-    sourceRect: parseSourceRect(value.sourceRect, `tiles[${index}].sourceRect`),
-    offsetX: readNumber(value.offsetX, `tiles[${index}].offsetX`),
-    offsetY: readNumber(value.offsetY, `tiles[${index}].offsetY`),
-    scaleX: readPositiveNumber(value.scaleX, `tiles[${index}].scaleX`),
-    scaleY: readPositiveNumber(value.scaleY, `tiles[${index}].scaleY`),
-    flipX: readBoolean(value.flipX, `tiles[${index}].flipX`),
-    flipY: readBoolean(value.flipY, `tiles[${index}].flipY`),
-    brightness: readOptionalNumber(value.brightness, 0, `tiles[${index}].brightness`),
-    contrast: readOptionalPositiveNumber(value.contrast, 1, `tiles[${index}].contrast`),
-    saturation: readOptionalPositiveNumber(value.saturation, 1, `tiles[${index}].saturation`),
-    tintColor: readOptionalNullableString(value.tintColor, null, `tiles[${index}].tintColor`),
-    filterMode: readOptionalFilterMode(value.filterMode, "nearest", `tiles[${index}].filterMode`),
-    pixelSnap: readOptionalBoolean(value.pixelSnap, true, `tiles[${index}].pixelSnap`),
-    name: readString(value.name, `tiles[${index}].name`),
-    tags: readStringArray(value.tags, `tiles[${index}].tags`),
-    collision: readString(value.collision, `tiles[${index}].collision`),
+function createPersistedProject(project: TilejamProject): {
+  version: number;
+  sourceImage: string | null;
+  workingImage: string | null;
+  sourceTileWidth: TilejamProject["sourceTileWidth"];
+  sourceTileHeight: TilejamProject["sourceTileHeight"];
+  tileWidth: TilejamProject["tileWidth"];
+  tileHeight: TilejamProject["tileHeight"];
+  outputWidth: number;
+  outputHeight: number;
+  scene?: TilejamProject["scene"];
+} {
+  const persistedProject: {
+    version: number;
+    sourceImage: string | null;
+    workingImage: string | null;
+    sourceTileWidth: TilejamProject["sourceTileWidth"];
+    sourceTileHeight: TilejamProject["sourceTileHeight"];
+    tileWidth: TilejamProject["tileWidth"];
+    tileHeight: TilejamProject["tileHeight"];
+    outputWidth: number;
+    outputHeight: number;
+    scene?: TilejamProject["scene"];
+  } = {
+    version: project.version,
+    sourceImage: project.sourceImage,
+    workingImage: project.workingImage,
+    sourceTileWidth: project.sourceTileWidth,
+    sourceTileHeight: project.sourceTileHeight,
+    tileWidth: project.tileWidth,
+    tileHeight: project.tileHeight,
+    outputWidth: project.outputWidth,
+    outputHeight: project.outputHeight,
   };
-}
 
-function parseSourceRect(value: unknown, path: string): SourceRect {
-  if (!isRecord(value)) {
-    throw new Error(`${path} must be an object.`);
+  if (project.scene) {
+    persistedProject.scene = project.scene;
   }
 
-  return {
-    x: readNonNegativeInteger(value.x, `${path}.x`),
-    y: readNonNegativeInteger(value.y, `${path}.y`),
-    w: readPositiveInteger(value.w, `${path}.w`),
-    h: readPositiveInteger(value.h, `${path}.h`),
-  };
+  return persistedProject;
 }
 
 function readTileSize(value: unknown, path: string): 8 | 16 | 32 | 64 {
@@ -182,16 +174,6 @@ function readPositiveInteger(value: unknown, path: string): number {
   return result;
 }
 
-function readNonNegativeInteger(value: unknown, path: string): number {
-  const result = readInteger(value, path);
-
-  if (result < 0) {
-    throw new Error(`${path} must be 0 or greater.`);
-  }
-
-  return result;
-}
-
 function readPositiveNumber(value: unknown, path: string): number {
   const result = readNumber(value, path);
 
@@ -202,22 +184,6 @@ function readPositiveNumber(value: unknown, path: string): number {
   return result;
 }
 
-function readOptionalPositiveNumber(value: unknown, fallback: number, path: string): number {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  return readPositiveNumber(value, path);
-}
-
-function readOptionalNumber(value: unknown, fallback: number, path: string): number {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  return readNumber(value, path);
-}
-
 function readBoolean(value: unknown, path: string): boolean {
   if (typeof value !== "boolean") {
     throw new Error(`${path} must be a boolean.`);
@@ -226,40 +192,12 @@ function readBoolean(value: unknown, path: string): boolean {
   return value;
 }
 
-function readOptionalBoolean(value: unknown, fallback: boolean, path: string): boolean {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  return readBoolean(value, path);
-}
-
 function readOptionalNullableString(value: unknown, fallback: string | null, path: string): string | null {
   if (value === undefined) {
     return fallback;
   }
 
   return readNullableString(value, path);
-}
-
-function readOptionalFilterMode(value: unknown, fallback: "nearest" | "linear", path: string): "nearest" | "linear" {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  if (value !== "nearest" && value !== "linear") {
-    throw new Error(`${path} must be "nearest" or "linear".`);
-  }
-
-  return value;
-}
-
-function readStringArray(value: unknown, path: string): string[] {
-  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
-    throw new Error(`${path} must be an array of strings.`);
-  }
-
-  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

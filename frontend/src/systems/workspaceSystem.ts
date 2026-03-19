@@ -1,5 +1,6 @@
 import type { CameraState, GridCoordinate, ProjectState, WorkspacePanel } from "../types/project";
 import { getOutputGridMetrics, getProjectPixelSize } from "./tileGridSystem";
+import { getResolvedSourceImageAsset } from "./sourceImageSystem";
 
 export type Rect = {
   x: number;
@@ -265,7 +266,8 @@ export function getSourcePanelMetrics(state: ProjectState): {
     };
   }
 
-  const image = state.sourceImageAsset.image;
+  const sourceAsset = getResolvedSourceImageAsset(state);
+  const image = sourceAsset.image;
 
   if (!image) {
     return null;

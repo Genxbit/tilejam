@@ -160,13 +160,14 @@ export function createShell({
 
   inputLabel.append(input);
 
-  const projectInputLabel = document.createElement("label");
-  projectInputLabel.className = "file-input file-input-secondary";
-  projectInputLabel.textContent = "Open project";
+  const projectInputButton = document.createElement("button");
+  projectInputButton.type = "button";
+  projectInputButton.className = "file-input file-input-secondary";
+  projectInputButton.textContent = "Open project";
 
   const projectInput = document.createElement("input");
   projectInput.type = "file";
-  projectInput.accept = ".json,.tilejam.json,application/json";
+  projectInput.accept = ".tilejam.json,.json";
   projectInput.addEventListener("change", async () => {
     const file = projectInput.files?.[0];
 
@@ -178,11 +179,8 @@ export function createShell({
     projectInput.value = "";
   });
 
-  projectInputLabel.append(projectInput);
-
-  projectInputLabel.addEventListener("click", async (event) => {
-    event.preventDefault();
-
+  projectInputButton.append(projectInput);
+  projectInputButton.addEventListener("click", async () => {
     const handled = await onOpenProject();
 
     if (!handled) {
@@ -240,9 +238,13 @@ export function createShell({
   historyActions.className = "panel-actions";
   const undoButton = createActionButton("Undo", onUndo);
   const redoButton = createActionButton("Redo", onRedo);
-  historyActions.append(projectInputLabel, saveProjectButton, undoButton, redoButton);
+  historyActions.append(projectInputButton, saveProjectButton, undoButton, redoButton);
 
   const topActionsSection = createControlSection("Project", "Open or save the full editable project, then step backward or forward through the current session.");
+  const projectFileNote = document.createElement("p");
+  projectFileNote.className = "field-note";
+  projectFileNote.textContent = `Current project: ${getDisplayFileLabel(state.session.projectFileName ?? "unsaved")}`;
+  topActionsSection.append(projectFileNote);
   topActionsSection.append(historyActions);
 
   const fileActions = document.createElement("div");
@@ -598,7 +600,7 @@ export function createShell({
 
   const items = [
     ["Source", state.sourceImageAsset.name ?? state.project.sourceImage ?? "Not loaded"],
-    ["Working PNG", state.project.workingImage ?? "Not loaded"],
+    ["Working PNG", getDisplayFileLabel(state.session.workingImageFileName ?? state.project.workingImage ?? "Not loaded")],
     ["Resolution", `${state.sourceImageAsset.width} x ${state.sourceImageAsset.height}`],
     ["Source grid", `${state.project.sourceTileWidth} x ${state.project.sourceTileHeight}`],
     [
@@ -799,8 +801,9 @@ export function createShell({
     canvas,
     update(nextState) {
       const scrollTop = panel.scrollTop;
+      projectFileNote.textContent = `Current project: ${getDisplayFileLabel(nextState.session.projectFileName ?? "unsaved")}`;
       items[0].description.textContent = nextState.sourceImageAsset.name ?? nextState.project.sourceImage ?? "Not loaded";
-      items[1].description.textContent = nextState.project.workingImage ?? "Not loaded";
+      items[1].description.textContent = getDisplayFileLabel(nextState.session.workingImageFileName ?? nextState.project.workingImage ?? "Not loaded");
       items[2].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
       items[3].description.textContent = `${nextState.project.sourceTileWidth} x ${nextState.project.sourceTileHeight}`;
       const selection = getVisibleSelection(nextState);
@@ -1126,4 +1129,10 @@ function createControlSection(title: string, description: string): HTMLElement {
 
   section.append(heading, copy);
   return section;
+}
+
+function getDisplayFileLabel(value: string): string {
+  const normalized = value.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+  return segments[segments.length - 1] || value;
 }

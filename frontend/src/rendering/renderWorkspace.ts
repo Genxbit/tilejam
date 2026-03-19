@@ -2,7 +2,7 @@ import type { ProjectState } from "../types/project";
 import { getSelectedOutputTile } from "../systems/tileEditorSystem";
 import { getActiveSceneLayer, getSceneCellGid } from "../systems/sceneSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
-import { getSourceImageForRef } from "../systems/sourceImageSystem";
+import { getResolvedSourceImageAsset, getSourceImageForRef } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, getSourceGridMetrics } from "../systems/tileGridSystem";
 import { getOutputPanelMetrics, getSourcePanelMetrics, getWorkspaceLayout, type OutputViewport, type SourceViewport } from "../systems/workspaceSystem";
 
@@ -140,8 +140,12 @@ function drawSourcePanel(
       baseContext.clip();
       if (state.session.activeWorkspaceMode === "scene") {
         drawTilesheetPalette(baseContext, state, viewport);
-      } else if (state.sourceImageAsset.image) {
-        baseContext.drawImage(state.sourceImageAsset.image, viewport.contentX, viewport.contentY, viewport.contentWidth, viewport.contentHeight);
+      } else {
+        const sourceAsset = getResolvedSourceImageAsset(state);
+
+        if (sourceAsset.image) {
+          baseContext.drawImage(sourceAsset.image, viewport.contentX, viewport.contentY, viewport.contentWidth, viewport.contentHeight);
+        }
       }
       drawGridOverlay(baseContext, state, viewport);
       baseContext.restore();
@@ -641,8 +645,9 @@ function getSourcePanelLabel(state: ProjectState): string {
     return `Tilesheet: ${name} · ${outputGrid.columns} x ${outputGrid.rows} tiles · ${state.project.outputWidth} x ${state.project.outputHeight}`;
   }
 
-  const image = state.sourceImageAsset.image;
-  const label = state.sourceImageAsset.name ?? state.project.sourceImage ?? "image";
+  const sourceAsset = getResolvedSourceImageAsset(state);
+  const image = sourceAsset.image;
+  const label = getDisplayFileLabel(sourceAsset.name ?? state.project.sourceImage ?? "image");
   return `Source: ${label} · ${image?.width ?? 0} x ${image?.height ?? 0}`;
 }
 
@@ -663,10 +668,18 @@ function getOutputPanelLabel(
 
 function getWorkingTilesheetLabel(state: ProjectState): string {
   if (state.session.activeWorkspaceMode === "scene" && state.project.scene && !state.project.workingImage && !state.session.workingImageFileName) {
-    return state.project.scene.tilesetSource.replace(/\.tsj$/i, ".png");
+    return getDisplayFileLabel(state.project.scene.tilesetSource.replace(/\.tsj$/i, ".png"));
   }
 
-  return state.session.workingImageFileName
+  return getDisplayFileLabel(
+    state.session.workingImageFileName
     ?? state.project.workingImage
-    ?? "unsaved";
+    ?? "unsaved",
+  );
+}
+
+function getDisplayFileLabel(value: string): string {
+  const normalized = value.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+  return segments[segments.length - 1] || value;
 }

@@ -30,6 +30,8 @@ export type SessionState = {
   message: string | null;
   projectFileName: string | null;
   projectFileHandle: FileSystemFileHandle | null;
+  projectDirectoryHandle: FileSystemDirectoryHandle | null;
+  projectBaseUrl: string | null;
   workingImageFileName: string | null;
   workingImageFileHandle: FileSystemFileHandle | null;
   sceneFileName: string | null;

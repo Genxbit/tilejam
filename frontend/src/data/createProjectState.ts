@@ -26,6 +26,8 @@ export function createProjectState(): ProjectState {
       message: "The bundled sample image is loaded on startup so the canvas stays immediately visible.",
       projectFileName: null,
       projectFileHandle: null,
+      projectDirectoryHandle: null,
+      projectBaseUrl: null,
       workingImageFileName: null,
       workingImageFileHandle: null,
       sceneFileName: null,

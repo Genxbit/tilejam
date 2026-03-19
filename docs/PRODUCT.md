@@ -21,7 +21,7 @@ It also grows into a scene editor that uses the cleaned tilesheet as the palette
 9. repair target/output tile content in the editor panel
 10. move placed tiles between output cells when needed
 11. save the working/output tilesheet as PNG
-12. optionally save project JSON for richer editable state
+12. optionally save project JSON for references and grid settings
 13. open the Scene editor
 14. use the current tilesheet as the palette/source for scene placement
 15. open or save scenes as TMJ
@@ -44,7 +44,6 @@ It also grows into a scene editor that uses the cleaned tilesheet as the palette
 * per-tile visual correction controls
 * project JSON load/save
 * seamless tiling support
-* PNG export
 * TSJ export
 * scene editing using the current tilesheet
 * TMJ scene load/save
@@ -77,7 +76,10 @@ It also grows into a scene editor that uses the cleaned tilesheet as the palette
 * no hidden state
 * project data must stay editable and serializable
 * PNG is visual truth for the working/output sheet
-* `.tilejam.json` preserves richer editable state than PNG alone
+* `.tilejam.json` should not duplicate baked working-sheet tile placement when the working PNG already exists
+* a project without a resolvable working PNG cannot fully restore tilesheet editing until that PNG is relinked
+* TMJ is the source of truth for scene content
+* `.tilejam.json` should reference the current scene file instead of embedding the full scene map
 
 ---
 
