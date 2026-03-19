@@ -6,6 +6,7 @@ export function createProjectState(): ProjectState {
       version: 1,
       sourceImage: null,
       workingImage: null,
+      sceneFile: null,
       sourceTileWidth: 32,
       sourceTileHeight: 32,
       tileWidth: 32,

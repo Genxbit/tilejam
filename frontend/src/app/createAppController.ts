@@ -1,7 +1,7 @@
 import type { ProjectState } from "../types/project";
 import { saveTilesetPngToHandle, saveTilesetPngWithPicker, saveTilesetTsjWithPicker } from "../io/exportTileset";
 import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
-import { loadSceneFile, loadSceneFromHandle, saveSceneToHandle, saveSceneWithPicker } from "../io/sceneFile";
+import { loadSceneFile, loadSceneFromHandle, loadSceneFromUrl, saveSceneToHandle, saveSceneWithPicker } from "../io/sceneFile";
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
 import { createProjectState } from "../data/createProjectState";
@@ -41,6 +41,7 @@ type HistoryEntry = {
 type UnresolvedProjectAssets = {
   sourceImageRef: string | null;
   workingImageRef: string | null;
+  sceneFileRef: string | null;
 };
 
 const HISTORY_LIMIT = 40;
@@ -300,6 +301,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         recordHistory();
         const scene = await loadSceneFile(file);
         state.project.scene = scene;
+        state.project.sceneFile = file.name;
         state.session.sceneFileName = file.name;
         state.session.sceneFileHandle = null;
         state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
@@ -342,6 +344,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         recordHistory();
         const { file, scene } = await loadSceneFromHandle(handle);
         state.project.scene = scene;
+        state.project.sceneFile = file.name;
         state.session.sceneFileName = file.name;
         state.session.sceneFileHandle = handle;
         state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
@@ -371,6 +374,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
         if (state.session.sceneFileHandle) {
           await saveSceneToHandle(state.session.sceneFileHandle, scene);
+          state.project.sceneFile = state.session.sceneFileName ?? suggestedName;
           state.session.message = `Saved scene to ${state.session.sceneFileName ?? suggestedName}.`;
           renderAll();
           return;
@@ -381,9 +385,11 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         if (handle) {
           state.session.sceneFileHandle = handle;
           state.session.sceneFileName = handle.name;
+          state.project.sceneFile = handle.name;
           state.session.message = `Saved scene to ${handle.name}.`;
         } else {
           state.session.sceneFileName = suggestedName;
+          state.project.sceneFile = suggestedName;
           state.session.message = `Downloaded scene as ${suggestedName}. Browser file overwrite is not supported here.`;
         }
       } catch (error) {
@@ -1276,7 +1282,7 @@ async function loadProjectIntoState(
   state.session.activeWorkspaceMode = "tilesheet";
   state.session.workingImageFileName = getDisplayFileName(project.workingImage);
   state.session.workingImageFileHandle = null;
-  state.session.sceneFileName = null;
+  state.session.sceneFileName = getDisplayFileName(project.sceneFile);
   state.session.sceneFileHandle = null;
   state.session.activeSceneLayerId = project.scene?.layers[0]?.id ?? null;
   state.session.selectedSceneCell = null;
@@ -1286,6 +1292,7 @@ async function loadProjectIntoState(
   const unresolved: UnresolvedProjectAssets = {
     sourceImageRef: null,
     workingImageRef: null,
+    sceneFileRef: null,
   };
 
   if (!project.sourceImage) {
@@ -1334,6 +1341,27 @@ async function loadProjectIntoState(
     resolutionMessages.push("No working PNG reference was included. Open tilesheet to rebuild editable tiles.");
   }
 
+  if (project.sceneFile) {
+    const resolvedSceneFile = resolveProjectAssetReference(state, project.sceneFile);
+
+    try {
+      const scene = await loadSceneFromUrl(resolvedSceneFile);
+      state.project.scene = scene;
+      state.project.sceneFile = project.sceneFile;
+      state.session.sceneFileName = getDisplayFileName(project.sceneFile);
+      state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+      resolutionMessages.push(`Scene resolved from ${project.sceneFile}.`);
+    } catch {
+      state.project.scene = null;
+      unresolved.sceneFileRef = isRelativeAssetReference(project.sceneFile) ? project.sceneFile : null;
+      resolutionMessages.push(`Scene "${project.sceneFile}" could not be resolved automatically. Use "Open scene" to relink it.`);
+    }
+  } else {
+    state.project.scene = null;
+    state.session.sceneFileName = null;
+    state.session.activeSceneLayerId = null;
+  }
+
   state.session.message = `${messagePrefix} ${resolutionMessages.join(" ")}`.trim();
   return unresolved;
 }
@@ -1342,7 +1370,7 @@ async function tryResolveProjectAssetsFromDirectory(
   state: ProjectState,
   unresolved: UnresolvedProjectAssets,
 ): Promise<void> {
-  const refs = [unresolved.sourceImageRef, unresolved.workingImageRef].filter((value): value is string => Boolean(value));
+  const refs = [unresolved.sourceImageRef, unresolved.workingImageRef, unresolved.sceneFileRef].filter((value): value is string => Boolean(value));
 
   const showDirectoryPicker = (window as Window & {
     showDirectoryPicker?: (options?: {
@@ -1395,6 +1423,26 @@ async function tryResolveProjectAssetsFromDirectory(
         }
       } catch {
         resolutionMessages.push(`Working PNG "${unresolved.workingImageRef}" was not found in the selected project folder.`);
+      }
+    }
+
+    if (unresolved.sceneFileRef) {
+      try {
+        const sceneFile = await getRelativeFileFromDirectory(directoryHandle, unresolved.sceneFileRef);
+
+        if (sceneFile) {
+          const scene = await loadSceneFile(sceneFile);
+          state.project.scene = scene;
+          state.project.sceneFile = unresolved.sceneFileRef;
+          state.session.sceneFileName = getDisplayFileName(unresolved.sceneFileRef);
+          state.session.sceneFileHandle = null;
+          state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+          resolutionMessages.push(`Scene linked from project folder (${unresolved.sceneFileRef}).`);
+        } else {
+          resolutionMessages.push(`Scene "${unresolved.sceneFileRef}" was not found in the selected project folder.`);
+        }
+      } catch {
+        resolutionMessages.push(`Scene "${unresolved.sceneFileRef}" was not found in the selected project folder.`);
       }
     }
 

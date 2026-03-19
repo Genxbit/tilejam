@@ -1,5 +1,4 @@
 import type { TilejamProject } from "../types/project";
-import { parseSceneJson } from "./sceneJsonShared";
 
 export async function loadProjectFile(file: File): Promise<TilejamProject> {
   const text = await file.text();
@@ -46,6 +45,7 @@ function parseTilejamProject(value: unknown): TilejamProject {
     version: readPositiveInteger(value.version, "version"),
     sourceImage,
     workingImage: readOptionalNullableString(value.workingImage, null, "workingImage"),
+    sceneFile: readOptionalNullableString(value.sceneFile, null, "sceneFile"),
     sourceTileWidth: readOptionalTileSize(value.sourceTileWidth, value.tileWidth, "sourceTileWidth"),
     sourceTileHeight: readOptionalTileSize(value.sourceTileHeight, value.tileHeight, "sourceTileHeight"),
     tileWidth: readTileSize(value.tileWidth, "tileWidth"),
@@ -53,7 +53,7 @@ function parseTilejamProject(value: unknown): TilejamProject {
     outputWidth: readOutputDimension(value.outputWidth, value.columns, value.tileWidth, "outputWidth"),
     outputHeight: readOutputDimension(value.outputHeight, value.rows, value.tileHeight, "outputHeight"),
     tiles: [],
-    scene: value.scene === undefined || value.scene === null ? null : parseSceneJson(value.scene, "scene"),
+    scene: null,
   };
 }
 
@@ -61,29 +61,30 @@ function createPersistedProject(project: TilejamProject): {
   version: number;
   sourceImage: string | null;
   workingImage: string | null;
+  sceneFile: string | null;
   sourceTileWidth: TilejamProject["sourceTileWidth"];
   sourceTileHeight: TilejamProject["sourceTileHeight"];
   tileWidth: TilejamProject["tileWidth"];
   tileHeight: TilejamProject["tileHeight"];
   outputWidth: number;
   outputHeight: number;
-  scene?: TilejamProject["scene"];
 } {
   const persistedProject: {
     version: number;
     sourceImage: string | null;
     workingImage: string | null;
+    sceneFile: string | null;
     sourceTileWidth: TilejamProject["sourceTileWidth"];
     sourceTileHeight: TilejamProject["sourceTileHeight"];
     tileWidth: TilejamProject["tileWidth"];
     tileHeight: TilejamProject["tileHeight"];
     outputWidth: number;
     outputHeight: number;
-    scene?: TilejamProject["scene"];
   } = {
     version: project.version,
     sourceImage: project.sourceImage,
     workingImage: project.workingImage,
+    sceneFile: project.sceneFile,
     sourceTileWidth: project.sourceTileWidth,
     sourceTileHeight: project.sourceTileHeight,
     tileWidth: project.tileWidth,
@@ -91,10 +92,6 @@ function createPersistedProject(project: TilejamProject): {
     outputWidth: project.outputWidth,
     outputHeight: project.outputHeight,
   };
-
-  if (project.scene) {
-    persistedProject.scene = project.scene;
-  }
 
   return persistedProject;
 }

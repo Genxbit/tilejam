@@ -5,6 +5,16 @@ export async function loadSceneFile(file: File): Promise<SceneMapState> {
   return parseTmj(await file.text());
 }
 
+export async function loadSceneFromUrl(url: string): Promise<SceneMapState> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to load scene from ${url}.`);
+  }
+
+  return parseTmj(await response.text());
+}
+
 export async function loadSceneFromHandle(handle: FileSystemFileHandle): Promise<{ file: File; scene: SceneMapState }> {
   const file = await handle.getFile();
   const scene = await loadSceneFile(file);

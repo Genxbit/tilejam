@@ -255,7 +255,7 @@ Update project persistence so the working tilesheet is rebuilt from the saved PN
 ## Ticket 9: Scene reference cleanup
 
 **Status**
-Planned
+Completed
 
 **Goal**
 Make TMJ the source of truth for scenes and remove embedded scene duplication from `.tilejam.json`.

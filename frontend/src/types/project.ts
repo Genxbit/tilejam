@@ -8,6 +8,7 @@ export type TilejamProject = {
   version: number;
   sourceImage: string | null;
   workingImage: string | null;
+  sceneFile: string | null;
   sourceTileWidth: TileSize;
   sourceTileHeight: TileSize;
   tileWidth: TileSize;
