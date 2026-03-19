@@ -127,6 +127,10 @@ Standard Tiled JSON map.
       "height": 32,
       "visible": true,
       "opacity": 1,
+      "offsetx": 0,
+      "offsety": 0,
+      "parallaxx": 1,
+      "parallaxy": 1,
       "data": [1, 0, 0, 2]
     }
   ],
@@ -146,6 +150,8 @@ Standard Tiled JSON map.
 * scene tile size must match the selected tilesheet tile size
 * scene layer data uses Tiled global tile IDs
 * Tilejam v1 should start with orthogonal tile layers
+* scene tile layers may include `offsetx`, `offsety`, `parallaxx`, and `parallaxy`
+* Tilejam scene state maps those TMJ fields to `offsetX`, `offsetY`, `parallaxX`, and `parallaxY`
 * the active tilesheet is used as the palette/source for scene editing
 * loading TMJ must restore editable scene grid content
 * saving TMJ must preserve deterministic tile placement
