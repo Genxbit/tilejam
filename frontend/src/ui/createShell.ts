@@ -52,7 +52,7 @@ type Shell = {
 };
 
 type EditorTab = "layout" | "visual" | "meta";
-type SidebarTab = "project" | "editor";
+type SidebarTab = "tilesheet" | "tile" | "scene";
 
 export function createShell({
   root,
@@ -103,7 +103,7 @@ export function createShell({
 
   const intro = document.createElement("p");
   intro.className = "panel-copy";
-  intro.textContent = "Configure the source tilesheet grid and the target/output tilesheet before moving tiles across.";
+  intro.textContent = "Load a source, shape the working tilesheet, then repair individual tiles before moving into scene editing.";
 
   const inputLabel = document.createElement("label");
   inputLabel.className = "file-input";
@@ -205,6 +205,9 @@ export function createShell({
   actions.className = "panel-actions";
   actions.append(inputLabel, projectInputLabel, saveProjectButton, workingImageInputLabel, saveWorkingImageButton);
 
+  const actionsSection = createControlSection("Files", "Open sources, projects, and the current working tilesheet.");
+  actionsSection.append(actions);
+
   const historyActions = document.createElement("div");
   historyActions.className = "panel-actions";
   const undoButton = createActionButton("Undo", onUndo);
@@ -212,10 +215,16 @@ export function createShell({
   const copyAllButton = createActionButton("Copy All Tiles", onCopyAllTiles);
   historyActions.append(undoButton, redoButton, copyAllButton);
 
+  const historySection = createControlSection("Editing", "Quick actions for the current tilesheet editing session.");
+  historySection.append(historyActions);
+
   const exportActions = document.createElement("div");
   exportActions.className = "panel-actions";
   const exportTsjButton = createAsyncActionButton("Export TSJ", onExportTsj);
   exportActions.append(exportTsjButton);
+
+  const exportSection = createControlSection("Export", "Save interoperability data for the current tilesheet.");
+  exportSection.append(exportActions);
 
   const sourceGridField = document.createElement("label");
   sourceGridField.className = "field-group";
@@ -322,7 +331,7 @@ export function createShell({
   derivedGridField.append(derivedGridLabel, derivedGridValue, derivedGridNote);
 
   const selectedTile = getSelectedOutputTile(state);
-  let activeSidebarTab: SidebarTab = "project";
+  let activeSidebarTab: SidebarTab = "tilesheet";
   const editorSection = createControlSection(
     "Tile Editor",
     "Select a placed output tile to repair seams, move it, and adjust export settings.",
@@ -529,36 +538,56 @@ export function createShell({
   items.forEach((item) => metadata.append(item.term, item.description));
 
   controls.append(sourceSection, outputSection, derivedGridField);
+  const tilesheetPanelContent = document.createElement("div");
+  tilesheetPanelContent.className = "sidebar-section-stack";
+  tilesheetPanelContent.append(actionsSection, historySection, exportSection, controls, metadata);
 
   const sidebarTabs = document.createElement("div");
   sidebarTabs.className = "sidebar-tabs";
-  const projectTab = createSidebarTabButton("Project");
-  const editorTab = createSidebarTabButton("Editor");
-  sidebarTabs.append(projectTab, editorTab);
+  const tilesheetTab = createSidebarTabButton("Tilesheet");
+  const tileTab = createSidebarTabButton("Tile");
+  const sceneTab = createSidebarTabButton("Scene");
+  sidebarTabs.append(tilesheetTab, tileTab, sceneTab);
 
-  const projectPanel = document.createElement("div");
-  projectPanel.className = "sidebar-tab-panel";
-  projectPanel.append(controls, metadata);
+  const tilesheetPanel = document.createElement("div");
+  tilesheetPanel.className = "sidebar-tab-panel";
+  tilesheetPanel.append(tilesheetPanelContent);
 
-  const editorPanel = document.createElement("div");
-  editorPanel.className = "sidebar-tab-panel";
-  editorPanel.append(editorSection);
+  const tilePanel = document.createElement("div");
+  tilePanel.className = "sidebar-tab-panel";
+  tilePanel.append(editorSection);
 
-  projectTab.addEventListener("click", () => {
-    activeSidebarTab = "project";
-    syncSidebarTabState(activeSidebarTab, projectTab, editorTab, projectPanel, editorPanel);
+  const scenePanel = document.createElement("div");
+  scenePanel.className = "sidebar-tab-panel";
+  const sceneSection = createControlSection(
+    "Scene Editor",
+    "This area will use the current tilesheet as the palette for placing tiles into scenes.",
+  );
+  const sceneNote = document.createElement("p");
+  sceneNote.className = "field-note";
+  sceneNote.textContent = "Scene editing is not implemented yet, but this tab is reserved so the workspace structure stays stable as the app grows.";
+  sceneSection.append(sceneNote);
+  scenePanel.append(sceneSection);
+
+  tilesheetTab.addEventListener("click", () => {
+    activeSidebarTab = "tilesheet";
+    syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
   });
-  editorTab.addEventListener("click", () => {
-    activeSidebarTab = "editor";
-    syncSidebarTabState(activeSidebarTab, projectTab, editorTab, projectPanel, editorPanel);
+  tileTab.addEventListener("click", () => {
+    activeSidebarTab = "tile";
+    syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
   });
-  syncSidebarTabState(activeSidebarTab, projectTab, editorTab, projectPanel, editorPanel);
+  sceneTab.addEventListener("click", () => {
+    activeSidebarTab = "scene";
+    syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
+  });
+  syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
 
   const notes = document.createElement("p");
   notes.className = "panel-note";
   notes.textContent = state.session.message ?? "";
 
-  panel.append(heading, intro, actions, historyActions, exportActions, sidebarTabs, projectPanel, editorPanel, notes);
+  panel.append(heading, intro, sidebarTabs, tilesheetPanel, tilePanel, scenePanel, notes);
   appShell.append(workspace, panel);
   root.append(appShell);
 
@@ -761,15 +790,19 @@ function syncEditorTabState(
 
 function syncSidebarTabState(
   activeTab: SidebarTab,
-  projectTab: HTMLButtonElement,
-  editorTab: HTMLButtonElement,
-  projectPanel: HTMLDivElement,
-  editorPanel: HTMLDivElement,
+  tilesheetTab: HTMLButtonElement,
+  tileTab: HTMLButtonElement,
+  sceneTab: HTMLButtonElement,
+  tilesheetPanel: HTMLDivElement,
+  tilePanel: HTMLDivElement,
+  scenePanel: HTMLDivElement,
 ): void {
-  projectTab.dataset.active = activeTab === "project" ? "true" : "false";
-  editorTab.dataset.active = activeTab === "editor" ? "true" : "false";
-  projectPanel.hidden = activeTab !== "project";
-  editorPanel.hidden = activeTab !== "editor";
+  tilesheetTab.dataset.active = activeTab === "tilesheet" ? "true" : "false";
+  tileTab.dataset.active = activeTab === "tile" ? "true" : "false";
+  sceneTab.dataset.active = activeTab === "scene" ? "true" : "false";
+  tilesheetPanel.hidden = activeTab !== "tilesheet";
+  tilePanel.hidden = activeTab !== "tile";
+  scenePanel.hidden = activeTab !== "scene";
 }
 
 function syncSelectedTileEditor(
