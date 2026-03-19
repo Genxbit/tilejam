@@ -282,3 +282,48 @@ Update project persistence so `.tilejam.json` stores only a scene-file reference
 * reopening a project can restore the current scene from the referenced TMJ
 * TMJ remains the only source of truth for scene content
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 10: Advanced tile repair tools
+
+**Status**
+Planned
+
+**Goal**
+Add precision tile-repair tools for aligning, fitting, cropping, and seam-checking AI-generated tiles.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Extend the tile editor with advanced repair tools for positioning, fitting, cropping, rotation, and seam preview.
+
+**Deliverables**
+
+* nudge image by 1px steps
+* free offset inside tile
+* per-side crop: left, right, top, bottom
+* clamp to tile bounds
+* fit to tile: stretch
+* fit to tile: preserve ratio
+* anchor align: top, center, bottom, left, right
+* edge snap to tile boundaries
+* per-edge stretch
+* flip X and Y
+* rotate in 90 degree steps
+* trim transparent bounds
+* repeat preview
+* neighbor preview
+* organize advanced repair tools into a smart tile editor layout with clear grouping and progressive disclosure
+
+**Validation**
+
+* all edits are visible in the tile preview and output sheet
+* controls are serializable in project data where applicable
+* seam-check previews help evaluate tiling correctness
+* controls fit naturally in the tile editor panel and remain usable without excessive scrolling or confusion
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
