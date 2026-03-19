@@ -1,10 +1,12 @@
 import type { ProjectState } from "../types/project";
 import { saveTilesetPngToHandle, saveTilesetPngWithPicker, saveTilesetTsjWithPicker } from "../io/exportTileset";
 import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
+import { loadSceneFile, loadSceneFromHandle, saveSceneToHandle, saveSceneWithPicker } from "../io/sceneFile";
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
 import { clearSelectedOutputTile, deleteSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
+import { addSceneLayer, deleteSelectedSceneCell, ensureScene, moveSceneCellTo, moveSelectedSceneCellBy, placeSelectionIntoScene, resizeScene, selectSceneCell, selectSceneLayer, setSceneTilesetSource } from "../systems/sceneSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import { clearSourceImageAsset, loadImageAssetFromFile, loadImageAssetFromUrl, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, normalizeProjectTilesToGrid, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
@@ -23,6 +25,8 @@ import { createShell } from "../ui/createShell";
 type HistoryEntry = {
   project: ProjectState["project"];
   selectedOutputTileId: number | null;
+  selectedSceneCell: ProjectState["session"]["selectedSceneCell"];
+  activeSceneLayerId: number | null;
 };
 
 const HISTORY_LIMIT = 40;
@@ -214,6 +218,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
           state.session.workingImageFileHandle = result.handle;
           state.session.workingImageFileName = suggestedName;
           state.project.workingImage = suggestedName;
+          syncSceneTilesetSourceToDefault(state);
           state.session.message = result.missingTileCount > 0
             ? `Saved working PNG to ${suggestedName}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
             : `Saved working PNG to ${suggestedName}.`;
@@ -223,6 +228,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
         state.session.workingImageFileName = suggestedName;
         state.project.workingImage = suggestedName;
+        syncSceneTilesetSourceToDefault(state);
         state.session.message = result.missingTileCount > 0
           ? `Downloaded working PNG as ${suggestedName}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
           : `Downloaded working PNG as ${suggestedName}. Browser file overwrite is not supported here.`;
@@ -253,6 +259,115 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.message = `TSJ export failed: ${message}`;
       }
 
+      renderAll();
+    },
+    onSceneSelected: async (file) => {
+      try {
+        recordHistory();
+        const scene = await loadSceneFile(file);
+        state.project.scene = scene;
+        state.session.sceneFileName = file.name;
+        state.session.sceneFileHandle = null;
+        state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+        state.session.selectedSceneCell = null;
+        state.session.activeWorkspaceMode = "scene";
+        bumpRenderRevision();
+        state.session.message = `Loaded scene: ${file.name}.`;
+      } catch (error) {
+        undoStack.pop();
+        const message = error instanceof Error ? error.message : "Unknown TMJ import error.";
+        state.session.message = `Scene import failed: ${message}`;
+      }
+
+      renderAll();
+    },
+    onOpenScene: async () => {
+      if (!window.showOpenFilePicker) {
+        return false;
+      }
+
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          excludeAcceptAllOption: false,
+          multiple: false,
+          types: [
+            {
+              description: "Tiled JSON map",
+              accept: {
+                "application/json": [".tmj"],
+              },
+            },
+          ],
+        });
+
+        if (!handle) {
+          return true;
+        }
+
+        recordHistory();
+        const { file, scene } = await loadSceneFromHandle(handle);
+        state.project.scene = scene;
+        state.session.sceneFileName = file.name;
+        state.session.sceneFileHandle = handle;
+        state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+        state.session.selectedSceneCell = null;
+        state.session.activeWorkspaceMode = "scene";
+        bumpRenderRevision();
+        state.session.message = `Loaded scene: ${file.name}.`;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return true;
+        }
+
+        undoStack.pop();
+        const message = error instanceof Error ? error.message : "Unknown TMJ open error.";
+        state.session.message = `Scene open failed: ${message}`;
+      }
+
+      renderAll();
+      return true;
+    },
+    onSaveScene: async () => {
+      try {
+        const scene = ensureScene(state);
+        syncSceneTilesetSourceToDefault(state);
+        const suggestedName = state.session.sceneFileName ?? "scene.tmj";
+
+        if (state.session.sceneFileHandle) {
+          await saveSceneToHandle(state.session.sceneFileHandle, scene);
+          state.session.message = `Saved scene to ${state.session.sceneFileName ?? suggestedName}.`;
+          renderAll();
+          return;
+        }
+
+        const handle = await saveSceneWithPicker(scene, suggestedName);
+
+        if (handle) {
+          state.session.sceneFileHandle = handle;
+          state.session.sceneFileName = suggestedName;
+          state.session.message = `Saved scene to ${suggestedName}.`;
+        } else {
+          state.session.sceneFileName = suggestedName;
+          state.session.message = `Downloaded scene as ${suggestedName}. Browser file overwrite is not supported here.`;
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "Unknown scene save error.";
+        state.session.message = `Scene save failed: ${message}`;
+      }
+
+      renderAll();
+    },
+    onWorkspaceModeChanged: (mode) => {
+      state.session.activeWorkspaceMode = mode;
+      if (mode === "scene") {
+        ensureScene(state);
+        syncSceneTilesetSourceToDefault(state);
+      }
+      clearSelectionState(state);
       renderAll();
     },
     onSourceGridSizeChanged: (tileSize) => {
@@ -295,6 +410,40 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = dropped > 0
         ? `Output image height set to ${state.project.outputHeight}. Output grid is ${grid.columns} x ${grid.rows}. ${dropped} out-of-bounds tile${dropped === 1 ? "" : "s"} were removed.`
         : `Output image height set to ${state.project.outputHeight}. Output grid is ${grid.columns} x ${grid.rows}.`;
+      renderAll();
+    },
+    onSceneWidthChanged: (width) => {
+      recordHistory();
+      const scene = resizeScene(state, width, state.project.scene?.height ?? 32);
+      bumpRenderRevision();
+      state.session.message = `Scene width set to ${scene.width}.`;
+      renderAll();
+    },
+    onSceneHeightChanged: (height) => {
+      recordHistory();
+      const scene = resizeScene(state, state.project.scene?.width ?? 32, height);
+      bumpRenderRevision();
+      state.session.message = `Scene height set to ${scene.height}.`;
+      renderAll();
+    },
+    onSceneTilesetSourceChanged: (tilesetSource) => {
+      recordHistory();
+        const scene = setSceneTilesetSource(state, tilesetSource);
+        state.session.message = `Scene tileset source set to ${scene.tilesetSource}.`;
+        renderAll();
+    },
+    onSceneLayerChanged: (layerId) => {
+      const layer = selectSceneLayer(state, layerId);
+      state.session.selectedSceneCell = null;
+      state.session.message = layer ? `Selected scene layer ${layer.name}.` : "Scene layer not found.";
+      renderAll();
+    },
+    onSceneLayerAdded: () => {
+      recordHistory();
+      const layer = addSceneLayer(state);
+      bumpRenderRevision();
+      state.session.selectedSceneCell = null;
+      state.session.message = `Added scene layer ${layer.name}.`;
       renderAll();
     },
     onSelectedTileUpdated: (patch) => {
@@ -460,6 +609,44 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
     setHoveredOutputTile(state, outputHit);
 
+    if (state.session.activeWorkspaceMode === "scene") {
+      if (state.session.sourceSelection) {
+        ensureScene(state);
+        recordHistory();
+        const assignedCount = placeSelectionIntoScene(
+          state,
+          state.session.sourceSelection,
+          outputHit.col,
+          outputHit.row,
+        );
+
+        if (assignedCount > 0) {
+          bumpRenderRevision();
+          state.session.selectedSceneCell = { col: outputHit.col, row: outputHit.row };
+          state.session.message = `Placed ${assignedCount} scene tile${assignedCount === 1 ? "" : "s"} starting at ${outputHit.col}, ${outputHit.row}. Selection is still active for repeated placement.`;
+        } else {
+          undoStack.pop();
+          state.session.message = "Selection did not fit inside the scene grid.";
+        }
+
+        renderAll();
+        return;
+      }
+
+      const sceneCell = selectSceneCell(state, outputHit.col, outputHit.row);
+
+      if (sceneCell) {
+        activePointerId = event.pointerId;
+        dragMode = "move-tile";
+        movingTileOrigin = sceneCell;
+        shell.canvas.setPointerCapture(event.pointerId);
+        state.session.message = `Selected scene cell ${sceneCell.col}, ${sceneCell.row}. Drag to move it.`;
+      }
+
+      renderAll();
+      return;
+    }
+
     if (!state.session.sourceSelection) {
       const selectedTile = selectOutputTileAtCell(state, outputHit.col, outputHit.row);
       if (selectedTile) {
@@ -603,6 +790,49 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       return;
     }
 
+    if (dragMode === "move-tile" && state.session.activeWorkspaceMode === "scene" && movingTileOrigin) {
+      const point = getCanvasPoint(shell.canvas, event);
+      const layout = getWorkspaceLayout(shell.canvas.width, shell.canvas.height, state);
+      const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
+      const shouldMove = outputHit
+        ? outputHit.col !== movingTileOrigin.col || outputHit.row !== movingTileOrigin.row
+        : false;
+
+      if (shouldMove) {
+        recordHistory();
+      }
+
+      const movedCell = outputHit ? moveSceneCellTo(state, outputHit.col, outputHit.row) : null;
+      const moved = movedCell
+        ? movedCell.col !== movingTileOrigin.col || movedCell.row !== movingTileOrigin.row
+        : false;
+
+      activePointerId = null;
+      dragMode = null;
+      movingTileOrigin = null;
+      lastPointerPoint = null;
+
+      if (shell.canvas.hasPointerCapture(event.pointerId)) {
+        shell.canvas.releasePointerCapture(event.pointerId);
+      }
+
+      if (!moved && shouldMove) {
+        undoStack.pop();
+      }
+
+      if (moved) {
+        bumpRenderRevision();
+      }
+
+      state.session.message = movedCell
+        ? moved
+          ? `Moved scene cell to ${movedCell.col}, ${movedCell.row}.`
+          : `Selected scene cell ${movedCell.col}, ${movedCell.row}.`
+        : "Scene move cancelled.";
+      renderAll();
+      return;
+    }
+
     if (!sourceDragAnchor) {
       activePointerId = null;
       dragMode = null;
@@ -717,6 +947,26 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       }
 
       if (event.shiftKey) {
+        if (state.session.activeWorkspaceMode === "scene") {
+          if (!state.session.selectedSceneCell) {
+            return;
+          }
+
+          recordHistory();
+          const movedCell = moveSelectedSceneCellBy(state, movement.col, movement.row);
+
+          if (movedCell) {
+            event.preventDefault();
+            bumpRenderRevision();
+            state.session.message = `Moved scene cell to ${movedCell.col}, ${movedCell.row}.`;
+            renderAll();
+          } else {
+            undoStack.pop();
+          }
+
+          return;
+        }
+
         const movedTile = moveSelectedOutputTileBy(state, movement.col, movement.row);
 
         if (movedTile) {
@@ -749,6 +999,26 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     }
 
     if (event.code === "Backspace" || event.code === "Delete") {
+      if (state.session.activeWorkspaceMode === "scene") {
+        if (!state.session.selectedSceneCell) {
+          return;
+        }
+
+        event.preventDefault();
+        recordHistory();
+        const deletedCell = deleteSelectedSceneCell(state);
+
+        if (!deletedCell) {
+          undoStack.pop();
+          return;
+        }
+
+        bumpRenderRevision();
+        state.session.message = `Cleared scene cell ${deletedCell.col}, ${deletedCell.row}.`;
+        renderAll();
+        return;
+      }
+
       const tile = state.project.tiles.find((entry) => entry.id === state.session.selectedOutputTileId) ?? null;
 
       if (!tile) {
@@ -820,12 +1090,16 @@ function createHistoryEntry(state: ProjectState): HistoryEntry {
   return {
     project: JSON.parse(JSON.stringify(state.project)) as ProjectState["project"],
     selectedOutputTileId: state.session.selectedOutputTileId,
+    selectedSceneCell: state.session.selectedSceneCell ? { ...state.session.selectedSceneCell } : null,
+    activeSceneLayerId: state.session.activeSceneLayerId,
   };
 }
 
 function restoreHistoryEntry(state: ProjectState, entry: HistoryEntry): void {
   state.project = JSON.parse(JSON.stringify(entry.project)) as ProjectState["project"];
   state.session.selectedOutputTileId = entry.selectedOutputTileId;
+  state.session.selectedSceneCell = entry.selectedSceneCell ? { ...entry.selectedSceneCell } : null;
+  state.session.activeSceneLayerId = entry.activeSceneLayerId;
   normalizeProjectTilesToGrid(state);
 }
 
@@ -845,6 +1119,32 @@ function getWorkingImageFilename(state: ProjectState): string {
   return getExportFilename(state, "png");
 }
 
+function getDefaultSceneTilesetSource(state: ProjectState): string {
+  const explicitWorkingName = state.session.workingImageFileName ?? state.project.workingImage;
+
+  if (explicitWorkingName) {
+    return explicitWorkingName.replace(/\.[^.]+$/i, ".tsj");
+  }
+
+  if (state.session.projectFileName) {
+    return getExportFilename(state, "tsj");
+  }
+
+  return "tileset.tsj";
+}
+
+function syncSceneTilesetSourceToDefault(state: ProjectState): void {
+  if (!state.project.scene) {
+    return;
+  }
+
+  const currentValue = state.project.scene.tilesetSource.trim();
+
+  if (currentValue.length === 0 || currentValue === "tileset.tsj" || currentValue === getDefaultSceneTilesetSource(state)) {
+    state.project.scene.tilesetSource = getDefaultSceneTilesetSource(state);
+  }
+}
+
 
 async function loadProjectIntoState(state: ProjectState, project: ProjectState["project"], messagePrefix: string): Promise<void> {
   state.project = project;
@@ -852,6 +1152,11 @@ async function loadProjectIntoState(state: ProjectState, project: ProjectState["
   clearSelectedOutputTile(state);
   state.session.workingImageFileName = project.workingImage;
   state.session.workingImageFileHandle = null;
+  state.session.sceneFileName = null;
+  state.session.sceneFileHandle = null;
+  state.session.activeSceneLayerId = project.scene?.layers[0]?.id ?? null;
+  state.session.selectedSceneCell = null;
+  syncSceneTilesetSourceToDefault(state);
 
   const resolutionMessages: string[] = [];
 

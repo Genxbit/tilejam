@@ -1,4 +1,5 @@
 import type { SourceRect, TilePlacement, TilejamProject } from "../types/project";
+import { parseSceneJson } from "./sceneJsonShared";
 
 export async function loadProjectFile(file: File): Promise<TilejamProject> {
   const text = await file.text();
@@ -52,6 +53,7 @@ function parseTilejamProject(value: unknown): TilejamProject {
     outputWidth: readOutputDimension(value.outputWidth, value.columns, value.tileWidth, "outputWidth"),
     outputHeight: readOutputDimension(value.outputHeight, value.rows, value.tileHeight, "outputHeight"),
     tiles: readTiles(value.tiles, sourceImage),
+    scene: value.scene === undefined || value.scene === null ? null : parseSceneJson(value.scene, "scene"),
   };
 }
 

@@ -1,7 +1,8 @@
-import type { ProjectState, TileFilterMode } from "../types/project";
+import type { ProjectState, TileFilterMode, WorkspaceMode } from "../types/project";
 import { getSelectedOutputTile } from "../systems/tileEditorSystem";
 import { getOutputGridMetrics, getProjectIndexRange, getProjectPixelSize, getProjectTileCount, TILE_SIZE_OPTIONS } from "../systems/tileGridSystem";
 import { getAssignedTileCount } from "../systems/tilePlacementSystem";
+import { getActiveSceneLayer } from "../systems/sceneSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
 
 type ShellOptions = {
@@ -15,10 +16,19 @@ type ShellOptions = {
   onOpenWorkingImage: () => Promise<boolean>;
   onSaveWorkingImage: () => Promise<void>;
   onExportTsj: () => Promise<void>;
+  onSceneSelected: (file: File) => Promise<void>;
+  onOpenScene: () => Promise<boolean>;
+  onSaveScene: () => Promise<void>;
+  onWorkspaceModeChanged: (mode: WorkspaceMode) => void;
   onSourceGridSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
   onOutputTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
   onOutputWidthChanged: (width: number) => void;
   onOutputHeightChanged: (height: number) => void;
+  onSceneWidthChanged: (width: number) => void;
+  onSceneHeightChanged: (height: number) => void;
+  onSceneTilesetSourceChanged: (tilesetSource: string) => void;
+  onSceneLayerChanged: (layerId: number) => void;
+  onSceneLayerAdded: () => void;
   onSelectedTileUpdated: (patch: SelectedTilePatch) => void;
   onClearSelectedTile: () => void;
   onUndo: () => void;
@@ -65,10 +75,19 @@ export function createShell({
   onOpenWorkingImage,
   onSaveWorkingImage,
   onExportTsj,
+  onSceneSelected,
+  onOpenScene,
+  onSaveScene,
+  onWorkspaceModeChanged,
   onSourceGridSizeChanged,
   onOutputTileSizeChanged,
   onOutputWidthChanged,
   onOutputHeightChanged,
+  onSceneWidthChanged,
+  onSceneHeightChanged,
+  onSceneTilesetSourceChanged,
+  onSceneLayerChanged,
+  onSceneLayerAdded,
   onSelectedTileUpdated,
   onClearSelectedTile,
   onUndo,
@@ -233,6 +252,42 @@ export function createShell({
   const exportSection = createControlSection("Export", "Save interoperability data for the current tilesheet.");
   exportSection.append(exportActions);
 
+  const sceneInputLabel = document.createElement("label");
+  sceneInputLabel.className = "file-input file-input-secondary";
+  sceneInputLabel.textContent = "Open scene";
+
+  const sceneInput = document.createElement("input");
+  sceneInput.type = "file";
+  sceneInput.accept = ".tmj,application/json";
+  sceneInput.addEventListener("change", async () => {
+    const file = sceneInput.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    await onSceneSelected(file);
+    sceneInput.value = "";
+  });
+  sceneInputLabel.append(sceneInput);
+  sceneInputLabel.addEventListener("click", async (event) => {
+    event.preventDefault();
+
+    const handled = await onOpenScene();
+
+    if (!handled) {
+      sceneInput.click();
+    }
+  });
+
+  const saveSceneButton = document.createElement("button");
+  saveSceneButton.type = "button";
+  saveSceneButton.className = "file-input file-input-secondary";
+  saveSceneButton.textContent = "Save scene";
+  saveSceneButton.addEventListener("click", async () => {
+    await onSaveScene();
+  });
+
   const sourceGridField = document.createElement("label");
   sourceGridField.className = "field-group";
 
@@ -338,7 +393,8 @@ export function createShell({
   derivedGridField.append(derivedGridLabel, derivedGridValue, derivedGridNote);
 
   const selectedTile = getSelectedOutputTile(state);
-  let activeSidebarTab: SidebarTab = "tilesheet";
+  const selectedSceneLayer = getActiveSceneLayer(state);
+  let activeSidebarTab: SidebarTab = state.session.activeWorkspaceMode === "scene" ? "scene" : "tilesheet";
   const editorSection = createControlSection(
     "Tile Editor",
     "Select a placed output tile to repair seams, move it, and adjust export settings.",
@@ -568,24 +624,77 @@ export function createShell({
   scenePanel.className = "sidebar-tab-panel";
   const sceneSection = createControlSection(
     "Scene Editor",
-    "This area will use the current tilesheet as the palette for placing tiles into scenes.",
+    "Use the current tilesheet as the palette on the left, and place those tiles into the scene grid on the right.",
   );
-  const sceneNote = document.createElement("p");
-  sceneNote.className = "field-note";
-  sceneNote.textContent = "Scene editing is not implemented yet, but this tab is reserved so the workspace structure stays stable as the app grows.";
-  sceneSection.append(sceneNote);
+  const sceneActions = document.createElement("div");
+  sceneActions.className = "panel-actions";
+  sceneActions.append(sceneInputLabel, saveSceneButton);
+
+  const sceneSizeInputs = document.createElement("div");
+  sceneSizeInputs.className = "grid-inputs";
+  const sceneWidthField = createLabeledNumberField("Width", state.project.scene?.width ?? 32, "Scene width", 1, 1);
+  const sceneHeightField = createLabeledNumberField("Height", state.project.scene?.height ?? 32, "Scene height", 1, 1);
+  sceneWidthField.input.addEventListener("change", () => {
+    onSceneWidthChanged(Math.max(1, Number.parseInt(sceneWidthField.input.value, 10) || 1));
+  });
+  sceneHeightField.input.addEventListener("change", () => {
+    onSceneHeightChanged(Math.max(1, Number.parseInt(sceneHeightField.input.value, 10) || 1));
+  });
+  sceneSizeInputs.append(sceneWidthField.field, sceneHeightField.field);
+
+  const sceneTilesetField = document.createElement("label");
+  sceneTilesetField.className = "field-group";
+  const sceneTilesetLabel = document.createElement("span");
+  sceneTilesetLabel.className = "field-label";
+  sceneTilesetLabel.textContent = "Tileset source";
+  const sceneTilesetInput = document.createElement("input");
+  sceneTilesetInput.type = "text";
+  sceneTilesetInput.className = "grid-number-input";
+  sceneTilesetInput.value = state.project.scene?.tilesetSource ?? "tileset.tsj";
+  sceneTilesetInput.addEventListener("change", () => {
+    onSceneTilesetSourceChanged(sceneTilesetInput.value);
+  });
+  sceneTilesetField.append(sceneTilesetLabel, sceneTilesetInput);
+
+  const sceneLayerRow = document.createElement("div");
+  sceneLayerRow.className = "panel-actions";
+  const sceneLayerSelect = document.createElement("select");
+  sceneLayerSelect.className = "tile-size-select";
+  for (const layer of state.project.scene?.layers ?? []) {
+    const option = document.createElement("option");
+    option.value = `${layer.id}`;
+    option.textContent = layer.name;
+    option.selected = layer.id === selectedSceneLayer?.id;
+    sceneLayerSelect.append(option);
+  }
+  sceneLayerSelect.addEventListener("change", () => {
+    onSceneLayerChanged(Number.parseInt(sceneLayerSelect.value, 10));
+  });
+  const addLayerButton = createActionButton("Add Layer", onSceneLayerAdded);
+  sceneLayerRow.append(sceneLayerSelect, addLayerButton);
+
+  const sceneInfo = document.createElement("p");
+  sceneInfo.className = "field-note";
+  sceneInfo.textContent = state.project.scene
+    ? `Scene grid is ${state.project.scene.width} x ${state.project.scene.height}. Use the left panel to select tilesheet tiles, then click the right panel to place them.`
+    : "Create or open a scene to begin placing tiles.";
+
+  sceneSection.append(sceneActions, sceneSizeInputs, sceneTilesetField, sceneLayerRow, sceneInfo);
   scenePanel.append(sceneSection);
 
   tilesheetTab.addEventListener("click", () => {
     activeSidebarTab = "tilesheet";
+    onWorkspaceModeChanged("tilesheet");
     syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
   });
   tileTab.addEventListener("click", () => {
     activeSidebarTab = "tile";
+    onWorkspaceModeChanged("tilesheet");
     syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
   });
   sceneTab.addEventListener("click", () => {
     activeSidebarTab = "scene";
+    onWorkspaceModeChanged("scene");
     syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
   });
   syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
@@ -622,7 +731,21 @@ export function createShell({
       outputTileSelect.value = `${nextState.project.tileWidth}`;
       widthInput.value = `${nextState.project.outputWidth}`;
       heightInput.value = `${nextState.project.outputHeight}`;
+      sceneWidthField.input.value = `${nextState.project.scene?.width ?? 32}`;
+      sceneHeightField.input.value = `${nextState.project.scene?.height ?? 32}`;
+      sceneTilesetInput.value = nextState.project.scene?.tilesetSource ?? "tileset.tsj";
+      sceneLayerSelect.replaceChildren();
+      for (const layer of nextState.project.scene?.layers ?? []) {
+        const option = document.createElement("option");
+        option.value = `${layer.id}`;
+        option.textContent = layer.name;
+        option.selected = layer.id === getActiveSceneLayer(nextState)?.id;
+        sceneLayerSelect.append(option);
+      }
       derivedGridValue.textContent = `${nextOutputGrid.columns} columns x ${nextOutputGrid.rows} rows`;
+      sceneInfo.textContent = nextState.project.scene
+        ? `Scene grid is ${nextState.project.scene.width} x ${nextState.project.scene.height}. Use the left panel to select tilesheet tiles, then click the right panel to place them.`
+        : "Create or open a scene to begin placing tiles.";
       syncSelectedTileEditor(
         nextSelectedTile,
         {

@@ -13,6 +13,7 @@ export function createProjectState(): ProjectState {
       outputWidth: 1024,
       outputHeight: 1024,
       tiles: [],
+      scene: null,
     },
     sourceImageAsset: {
       image: null,
@@ -27,10 +28,15 @@ export function createProjectState(): ProjectState {
       projectFileHandle: null,
       workingImageFileName: null,
       workingImageFileHandle: null,
+      sceneFileName: null,
+      sceneFileHandle: null,
+      activeWorkspaceMode: "tilesheet",
+      activeSceneLayerId: null,
       sourceSelection: null,
       draftSourceSelection: null,
       hoveredOutputTile: null,
       selectedOutputTileId: null,
+      selectedSceneCell: null,
       hoveredPanel: null,
       sourceCamera: {
         zoom: 1,

@@ -15,6 +15,7 @@ export type TilejamProject = {
   outputWidth: number;
   outputHeight: number;
   tiles: TilePlacement[];
+  scene: SceneMapState | null;
 };
 
 export type SourceImageAssetState = {
@@ -31,10 +32,15 @@ export type SessionState = {
   projectFileHandle: FileSystemFileHandle | null;
   workingImageFileName: string | null;
   workingImageFileHandle: FileSystemFileHandle | null;
+  sceneFileName: string | null;
+  sceneFileHandle: FileSystemFileHandle | null;
+  activeWorkspaceMode: WorkspaceMode;
+  activeSceneLayerId: number | null;
   sourceSelection: SourceSelection | null;
   draftSourceSelection: SourceSelection | null;
   hoveredOutputTile: GridCoordinate | null;
   selectedOutputTileId: number | null;
+  selectedSceneCell: GridCoordinate | null;
   hoveredPanel: WorkspacePanel | null;
   sourceCamera: CameraState;
   outputCamera: CameraState;
@@ -50,6 +56,7 @@ export type GridCoordinate = {
 };
 
 export type WorkspacePanel = "source" | "output";
+export type WorkspaceMode = "tilesheet" | "scene";
 
 export type CameraState = {
   zoom: number;
@@ -105,4 +112,23 @@ export type SourceRect = {
   y: number;
   w: number;
   h: number;
+};
+
+export type SceneMapState = {
+  width: number;
+  height: number;
+  tileWidth: number;
+  tileHeight: number;
+  tilesetSource: string;
+  layers: SceneLayerState[];
+};
+
+export type SceneLayerState = {
+  id: number;
+  name: string;
+  width: number;
+  height: number;
+  visible: boolean;
+  opacity: number;
+  data: number[];
 };

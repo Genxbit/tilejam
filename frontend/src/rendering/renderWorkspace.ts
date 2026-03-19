@@ -1,9 +1,10 @@
 import type { ProjectState } from "../types/project";
 import { getSelectedOutputTile } from "../systems/tileEditorSystem";
+import { getActiveSceneLayer, getSceneCellGid } from "../systems/sceneSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
 import { getSourceImageForRef } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, getSourceGridMetrics } from "../systems/tileGridSystem";
-import { getWorkspaceLayout, type OutputViewport, type SourceViewport } from "../systems/workspaceSystem";
+import { getOutputPanelMetrics, getSourcePanelMetrics, getWorkspaceLayout, type OutputViewport, type SourceViewport } from "../systems/workspaceSystem";
 
 const BACKGROUND = "#12202f";
 const BORDER = "#3e6d89";
@@ -18,6 +19,8 @@ const SELECTION_STROKE = "#6be2ff";
 const HOVER_FILL = "rgba(242, 193, 78, 0.18)";
 const SELECTED_TILE_STROKE = "#77f1b2";
 const SELECTED_TILE_FILL = "rgba(119, 241, 178, 0.12)";
+const SELECTED_SCENE_STROKE = "#ff9d57";
+const SELECTED_SCENE_FILL = "rgba(255, 157, 87, 0.14)";
 const VIEW_HINT = "rgba(198, 215, 229, 0.72)";
 
 type RenderCache = {
@@ -54,7 +57,6 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
   context.fillStyle = BACKGROUND;
   context.fillRect(0, 0, width, height);
 
-  const { image } = state.sourceImageAsset;
   const layout = getWorkspaceLayout(width, height, state);
   const { sourcePanel, outputPanel } = layout;
   const cache = getRenderCache(canvas);
@@ -63,27 +65,20 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
   drawPanel(context, outputPanel);
   drawOutputGrid(context, state, layout.outputViewport, cache);
 
-  if (!image) {
+  if (!layout.sourceViewport) {
     drawEmptyState(context, sourcePanel);
     return;
   }
 
   const viewport = layout.sourceViewport;
-
-  if (!viewport) {
-    drawEmptyState(context, sourcePanel);
-    return;
-  }
-
-  drawSourcePanel(context, state, viewport, image, cache);
+  drawSourcePanel(context, state, viewport, cache);
   context.strokeStyle = BORDER;
   context.lineWidth = 2;
   context.strokeRect(viewport.frame.x - 8, viewport.frame.y - 8, viewport.frame.width + 16, viewport.frame.height + 16);
 
   context.fillStyle = LABEL;
   context.font = "12px monospace";
-  const label = state.sourceImageAsset.name ?? state.project.sourceImage ?? "image";
-  context.fillText(`Source: ${label} · ${image.width} x ${image.height}`, sourcePanel.x + 12, sourcePanel.y + 18);
+  context.fillText(getSourcePanelLabel(state), sourcePanel.x + 12, sourcePanel.y + 18);
   context.fillStyle = VIEW_HINT;
   context.fillText(`Zoom ${state.session.sourceCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`, sourcePanel.x + 12, sourcePanel.y + sourcePanel.height - 12);
 }
@@ -108,14 +103,17 @@ function drawSourcePanel(
   context: CanvasRenderingContext2D,
   state: ProjectState,
   viewport: SourceViewport,
-  image: HTMLImageElement,
   cache: RenderCache,
 ): void {
   const sourceKey = [
     state.session.renderRevision,
+    state.session.activeWorkspaceMode,
     state.project.sourceImage,
+    state.project.workingImage,
     state.project.sourceTileWidth,
     state.project.sourceTileHeight,
+    state.project.tileWidth,
+    state.project.tileHeight,
     viewport.frame.x,
     viewport.frame.y,
     viewport.frame.width,
@@ -139,8 +137,12 @@ function drawSourcePanel(
       baseContext.beginPath();
       baseContext.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
       baseContext.clip();
-      baseContext.drawImage(image, viewport.contentX, viewport.contentY, viewport.contentWidth, viewport.contentHeight);
-      drawGridOverlay(baseContext, state, viewport, image.width, image.height);
+      if (state.session.activeWorkspaceMode === "scene") {
+        drawTilesheetPalette(baseContext, state, viewport);
+      } else if (state.sourceImageAsset.image) {
+        baseContext.drawImage(state.sourceImageAsset.image, viewport.contentX, viewport.contentY, viewport.contentWidth, viewport.contentHeight);
+      }
+      drawGridOverlay(baseContext, state, viewport);
       baseContext.restore();
     }
 
@@ -164,27 +166,20 @@ function drawGridOverlay(
   context: CanvasRenderingContext2D,
   state: ProjectState,
   viewport: SourceViewport,
-  sourceWidth: number,
-  sourceHeight: number,
 ): void {
-  const metrics = getSourceGridMetrics(
-    sourceWidth,
-    sourceHeight,
-    state.project.sourceTileWidth,
-    state.project.sourceTileHeight,
-  );
+  const sourceMetrics = getSourcePanelMetrics(state);
 
-  if (metrics.columns < 1 || metrics.rows < 1) {
+  if (!sourceMetrics || sourceMetrics.columns < 1 || sourceMetrics.rows < 1) {
     return;
   }
 
-  const cellWidth = metrics.tileWidth * viewport.scaleX;
-  const cellHeight = metrics.tileHeight * viewport.scaleY;
+  const cellWidth = sourceMetrics.tileWidth * viewport.scaleX;
+  const cellHeight = sourceMetrics.tileHeight * viewport.scaleY;
 
   context.strokeStyle = GRID;
   context.lineWidth = 1;
 
-  for (let column = 1; column < metrics.columns; column += 1) {
+  for (let column = 1; column < sourceMetrics.columns; column += 1) {
     const lineX = viewport.contentX + Math.round(column * cellWidth) + 0.5;
     context.beginPath();
     context.moveTo(lineX, viewport.frame.y);
@@ -192,7 +187,7 @@ function drawGridOverlay(
     context.stroke();
   }
 
-  for (let row = 1; row < metrics.rows; row += 1) {
+  for (let row = 1; row < sourceMetrics.rows; row += 1) {
     const lineY = viewport.contentY + Math.round(row * cellHeight) + 0.5;
     context.beginPath();
     context.moveTo(viewport.frame.x, lineY);
@@ -211,7 +206,7 @@ function drawEmptyState(
 ): void {
   context.fillStyle = LABEL;
   context.font = "16px monospace";
-  context.fillText("Load a source tilesheet to begin.", panel.x + 16, panel.y + 28);
+  context.fillText("Load a source or working tilesheet to begin.", panel.x + 16, panel.y + 28);
 }
 
 function drawPanel(
@@ -231,13 +226,12 @@ function drawOutputGrid(
   viewport: OutputViewport,
   cache: RenderCache,
 ): void {
-  const projectPixels = getProjectPixelSize(state.project);
-  const outputGrid = getOutputGridMetrics(state.project);
+  const outputMetrics = getOutputPanelMetrics(state);
 
   context.fillStyle = LABEL;
   context.font = "12px monospace";
   context.fillText(
-    `Output: ${outputGrid.columns} x ${outputGrid.rows} tiles · ${projectPixels.width} x ${projectPixels.height}px`,
+    getOutputPanelLabel(state, outputMetrics.columns, outputMetrics.rows, outputMetrics.pixelWidth, outputMetrics.pixelHeight),
     viewport.frame.x,
     viewport.frame.y - 14,
   );
@@ -248,7 +242,11 @@ function drawOutputGrid(
   context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
   context.clip();
   drawHoveredOutputTile(context, state, viewport);
-  drawSelectedOutputTile(context, state, viewport);
+  if (state.session.activeWorkspaceMode === "scene") {
+    drawSelectedSceneCell(context, state, viewport);
+  } else {
+    drawSelectedOutputTile(context, state, viewport);
+  }
   context.restore();
   context.strokeStyle = GRID_STRONG;
   context.lineWidth = 1.5;
@@ -257,7 +255,7 @@ function drawOutputGrid(
   context.strokeStyle = OUTPUT_GRID;
   context.lineWidth = 1;
 
-  for (let column = 1; column < outputGrid.columns; column += 1) {
+  for (let column = 1; column < outputMetrics.columns; column += 1) {
     const lineX = viewport.contentX + Math.round(column * viewport.cellWidth) + 0.5;
     context.beginPath();
     context.moveTo(lineX, viewport.frame.y);
@@ -265,7 +263,7 @@ function drawOutputGrid(
     context.stroke();
   }
 
-  for (let row = 1; row < outputGrid.rows; row += 1) {
+  for (let row = 1; row < outputMetrics.rows; row += 1) {
     const lineY = viewport.contentY + Math.round(row * viewport.cellHeight) + 0.5;
     context.beginPath();
     context.moveTo(viewport.frame.x, lineY);
@@ -289,6 +287,7 @@ function drawOutputBase(
 ): void {
   const outputKey = [
     state.session.renderRevision,
+    state.session.activeWorkspaceMode,
     viewport.frame.x,
     viewport.frame.y,
     viewport.frame.width,
@@ -314,7 +313,11 @@ function drawOutputBase(
       baseContext.beginPath();
       baseContext.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
       baseContext.clip();
-      drawPlacedTiles(baseContext, state, viewport);
+      if (state.session.activeWorkspaceMode === "scene") {
+        drawSceneTiles(baseContext, state, viewport);
+      } else {
+        drawPlacedTiles(baseContext, state, viewport);
+      }
       baseContext.restore();
     }
 
@@ -419,6 +422,125 @@ function drawPlacedTiles(
   }
 }
 
+function drawTilesheetPalette(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: SourceViewport,
+): void {
+  const paletteViewport: OutputViewport = {
+    ...viewport,
+    panel: "output",
+    cellWidth: state.project.tileWidth * viewport.scaleX,
+    cellHeight: state.project.tileHeight * viewport.scaleY,
+    columns: Math.max(1, Math.floor(state.project.outputWidth / state.project.tileWidth)),
+    rows: Math.max(1, Math.floor(state.project.outputHeight / state.project.tileHeight)),
+  };
+
+  drawPlacedTiles(context, state, paletteViewport);
+}
+
+function drawSceneTiles(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  const scene = state.project.scene;
+  const layer = getActiveSceneLayer(state);
+
+  if (!scene || !layer) {
+    return;
+  }
+
+  for (let row = 0; row < scene.height; row += 1) {
+    for (let col = 0; col < scene.width; col += 1) {
+      const gid = getSceneCellGid(state, col, row, layer.id);
+
+      if (gid < 1) {
+        continue;
+      }
+
+      const tile = state.project.tiles.find((entry) => entry.id === gid - 1);
+
+      if (!tile) {
+        continue;
+      }
+
+      drawTileInstance(context, state, viewport, col, row, tile);
+    }
+  }
+}
+
+function drawTileInstance(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+  col: number,
+  row: number,
+  tile: ProjectState["project"]["tiles"][number],
+): void {
+  const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+  if (!image) {
+    return;
+  }
+
+  const cellX = viewport.contentX + col * viewport.cellWidth;
+  const cellY = viewport.contentY + row * viewport.cellHeight;
+  const rawDrawX = cellX + tile.offsetX * viewport.scaleX;
+  const rawDrawY = cellY + tile.offsetY * viewport.scaleY;
+  const rawDrawWidth = tile.sourceRect.w * tile.scaleX * viewport.scaleX;
+  const rawDrawHeight = tile.sourceRect.h * tile.scaleY * viewport.scaleY;
+  const drawX = tile.pixelSnap ? Math.round(rawDrawX) : rawDrawX;
+  const drawY = tile.pixelSnap ? Math.round(rawDrawY) : rawDrawY;
+  const drawWidth = tile.pixelSnap ? Math.round(rawDrawWidth) : rawDrawWidth;
+  const drawHeight = tile.pixelSnap ? Math.round(rawDrawHeight) : rawDrawHeight;
+
+  context.save();
+  context.beginPath();
+  context.rect(cellX, cellY, viewport.cellWidth, viewport.cellHeight);
+  context.clip();
+  context.filter = buildTileFilter(tile);
+  context.imageSmoothingEnabled = tile.filterMode === "linear" && !tile.pixelSnap;
+
+  if (tile.flipX || tile.flipY) {
+    context.translate(drawX + drawWidth / 2, drawY + drawHeight / 2);
+    context.scale(tile.flipX ? -1 : 1, tile.flipY ? -1 : 1);
+    context.drawImage(
+      image,
+      tile.sourceRect.x,
+      tile.sourceRect.y,
+      tile.sourceRect.w,
+      tile.sourceRect.h,
+      -drawWidth / 2,
+      -drawHeight / 2,
+      drawWidth,
+      drawHeight,
+    );
+  } else {
+    context.drawImage(
+      image,
+      tile.sourceRect.x,
+      tile.sourceRect.y,
+      tile.sourceRect.w,
+      tile.sourceRect.h,
+      drawX,
+      drawY,
+      drawWidth,
+      drawHeight,
+    );
+  }
+
+  if (tile.tintColor) {
+    context.filter = "none";
+    context.globalCompositeOperation = "source-atop";
+    context.fillStyle = tile.tintColor;
+    context.fillRect(cellX, cellY, viewport.cellWidth, viewport.cellHeight);
+    context.globalCompositeOperation = "source-over";
+  }
+
+  context.restore();
+}
+
 function drawSelectedOutputTile(
   context: CanvasRenderingContext2D,
   state: ProjectState,
@@ -435,6 +557,26 @@ function drawSelectedOutputTile(
   context.fillStyle = SELECTED_TILE_FILL;
   context.fillRect(x, y, viewport.cellWidth, viewport.cellHeight);
   context.strokeStyle = SELECTED_TILE_STROKE;
+  context.lineWidth = 2;
+  context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
+}
+
+function drawSelectedSceneCell(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  const selectedCell = state.session.selectedSceneCell;
+
+  if (!selectedCell) {
+    return;
+  }
+
+  const x = viewport.contentX + selectedCell.col * viewport.cellWidth;
+  const y = viewport.contentY + selectedCell.row * viewport.cellHeight;
+  context.fillStyle = SELECTED_SCENE_FILL;
+  context.fillRect(x, y, viewport.cellWidth, viewport.cellHeight);
+  context.strokeStyle = SELECTED_SCENE_STROKE;
   context.lineWidth = 2;
   context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
 }
@@ -463,4 +605,37 @@ function drawHoveredOutputTile(
 function buildTileFilter(tile: ProjectState["project"]["tiles"][number]): string {
   const brightness = Math.max(0, 1 + tile.brightness);
   return `brightness(${brightness}) contrast(${tile.contrast}) saturate(${tile.saturation})`;
+}
+
+function getSourcePanelLabel(state: ProjectState): string {
+  if (state.session.activeWorkspaceMode === "scene") {
+    const outputGrid = getOutputGridMetrics(state.project);
+    const name = getWorkingTilesheetLabel(state);
+    return `Tilesheet: ${name} · ${outputGrid.columns} x ${outputGrid.rows} tiles · ${state.project.outputWidth} x ${state.project.outputHeight}`;
+  }
+
+  const image = state.sourceImageAsset.image;
+  const label = state.sourceImageAsset.name ?? state.project.sourceImage ?? "image";
+  return `Source: ${label} · ${image?.width ?? 0} x ${image?.height ?? 0}`;
+}
+
+function getOutputPanelLabel(
+  state: ProjectState,
+  columns: number,
+  rows: number,
+  pixelWidth: number,
+  pixelHeight: number,
+): string {
+  if (state.session.activeWorkspaceMode === "scene") {
+    const layer = getActiveSceneLayer(state);
+    return `Scene: ${columns} x ${rows} tiles · ${pixelWidth} x ${pixelHeight}px${layer ? ` · Layer ${layer.name}` : ""}`;
+  }
+
+  return `Tilesheet: ${getWorkingTilesheetLabel(state)} · ${columns} x ${rows} tiles · ${pixelWidth} x ${pixelHeight}px`;
+}
+
+function getWorkingTilesheetLabel(state: ProjectState): string {
+  return state.session.workingImageFileName
+    ?? state.project.workingImage
+    ?? "unsaved";
 }

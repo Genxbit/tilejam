@@ -96,8 +96,9 @@ export function getSourceGridCellAtPoint(
   clampToGrid = false,
 ): GridCoordinate | null {
   const viewport = layout.sourceViewport;
+  const sourceMetrics = getSourcePanelMetrics(state);
 
-  if (!viewport || !state.sourceImageAsset.image) {
+  if (!viewport || !sourceMetrics) {
     return null;
   }
 
@@ -105,15 +106,14 @@ export function getSourceGridCellAtPoint(
     return null;
   }
 
-  const image = state.sourceImageAsset.image;
   const worldX = getWorldX(viewport, x, clampToGrid);
   const worldY = getWorldY(viewport, y, clampToGrid);
-  const maxCol = Math.max(0, Math.floor(image.width / state.project.sourceTileWidth) - 1);
-  const maxRow = Math.max(0, Math.floor(image.height / state.project.sourceTileHeight) - 1);
+  const maxCol = Math.max(0, sourceMetrics.columns - 1);
+  const maxRow = Math.max(0, sourceMetrics.rows - 1);
 
   return {
-    col: clamp(Math.floor(worldX / state.project.sourceTileWidth), 0, maxCol),
-    row: clamp(Math.floor(worldY / state.project.sourceTileHeight), 0, maxRow),
+    col: clamp(Math.floor(worldX / sourceMetrics.tileWidth), 0, maxCol),
+    row: clamp(Math.floor(worldY / sourceMetrics.tileHeight), 0, maxRow),
   };
 }
 
@@ -208,9 +208,9 @@ function getWorkspaceLayoutFromStateAndSize(layout: WorkspaceLayout, state: Proj
 }
 
 function getSourceViewport(panel: Rect, state: ProjectState): SourceViewport | null {
-  const image = state.sourceImageAsset.image;
+  const metrics = getSourcePanelMetrics(state);
 
-  if (!image) {
+  if (!metrics) {
     return null;
   }
 
@@ -221,28 +221,94 @@ function getSourceViewport(panel: Rect, state: ProjectState): SourceViewport | n
     height: panel.height - SOURCE_FRAME_INSET * 2,
   };
 
-  const baseScale = Math.min(frame.width / image.width, frame.height / image.height);
-  return createViewport("source", frame, image.width, image.height, baseScale, state.session.sourceCamera);
+  const baseScale = Math.min(frame.width / metrics.pixelWidth, frame.height / metrics.pixelHeight);
+  return createViewport("source", frame, metrics.pixelWidth, metrics.pixelHeight, baseScale, state.session.sourceCamera);
 }
 
 function getOutputViewport(panel: Rect, state: ProjectState): OutputViewport {
-  const projectPixels = getProjectPixelSize(state.project);
-  const outputGrid = getOutputGridMetrics(state.project);
+  const outputMetrics = getOutputPanelMetrics(state);
   const frame = {
     x: panel.x + OUTPUT_FRAME_X_INSET,
     y: panel.y + OUTPUT_FRAME_TOP_OFFSET,
     width: panel.width - OUTPUT_FRAME_X_INSET * 2,
     height: panel.height - OUTPUT_FRAME_TOP_OFFSET - OUTPUT_FRAME_BOTTOM_INSET,
   };
-  const baseScale = Math.min(frame.width / projectPixels.width, frame.height / projectPixels.height);
-  const viewport = createViewport("output", frame, projectPixels.width, projectPixels.height, baseScale, state.session.outputCamera);
+  const baseScale = Math.min(frame.width / outputMetrics.pixelWidth, frame.height / outputMetrics.pixelHeight);
+  const viewport = createViewport("output", frame, outputMetrics.pixelWidth, outputMetrics.pixelHeight, baseScale, state.session.outputCamera);
 
   return {
     ...viewport,
-    cellWidth: state.project.tileWidth * viewport.scaleX,
-    cellHeight: state.project.tileHeight * viewport.scaleY,
+    cellWidth: outputMetrics.tileWidth * viewport.scaleX,
+    cellHeight: outputMetrics.tileHeight * viewport.scaleY,
+    columns: outputMetrics.columns,
+    rows: outputMetrics.rows,
+  };
+}
+
+export function getSourcePanelMetrics(state: ProjectState): {
+  pixelWidth: number;
+  pixelHeight: number;
+  columns: number;
+  rows: number;
+  tileWidth: number;
+  tileHeight: number;
+} | null {
+  if (state.session.activeWorkspaceMode === "scene") {
+    const outputGrid = getOutputGridMetrics(state.project);
+    return {
+      pixelWidth: state.project.outputWidth,
+      pixelHeight: state.project.outputHeight,
+      columns: outputGrid.columns,
+      rows: outputGrid.rows,
+      tileWidth: state.project.tileWidth,
+      tileHeight: state.project.tileHeight,
+    };
+  }
+
+  const image = state.sourceImageAsset.image;
+
+  if (!image) {
+    return null;
+  }
+
+  return {
+    pixelWidth: image.width,
+    pixelHeight: image.height,
+    columns: Math.max(1, Math.floor(image.width / state.project.sourceTileWidth)),
+    rows: Math.max(1, Math.floor(image.height / state.project.sourceTileHeight)),
+    tileWidth: state.project.sourceTileWidth,
+    tileHeight: state.project.sourceTileHeight,
+  };
+}
+
+export function getOutputPanelMetrics(state: ProjectState): {
+  pixelWidth: number;
+  pixelHeight: number;
+  columns: number;
+  rows: number;
+  tileWidth: number;
+  tileHeight: number;
+} {
+  if (state.session.activeWorkspaceMode === "scene" && state.project.scene) {
+    return {
+      pixelWidth: state.project.scene.width * state.project.scene.tileWidth,
+      pixelHeight: state.project.scene.height * state.project.scene.tileHeight,
+      columns: state.project.scene.width,
+      rows: state.project.scene.height,
+      tileWidth: state.project.scene.tileWidth,
+      tileHeight: state.project.scene.tileHeight,
+    };
+  }
+
+  const projectPixels = getProjectPixelSize(state.project);
+  const outputGrid = getOutputGridMetrics(state.project);
+  return {
+    pixelWidth: projectPixels.width,
+    pixelHeight: projectPixels.height,
     columns: outputGrid.columns,
     rows: outputGrid.rows,
+    tileWidth: state.project.tileWidth,
+    tileHeight: state.project.tileHeight,
   };
 }
 

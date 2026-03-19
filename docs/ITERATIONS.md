@@ -184,6 +184,9 @@ Support loading and saving the current working/output tilesheet as a real editab
 
 ## Ticket 7: Scene editor + TMJ
 
+**Status**
+Completed
+
 **Goal**
 Edit scenes using the current tilesheet.
 

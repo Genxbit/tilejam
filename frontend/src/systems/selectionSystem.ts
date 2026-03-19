@@ -1,5 +1,6 @@
 import type { GridCoordinate, ProjectState, SourceSelection, TilejamProject } from "../types/project";
-import { getOutputGridMetrics, getSourceGridMetrics } from "./tileGridSystem";
+import { getOutputGridMetrics } from "./tileGridSystem";
+import { getSourcePanelMetrics } from "./workspaceSystem";
 
 export function createSourceSelection(
   project: TilejamProject,
@@ -61,31 +62,25 @@ export function getVisibleSelection(state: ProjectState): SourceSelection | null
 }
 
 export function moveSourceSelectionBy(state: ProjectState, deltaCol: number, deltaRow: number): SourceSelection | null {
-  const image = state.sourceImageAsset.image;
+  const sourceMetrics = getSourcePanelMetrics(state);
 
-  if (!image) {
+  if (!sourceMetrics) {
     return null;
   }
 
   const currentSelection = getVisibleSelection(state) ?? createSourceSelection(
-    state.project,
+    getSourceSelectionProject(state),
     { col: 0, row: 0 },
     { col: 0, row: 0 },
   );
-  const sourceGrid = getSourceGridMetrics(
-    image.width,
-    image.height,
-    state.project.sourceTileWidth,
-    state.project.sourceTileHeight,
-  );
-  const maxStartCol = Math.max(0, sourceGrid.columns - currentSelection.columns);
-  const maxStartRow = Math.max(0, sourceGrid.rows - currentSelection.rows);
+  const maxStartCol = Math.max(0, sourceMetrics.columns - currentSelection.columns);
+  const maxStartRow = Math.max(0, sourceMetrics.rows - currentSelection.rows);
   const nextStartCol = clamp(currentSelection.startCol + deltaCol, 0, maxStartCol);
   const nextStartRow = clamp(currentSelection.startRow + deltaRow, 0, maxStartRow);
   const nextEndCol = nextStartCol + currentSelection.columns - 1;
   const nextEndRow = nextStartRow + currentSelection.rows - 1;
   const nextSelection = createSourceSelection(
-    state.project,
+    getSourceSelectionProject(state),
     { col: nextStartCol, row: nextStartRow },
     { col: nextEndCol, row: nextEndRow },
   );
@@ -110,6 +105,18 @@ export function moveHoveredOutputTileBy(state: ProjectState, deltaCol: number, d
 
   state.session.hoveredOutputTile = nextTile;
   return nextTile;
+}
+
+function getSourceSelectionProject(state: ProjectState): TilejamProject {
+  if (state.session.activeWorkspaceMode === "scene") {
+    return {
+      ...state.project,
+      sourceTileWidth: state.project.tileWidth,
+      sourceTileHeight: state.project.tileHeight,
+    };
+  }
+
+  return state.project;
 }
 
 function clamp(value: number, min: number, max: number): number {
