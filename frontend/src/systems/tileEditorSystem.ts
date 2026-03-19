@@ -71,6 +71,20 @@ export function moveSelectedOutputTileBy(state: ProjectState, deltaCol: number, 
   return moveTileToCell(state, tile.id, tile.destCol + deltaCol, tile.destRow + deltaRow);
 }
 
+export function deleteSelectedOutputTile(state: ProjectState): TilePlacement | null {
+  const tile = getSelectedOutputTile(state);
+
+  if (!tile) {
+    return null;
+  }
+
+  state.project.tiles = state.project.tiles.filter((entry) => entry.id !== tile.id);
+  state.session.selectedOutputTileId = null;
+  reindexTiles(state);
+
+  return tile;
+}
+
 export function moveTileToCell(state: ProjectState, tileId: number, destCol: number, destRow: number): TilePlacement | null {
   const outputGrid = getOutputGridMetrics(state.project);
   const clampedCol = clamp(destCol, 0, outputGrid.columns - 1);

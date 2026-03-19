@@ -18,6 +18,7 @@ type ShellOptions = {
   onOutputWidthChanged: (width: number) => void;
   onOutputHeightChanged: (height: number) => void;
   onSelectedTileUpdated: (patch: SelectedTilePatch) => void;
+  onClearSelectedTile: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onCopyAllTiles: () => void;
@@ -65,6 +66,7 @@ export function createShell({
   onOutputWidthChanged,
   onOutputHeightChanged,
   onSelectedTileUpdated,
+  onClearSelectedTile,
   onUndo,
   onRedo,
   onCopyAllTiles,
@@ -295,6 +297,12 @@ export function createShell({
     ? `Tile ${selectedTile.id} at ${selectedTile.destCol}, ${selectedTile.destRow}`
     : "No selection";
 
+  const editorActions = document.createElement("div");
+  editorActions.className = "panel-actions";
+  const clearTileButton = createActionButton("Clear Tile", onClearSelectedTile);
+  clearTileButton.disabled = !selectedTile;
+  editorActions.append(clearTileButton);
+
   const editorTabs = document.createElement("div");
   editorTabs.className = "editor-tabs";
   const layoutTab = createEditorTabButton("Layout");
@@ -436,7 +444,7 @@ export function createShell({
   visualPanel.append(colorInputs, filterField, tintField);
   metaPanel.append(metadataInputs);
 
-  editorSection.append(selectedTileSummary, editorEmpty, editorTabs, layoutPanel, visualPanel, metaPanel);
+  editorSection.append(selectedTileSummary, editorActions, editorEmpty, editorTabs, layoutPanel, visualPanel, metaPanel);
 
   layoutTab.addEventListener("click", () => {
     activeEditorTab = "layout";
@@ -540,6 +548,7 @@ export function createShell({
         nextSelectedTile,
         {
           summary: selectedTileSummary,
+          clearButton: clearTileButton,
           empty: editorEmpty,
           tileColInput: tileColField.input,
           tileRowInput: tileRowField.input,
@@ -724,6 +733,7 @@ function syncSelectedTileEditor(
   tile: ReturnType<typeof getSelectedOutputTile>,
   controls: {
     summary: HTMLDivElement;
+    clearButton: HTMLButtonElement;
     empty: HTMLParagraphElement;
     tileColInput: HTMLInputElement;
     tileRowInput: HTMLInputElement;
@@ -766,6 +776,7 @@ function syncSelectedTileEditor(
 
   if (!tile) {
     controls.summary.textContent = "No selection";
+    controls.clearButton.disabled = true;
     controls.empty.textContent = "No output tile selected yet.";
     for (const input of inputs) {
       input.disabled = true;
@@ -774,6 +785,7 @@ function syncSelectedTileEditor(
   }
 
   controls.summary.textContent = `Tile ${tile.id} at ${tile.destCol}, ${tile.destRow}`;
+  controls.clearButton.disabled = false;
   controls.empty.textContent = "";
   controls.tileColInput.value = `${tile.destCol}`;
   controls.tileRowInput.value = `${tile.destRow}`;

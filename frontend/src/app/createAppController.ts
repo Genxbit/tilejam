@@ -3,7 +3,7 @@ import { exportTilesetPng, exportTilesetTsj } from "../io/exportTileset";
 import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
 import { renderWorkspace } from "../rendering/renderWorkspace";
-import { clearSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
+import { clearSelectedOutputTile, deleteSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile } from "../systems/tilePlacementSystem";
 import { clearSelectionState, commitDraftSourceSelection, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import { clearSourceImageAsset, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
@@ -221,6 +221,21 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
       bumpRenderRevision();
       state.session.message = `Updated tile ${tile.id} at ${tile.destCol}, ${tile.destRow}.`;
+      renderAll();
+    },
+    onClearSelectedTile: () => {
+      recordHistory();
+      const deletedTile = deleteSelectedOutputTile(state);
+
+      if (!deletedTile) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before clearing it.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Cleared tile ${deletedTile.id} from ${deletedTile.destCol}, ${deletedTile.destRow}.`;
       renderAll();
     },
     onUndo: () => {
@@ -588,6 +603,29 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.message = `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`;
         renderAll();
       }
+
+      return;
+    }
+
+    if (event.code === "Backspace" || event.code === "Delete") {
+      const tile = state.project.tiles.find((entry) => entry.id === state.session.selectedOutputTileId) ?? null;
+
+      if (!tile) {
+        return;
+      }
+
+      event.preventDefault();
+      recordHistory();
+      const deletedTile = deleteSelectedOutputTile(state);
+
+      if (!deletedTile) {
+        undoStack.pop();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Cleared tile ${deletedTile.id} from ${deletedTile.destCol}, ${deletedTile.destRow}.`;
+      renderAll();
     }
   }
 
