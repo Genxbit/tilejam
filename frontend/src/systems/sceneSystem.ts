@@ -68,7 +68,10 @@ export function selectSceneLayer(state: ProjectState, layerId: number): SceneLay
   return layer;
 }
 
-export function updateActiveSceneLayer(state: ProjectState, patch: Partial<Pick<SceneLayerState, "name" | "visible" | "opacity">>): SceneLayerState | null {
+export function updateActiveSceneLayer(
+  state: ProjectState,
+  patch: Partial<Pick<SceneLayerState, "name" | "visible" | "opacity" | "offsetX" | "offsetY" | "parallaxX" | "parallaxY">>,
+): SceneLayerState | null {
   const layer = getActiveSceneLayer(state);
 
   if (!layer) {
@@ -78,6 +81,33 @@ export function updateActiveSceneLayer(state: ProjectState, patch: Partial<Pick<
   Object.assign(layer, patch);
   layer.name = layer.name.trim() || `layer_${layer.id}`;
   layer.opacity = clampOpacity(layer.opacity);
+  layer.parallaxX = clampParallax(layer.parallaxX);
+  layer.parallaxY = clampParallax(layer.parallaxY);
+  return layer;
+}
+
+export function moveActiveSceneLayerBy(state: ProjectState, delta: -1 | 1): SceneLayerState | null {
+  const scene = ensureScene(state);
+  const layerIndex = scene.layers.findIndex((layer) => layer.id === state.session.activeSceneLayerId);
+
+  if (layerIndex < 0) {
+    return null;
+  }
+
+  const nextIndex = clamp(layerIndex + delta, 0, scene.layers.length - 1);
+
+  if (nextIndex === layerIndex) {
+    return scene.layers[layerIndex] ?? null;
+  }
+
+  const [layer] = scene.layers.splice(layerIndex, 1);
+
+  if (!layer) {
+    return null;
+  }
+
+  scene.layers.splice(nextIndex, 0, layer);
+  state.session.activeSceneLayerId = layer.id;
   return layer;
 }
 
@@ -214,6 +244,10 @@ export function createSceneLayer(id: number, name: string, width: number, height
     height,
     visible: true,
     opacity: 1,
+    offsetX: 0,
+    offsetY: 0,
+    parallaxX: 1,
+    parallaxY: 1,
     data: new Array(width * height).fill(0),
   };
 }
@@ -244,4 +278,8 @@ function clamp(value: number, min: number, max: number): number {
 
 function clampOpacity(value: number): number {
   return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 1));
+}
+
+function clampParallax(value: number): number {
+  return Number.isFinite(value) ? value : 1;
 }

@@ -29,6 +29,16 @@ type ShellOptions = {
   onSceneTilesetSourceChanged: (tilesetSource: string) => void;
   onSceneLayerChanged: (layerId: number) => void;
   onSceneLayerAdded: () => void;
+  onSceneLayerUpdated: (patch: {
+    name?: string;
+    visible?: boolean;
+    opacity?: number;
+    offsetX?: number;
+    offsetY?: number;
+    parallaxX?: number;
+    parallaxY?: number;
+  }) => void;
+  onSceneLayerMoved: (delta: -1 | 1) => void;
   onSelectedTileUpdated: (patch: SelectedTilePatch) => void;
   onClearSelectedTile: () => void;
   onUndo: () => void;
@@ -88,6 +98,8 @@ export function createShell({
   onSceneTilesetSourceChanged,
   onSceneLayerChanged,
   onSceneLayerAdded,
+  onSceneLayerUpdated,
+  onSceneLayerMoved,
   onSelectedTileUpdated,
   onClearSelectedTile,
   onUndo,
@@ -678,15 +690,78 @@ export function createShell({
     onSceneLayerChanged(Number.parseInt(sceneLayerSelect.value, 10));
   });
   const addLayerButton = createActionButton("Add Layer", onSceneLayerAdded);
-  sceneLayerRow.append(sceneLayerSelect, addLayerButton);
+  const moveLayerUpButton = createActionButton("Move Up", () => {
+    onSceneLayerMoved(-1);
+  });
+  const moveLayerDownButton = createActionButton("Move Down", () => {
+    onSceneLayerMoved(1);
+  });
+  sceneLayerRow.append(sceneLayerSelect, addLayerButton, moveLayerUpButton, moveLayerDownButton);
+
+  const sceneLayerNameField = createLabeledTextField("Layer name", selectedSceneLayer?.name ?? "ground", "Scene layer name");
+  sceneLayerNameField.input.addEventListener("change", () => {
+    onSceneLayerUpdated({ name: sceneLayerNameField.input.value });
+  });
+
+  const sceneLayerSettings = document.createElement("div");
+  sceneLayerSettings.className = "grid-inputs";
+  const sceneLayerOpacityField = createLabeledNumberField("Opacity", selectedSceneLayer?.opacity ?? 1, "Scene layer opacity", 0, 0.1);
+  sceneLayerOpacityField.input.max = "1";
+  sceneLayerOpacityField.input.addEventListener("change", () => {
+    onSceneLayerUpdated({ opacity: Number.parseFloat(sceneLayerOpacityField.input.value) || 0 });
+  });
+  const sceneLayerVisibleToggle = createCheckboxField("Visible", selectedSceneLayer?.visible ?? true, (checked) => {
+    onSceneLayerUpdated({ visible: checked });
+  });
+  const sceneLayerVisibleField = document.createElement("div");
+  sceneLayerVisibleField.className = "number-field";
+  const sceneLayerVisibleLabel = document.createElement("span");
+  sceneLayerVisibleLabel.className = "number-field-label";
+  sceneLayerVisibleLabel.textContent = "Visibility";
+  sceneLayerVisibleField.append(sceneLayerVisibleLabel, sceneLayerVisibleToggle);
+  sceneLayerSettings.append(sceneLayerOpacityField.field, sceneLayerVisibleField);
+
+  const sceneLayerTransformSettings = document.createElement("div");
+  sceneLayerTransformSettings.className = "grid-inputs";
+  const sceneLayerOffsetXField = createLabeledNumberField("Offset X", selectedSceneLayer?.offsetX ?? 0, "Scene layer offset x", undefined, 1);
+  const sceneLayerOffsetYField = createLabeledNumberField("Offset Y", selectedSceneLayer?.offsetY ?? 0, "Scene layer offset y", undefined, 1);
+  sceneLayerOffsetXField.input.addEventListener("change", () => {
+    onSceneLayerUpdated({ offsetX: Number.parseFloat(sceneLayerOffsetXField.input.value) || 0 });
+  });
+  sceneLayerOffsetYField.input.addEventListener("change", () => {
+    onSceneLayerUpdated({ offsetY: Number.parseFloat(sceneLayerOffsetYField.input.value) || 0 });
+  });
+  sceneLayerTransformSettings.append(sceneLayerOffsetXField.field, sceneLayerOffsetYField.field);
+
+  const sceneLayerParallaxSettings = document.createElement("div");
+  sceneLayerParallaxSettings.className = "grid-inputs";
+  const sceneLayerParallaxXField = createLabeledNumberField("Parallax X", selectedSceneLayer?.parallaxX ?? 1, "Scene layer parallax x", undefined, 0.1);
+  const sceneLayerParallaxYField = createLabeledNumberField("Parallax Y", selectedSceneLayer?.parallaxY ?? 1, "Scene layer parallax y", undefined, 0.1);
+  sceneLayerParallaxXField.input.addEventListener("change", () => {
+    onSceneLayerUpdated({ parallaxX: Number.parseFloat(sceneLayerParallaxXField.input.value) || 1 });
+  });
+  sceneLayerParallaxYField.input.addEventListener("change", () => {
+    onSceneLayerUpdated({ parallaxY: Number.parseFloat(sceneLayerParallaxYField.input.value) || 1 });
+  });
+  sceneLayerParallaxSettings.append(sceneLayerParallaxXField.field, sceneLayerParallaxYField.field);
 
   const sceneInfo = document.createElement("p");
   sceneInfo.className = "field-note";
   sceneInfo.textContent = state.project.scene
-    ? `Scene grid is ${state.project.scene.width} x ${state.project.scene.height}. Use the left panel to select tilesheet tiles, then click the right panel to place them.`
+    ? `Scene grid is ${state.project.scene.width} x ${state.project.scene.height}. Visible layers are drawn on top of each other in order, and the selected layer is the one you edit.`
     : "Create or open a scene to begin placing tiles.";
 
-  sceneSection.append(sceneActions, sceneSizeInputs, sceneTilesetField, sceneLayerRow, sceneInfo);
+  sceneSection.append(
+    sceneActions,
+    sceneSizeInputs,
+    sceneTilesetField,
+    sceneLayerRow,
+    sceneLayerNameField.field,
+    sceneLayerSettings,
+    sceneLayerTransformSettings,
+    sceneLayerParallaxSettings,
+    sceneInfo,
+  );
   scenePanel.append(sceneSection);
 
   tilesheetTab.addEventListener("click", () => {
@@ -741,17 +816,25 @@ export function createShell({
       sceneWidthField.input.value = `${nextState.project.scene?.width ?? 32}`;
       sceneHeightField.input.value = `${nextState.project.scene?.height ?? 32}`;
       sceneTilesetInput.value = nextState.project.scene?.tilesetSource ?? "tileset.tsj";
+      const nextSceneLayer = getActiveSceneLayer(nextState);
+      sceneLayerNameField.input.value = nextSceneLayer?.name ?? "ground";
+      sceneLayerOpacityField.input.value = `${nextSceneLayer?.opacity ?? 1}`;
+      (sceneLayerVisibleToggle.querySelector("input") as HTMLInputElement).checked = nextSceneLayer?.visible ?? true;
+      sceneLayerOffsetXField.input.value = `${nextSceneLayer?.offsetX ?? 0}`;
+      sceneLayerOffsetYField.input.value = `${nextSceneLayer?.offsetY ?? 0}`;
+      sceneLayerParallaxXField.input.value = `${nextSceneLayer?.parallaxX ?? 1}`;
+      sceneLayerParallaxYField.input.value = `${nextSceneLayer?.parallaxY ?? 1}`;
       sceneLayerSelect.replaceChildren();
       for (const layer of nextState.project.scene?.layers ?? []) {
         const option = document.createElement("option");
         option.value = `${layer.id}`;
         option.textContent = layer.name;
-        option.selected = layer.id === getActiveSceneLayer(nextState)?.id;
+        option.selected = layer.id === nextSceneLayer?.id;
         sceneLayerSelect.append(option);
       }
       derivedGridValue.textContent = `${nextOutputGrid.columns} columns x ${nextOutputGrid.rows} rows`;
       sceneInfo.textContent = nextState.project.scene
-        ? `Scene grid is ${nextState.project.scene.width} x ${nextState.project.scene.height}. Use the left panel to select tilesheet tiles, then click the right panel to place them.`
+        ? `Scene grid is ${nextState.project.scene.width} x ${nextState.project.scene.height}. Visible layers are drawn on top of each other in order, and the selected layer is the one you edit.`
         : "Create or open a scene to begin placing tiles.";
       syncSelectedTileEditor(
         nextSelectedTile,

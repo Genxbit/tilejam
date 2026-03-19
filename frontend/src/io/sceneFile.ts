@@ -31,6 +31,10 @@ export function serializeScene(scene: SceneMapState): string {
       height: scene.height,
       visible: layer.visible,
       opacity: layer.opacity,
+      offsetx: layer.offsetX,
+      offsety: layer.offsetY,
+      parallaxx: layer.parallaxX,
+      parallaxy: layer.parallaxY,
       data: layer.data,
     })),
     tilesets: [
@@ -170,6 +174,10 @@ function readLayers(value: unknown, width: number, height: number): SceneLayerSt
         height,
         visible: readOptionalBoolean(entry.visible, true, `layers[${index}].visible`),
         opacity: readOptionalNumber(entry.opacity, 1, `layers[${index}].opacity`),
+        offsetX: readOptionalNumber(entry.offsetx, 0, `layers[${index}].offsetx`),
+        offsetY: readOptionalNumber(entry.offsety, 0, `layers[${index}].offsety`),
+        parallaxX: readOptionalNumber(entry.parallaxx, 1, `layers[${index}].parallaxx`),
+        parallaxY: readOptionalNumber(entry.parallaxy, 1, `layers[${index}].parallaxy`),
         data,
       };
     });

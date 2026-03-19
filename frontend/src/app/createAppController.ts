@@ -6,7 +6,7 @@ import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from 
 import { renderWorkspace } from "../rendering/renderWorkspace";
 import { clearSelectedOutputTile, deleteSelectedOutputTile, moveSelectedOutputTileBy, moveTileToCell, selectOutputTileAtCell, updateSelectedOutputTile } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
-import { addSceneLayer, deleteSelectedSceneCell, ensureScene, moveSceneCellTo, moveSelectedSceneCellBy, placeSelectionIntoScene, resizeScene, selectSceneCell, selectSceneLayer, setSceneTilesetSource } from "../systems/sceneSystem";
+import { addSceneLayer, deleteSelectedSceneCell, ensureScene, moveActiveSceneLayerBy, moveSceneCellTo, moveSelectedSceneCellBy, placeSelectionIntoScene, resizeScene, selectSceneCell, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import { clearSourceImageAsset, loadImageAssetFromFile, loadImageAssetFromUrl, loadSourceImageFromFile, loadSourceImageFromUrl } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, normalizeProjectTilesToGrid, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
@@ -437,8 +437,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     onSceneLayerChanged: (layerId) => {
       const layer = selectSceneLayer(state, layerId);
       state.session.selectedSceneCell = null;
-      state.session.message = layer ? `Selected scene layer ${layer.name}.` : "Scene layer not found.";
       renderAll();
+      state.session.message = layer ? `Selected scene layer ${layer.name}.` : "Scene layer not found.";
+      return;
     },
     onSceneLayerAdded: () => {
       recordHistory();
@@ -446,6 +447,36 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       bumpRenderRevision();
       state.session.selectedSceneCell = null;
       state.session.message = `Added scene layer ${layer.name}.`;
+      renderAll();
+    },
+    onSceneLayerUpdated: (patch) => {
+      recordHistory();
+      const layer = updateActiveSceneLayer(state, patch);
+
+      if (!layer) {
+        undoStack.pop();
+        state.session.message = "Select a scene layer before editing it.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Updated scene layer ${layer.name}.`;
+      renderAll();
+    },
+    onSceneLayerMoved: (delta) => {
+      recordHistory();
+      const layer = moveActiveSceneLayerBy(state, delta);
+
+      if (!layer) {
+        undoStack.pop();
+        state.session.message = "Select a scene layer before reordering it.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Moved scene layer ${layer.name} ${delta < 0 ? "up" : "down"} in the stack.`;
       renderAll();
     },
     onSelectedTileUpdated: (patch) => {

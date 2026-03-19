@@ -130,5 +130,9 @@ export type SceneLayerState = {
   height: number;
   visible: boolean;
   opacity: number;
+  offsetX: number;
+  offsetY: number;
+  parallaxX: number;
+  parallaxY: number;
   data: number[];
 };

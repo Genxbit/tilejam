@@ -458,28 +458,40 @@ function drawSceneTiles(
   viewport: OutputViewport,
 ): void {
   const scene = state.project.scene;
-  const layer = getActiveSceneLayer(state);
 
-  if (!scene || !layer) {
+  if (!scene) {
     return;
   }
 
-  for (let row = 0; row < scene.height; row += 1) {
-    for (let col = 0; col < scene.width; col += 1) {
-      const gid = getSceneCellGid(state, col, row, layer.id);
-
-      if (gid < 1) {
-        continue;
-      }
-
-      const tile = state.project.tiles.find((entry) => entry.id === gid - 1);
-
-      if (!tile) {
-        continue;
-      }
-
-      drawTileInstance(context, state, viewport, col, row, tile);
+  for (const layer of scene.layers) {
+    if (!layer.visible || layer.opacity <= 0) {
+      continue;
     }
+
+    context.save();
+    context.globalAlpha = layer.opacity;
+    const layerOffsetX = layer.offsetX * viewport.scaleX + state.session.outputCamera.panX * (layer.parallaxX - 1);
+    const layerOffsetY = layer.offsetY * viewport.scaleY + state.session.outputCamera.panY * (layer.parallaxY - 1);
+
+    for (let row = 0; row < scene.height; row += 1) {
+      for (let col = 0; col < scene.width; col += 1) {
+        const gid = getSceneCellGid(state, col, row, layer.id);
+
+        if (gid < 1) {
+          continue;
+        }
+
+        const tile = state.project.tiles.find((entry) => entry.id === gid - 1);
+
+        if (!tile) {
+          continue;
+        }
+
+        drawTileInstance(context, state, viewport, col, row, tile, layerOffsetX, layerOffsetY);
+      }
+    }
+
+    context.restore();
   }
 }
 
@@ -490,6 +502,8 @@ function drawTileInstance(
   col: number,
   row: number,
   tile: ProjectState["project"]["tiles"][number],
+  layerOffsetX = 0,
+  layerOffsetY = 0,
 ): void {
   const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
 
@@ -497,8 +511,8 @@ function drawTileInstance(
     return;
   }
 
-  const cellX = viewport.contentX + col * viewport.cellWidth;
-  const cellY = viewport.contentY + row * viewport.cellHeight;
+  const cellX = viewport.contentX + col * viewport.cellWidth + layerOffsetX;
+  const cellY = viewport.contentY + row * viewport.cellHeight + layerOffsetY;
   const rawDrawX = cellX + tile.offsetX * viewport.scaleX;
   const rawDrawY = cellY + tile.offsetY * viewport.scaleY;
   const rawDrawWidth = tile.sourceRect.w * tile.scaleX * viewport.scaleX;

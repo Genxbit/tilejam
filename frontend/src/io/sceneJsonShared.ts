@@ -46,6 +46,10 @@ function readSceneLayers(value: unknown, width: number, height: number, path: st
       height,
       visible: readOptionalBoolean(entry.visible, true, `${layerPath}.visible`),
       opacity: readOptionalNumber(entry.opacity, 1, `${layerPath}.opacity`),
+      offsetX: readOptionalNumber(entry.offsetX, 0, `${layerPath}.offsetX`),
+      offsetY: readOptionalNumber(entry.offsetY, 0, `${layerPath}.offsetY`),
+      parallaxX: readOptionalNumber(entry.parallaxX, 1, `${layerPath}.parallaxX`),
+      parallaxY: readOptionalNumber(entry.parallaxY, 1, `${layerPath}.parallaxY`),
       data,
     };
   });
