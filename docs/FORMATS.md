@@ -7,6 +7,7 @@ Tilejam uses:
 * project format → editing
 * tileset PNG → final output
 * TSJ → standard metadata
+* TMJ → scene format
 
 ---
 
@@ -126,6 +127,56 @@ Standard Tiled tileset.
 
 ---
 
+## TMJ Scene (`scene.tmj`)
+
+Standard Tiled JSON map.
+
+```json
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.10.2",
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "width": 32,
+  "height": 32,
+  "tilewidth": 32,
+  "tileheight": 32,
+  "infinite": false,
+  "layers": [
+    {
+      "id": 1,
+      "name": "ground",
+      "type": "tilelayer",
+      "width": 32,
+      "height": 32,
+      "visible": true,
+      "opacity": 1,
+      "data": [1, 0, 0, 2]
+    }
+  ],
+  "tilesets": [
+    {
+      "firstgid": 1,
+      "source": "tileset.tsj"
+    }
+  ]
+}
+```
+
+### Rules
+
+* scene editing uses TMJ as the interoperable scene format
+* scene width / height are stored in tile units
+* scene tile size must match the selected tilesheet tile size
+* scene layer data uses Tiled global tile IDs
+* Tilejam v1 should start with orthogonal tile layers
+* the active tilesheet is used as the palette/source for scene editing
+* loading TMJ must restore editable scene grid content
+* saving TMJ must preserve deterministic tile placement
+
+---
+
 ## Mapping Rules
 
 * tile id = `col + row * columns`
@@ -136,6 +187,8 @@ Standard Tiled tileset.
 * metadata → TSJ properties
 * copied source content is centered in the target tile before transforms
 * filtering and pixel snapping affect rendering/export, not TSJ metadata
+* scene tile placement maps selected tilesheet tile IDs into TMJ layer data
+* TMJ `firstgid` + local tilesheet tile id determine stored scene cell values
 
 ---
 
@@ -144,6 +197,7 @@ Standard Tiled tileset.
 * project = editable
 * PNG = visual truth
 * TSJ = interoperability
+* TMJ = scene interoperability
 
 `sourceImage` may be stored as a relative path or app-served path.
 

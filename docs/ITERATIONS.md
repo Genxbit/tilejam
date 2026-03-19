@@ -179,3 +179,37 @@ Support loading and saving the current working/output tilesheet as a real editab
 * PNG load/save matches the output grid correctly
 * `.tilejam.json` still restores richer editable state correctly
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 7: Scene editor + TMJ
+
+**Goal**
+Edit scenes using the current tilesheet.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Add scene editing with TMJ load/save using the selected/current tilesheet as the palette/source.
+
+**Deliverables**
+
+* scene editor view
+* open TMJ
+* save TMJ
+* scene grid configuration
+* place tiles from the current tilesheet into the scene
+* select, move, and erase scene tiles
+* basic scene layer support
+
+**Validation**
+
+* TMJ opens correctly
+* TMJ saves correctly
+* scene placement uses the current tilesheet tile IDs correctly
+* scene editing stays grid-aligned and deterministic
+* matches architecture rules in `docs/TECH_WORKFLOW.md`

@@ -4,6 +4,8 @@
 
 Tilejam is a tool for converting messy or AI-generated tilesheets into clean, grid-aligned output tilesets.
 
+It also grows into a scene editor that uses the cleaned tilesheet as the palette for building maps.
+
 ---
 
 ## Workflow
@@ -20,6 +22,9 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 10. move placed tiles between output cells when needed
 11. save the working/output tilesheet as PNG
 12. optionally save project JSON for richer editable state
+13. open the Scene editor
+14. use the current tilesheet as the palette/source for scene placement
+15. open or save scenes as TMJ
 
 ---
 
@@ -41,6 +46,8 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 * seamless tiling support
 * PNG export
 * TSJ export
+* scene editing using the current tilesheet
+* TMJ scene load/save
 
 ---
 
@@ -49,6 +56,7 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 * working/output tilesheet PNG
 * `tileset.png`
 * `tileset.tsj`
+* `scene.tmj`
 * `.tilejam.json`
 
 ---
@@ -62,6 +70,8 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 * seam repair is done through explicit tile parameters, not hidden edits
 * tile movement between output cells must stay deterministic
 * working/output PNG must reopen as editable output-grid content, not only as a flat preview
+* scene editing must use the current tilesheet as the palette/source
+* scene placement must stay grid-aligned and deterministic
 * output must be production-ready
 * behavior must be explicit
 * no hidden state

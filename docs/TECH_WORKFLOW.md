@@ -67,12 +67,14 @@ frontend/
 Define ownership early:
 
 * SourceImage
+* WorkingSheet
 * TileGrid
 * TilePlacement
 * Selection
 * Transform
 * Export
 * Project
+* Scene
 
 Keep behavior inside its domain.
 
@@ -130,6 +132,14 @@ Rule of thumb:
 * working PNG is visual truth for ongoing editing
 * project JSON may preserve richer edit state than PNG alone
 
+**Scene**
+
+* scene editing is a parallel editor mode to tilesheet editing
+* the current tilesheet is the palette/source for scene placement
+* TMJ load/save lives in `io/`
+* scene placement, selection, and editing logic live in scene systems
+* scene state should not be mixed into tilesheet-only systems
+
 **TileGrid**
 
 * owns size and indexing
@@ -171,6 +181,7 @@ Rule of thumb:
 Serializable project state must fully describe:
 
 * source image
+* working image
 * grid
 * tile assignments
 * transforms
@@ -220,6 +231,13 @@ Working-sheet save/load rules:
 * saving working PNG is an IO/export concern
 * loading working PNG must slice it into output-grid tiles for continued editing
 * undo/redo should stay short and session-local, not act as long-term persistence
+
+Scene rules:
+
+* TMJ load/save is an IO concern
+* scene rendering stays derived from scene state
+* scene editing should mirror the source/target editing model where helpful
+* scene interoperability must follow `docs/FORMATS.md`
 
 ---
 
