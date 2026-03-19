@@ -10,14 +10,16 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 
 1. create or open project
 2. load source tilesheet
-3. set source grid spacing
-4. create or configure target/output image size and tile grid
-5. select one or more source tiles
-6. assign the selection to a target/output tile
-7. select a placed output tile
-8. repair target/output tile content in the editor panel
-9. move placed tiles between output cells when needed
-10. save project or export tileset
+3. create a new working/output tilesheet or load an existing working/output PNG
+4. set source grid spacing
+5. configure target/output image size and tile grid
+6. select one or more source tiles
+7. assign the selection to a target/output tile
+8. select a placed output tile
+9. repair target/output tile content in the editor panel
+10. move placed tiles between output cells when needed
+11. save the working/output tilesheet as PNG
+12. optionally save project JSON for richer editable state
 
 ---
 
@@ -27,6 +29,7 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 * mouse and keyboard input for editing
 * responsive layout support
 * source tilesheet → target tilesheet workflow
+* working/output tilesheet load/save as PNG
 * source grid spacing controls
 * target/output tilesheet configuration
 * grid-based editing
@@ -43,6 +46,7 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 
 ## Output
 
+* working/output tilesheet PNG
 * `tileset.png`
 * `tileset.tsj`
 * `.tilejam.json`
@@ -57,10 +61,13 @@ Tilejam is a tool for converting messy or AI-generated tilesheets into clean, gr
 * copied source content is centered into the target tile before further transforms
 * seam repair is done through explicit tile parameters, not hidden edits
 * tile movement between output cells must stay deterministic
+* working/output PNG must reopen as editable output-grid content, not only as a flat preview
 * output must be production-ready
 * behavior must be explicit
 * no hidden state
 * project data must stay editable and serializable
+* PNG is visual truth for the working/output sheet
+* `.tilejam.json` preserves richer editable state than PNG alone
 
 ---
 

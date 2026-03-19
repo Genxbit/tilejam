@@ -157,18 +157,22 @@ Export tileset PNG and TSJ.
 ## Ticket 6: Project save/load
 
 **Goal**
-Harden project persistence.
+Harden working-sheet persistence.
 
 **Prompt**
-Complete save/load behavior for full editor state.
+Support loading and saving the current working/output tilesheet as a real editable PNG, while keeping project JSON for richer editor state.
 
 **Deliverables**
 
-* save project for all editable fields
-* load project for all editable fields
-* restore full editor session state needed for editing workflow
+* save current working/output tilesheet as PNG
+* load current working/output PNG back into the editor
+* slice loaded working PNG into editable output-grid tiles
+* keep `.tilejam.json` save/load for richer editable project state
+* keep undo/redo short and session-local
 
 **Validation**
 
-* project restores state correctly
+* working PNG can be reopened and edited tile-by-tile
+* PNG load/save matches the output grid correctly
+* `.tilejam.json` still restores richer editable state correctly
 * matches architecture rules in `docs/TECH_WORKFLOW.md`

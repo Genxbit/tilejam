@@ -123,6 +123,13 @@ Rule of thumb:
 * runtime-loaded image asset stays outside serializable project data
 * region queries live in a system
 
+**WorkingSheet**
+
+* working/output PNG is a first-class artifact
+* loading a working PNG must reconstruct editable output-grid tiles
+* working PNG is visual truth for ongoing editing
+* project JSON may preserve richer edit state than PNG alone
+
 **TileGrid**
 
 * owns size and indexing
@@ -208,6 +215,12 @@ Export must be:
 * based on project data only
 * compatible with `docs/FORMATS.md`
 
+Working-sheet save/load rules:
+
+* saving working PNG is an IO/export concern
+* loading working PNG must slice it into output-grid tiles for continued editing
+* undo/redo should stay short and session-local, not act as long-term persistence
+
 ---
 
 ## Backend Readiness
@@ -234,6 +247,8 @@ Notes:
 
 * checked-in sample or default projects may live in `frontend/public/`
 * browser file overwrite behavior is an IO concern, not a project-format concern
+* working/output PNG is a normal user-facing artifact alongside `.tilejam.json`
+* `.tilejam.json` preserves richer editable state, metadata, and references than PNG alone
 
 ---
 
