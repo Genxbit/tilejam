@@ -1,4 +1,4 @@
-import type { ProjectState } from "../types/project";
+import type { ColorReplaceTargetMode, ProjectState, TilePlacement } from "../types/project";
 import { saveTilesetPngToHandle, saveTilesetPngWithPicker, saveTilesetTsjWithPicker } from "../io/exportTileset";
 import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
 import { loadSceneFile, loadSceneFromHandle, loadSceneFromUrl, saveSceneToHandle, saveSceneWithPicker } from "../io/sceneFile";
@@ -785,6 +785,67 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.tilePreviewMode = previewMode;
       renderAll();
     },
+    onColorReplaceSourceColorChanged: (color) => {
+      state.session.colorReplaceSourceColor = normalizeHexColor(color, "#0000ff");
+      renderAll();
+    },
+    onColorReplaceTargetModeChanged: (mode) => {
+      state.session.colorReplaceTargetMode = mode;
+      renderAll();
+    },
+    onColorReplaceTargetColorChanged: (color) => {
+      state.session.colorReplaceTargetColor = normalizeHexColor(color, "#000000");
+      renderAll();
+    },
+    onColorReplaceToleranceChanged: (tolerance) => {
+      state.session.colorReplaceTolerance = Math.max(0, Math.min(441, Math.round(tolerance)));
+      renderAll();
+    },
+    onApplyColorReplace: async () => {
+      recordHistory();
+      const selectedTiles = getSelectedOutputTiles(state);
+
+      if (selectedTiles.length < 1) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before applying color replace.";
+        renderAll();
+        return;
+      }
+
+      const sourceColor = parseHexColor(state.session.colorReplaceSourceColor);
+      const targetColor = state.session.colorReplaceTargetMode === "color"
+        ? parseHexColor(state.session.colorReplaceTargetColor)
+        : null;
+
+      if (!sourceColor || (state.session.colorReplaceTargetMode === "color" && !targetColor)) {
+        undoStack.pop();
+        state.session.message = "Choose valid source and target colors before applying color replace.";
+        renderAll();
+        return;
+      }
+
+      const appliedCount = await bakeSelectedTilesColorReplace(
+        state,
+        selectedTiles,
+        sourceColor,
+        state.session.colorReplaceTargetMode,
+        targetColor,
+        state.session.colorReplaceTolerance,
+      );
+
+      if (appliedCount < 1) {
+        undoStack.pop();
+        state.session.message = "Could not apply color replace because the selected tile images were unavailable.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = appliedCount > 1
+        ? `Applied color replace to ${appliedCount} selected tiles.`
+        : `Applied color replace to tile ${selectedTiles[0]?.id ?? ""}.`;
+      renderAll();
+    },
     onClearSelectedTile: () => {
       recordHistory();
       const deletedTile = deleteSelectedOutputTile(state);
@@ -1569,44 +1630,191 @@ async function bakeSelectedTilesGroupShift(
 
     const ref = `runtime:group-shift:${Date.now()}:${tile.id}:${Math.random().toString(36).slice(2, 8)}`;
     await loadImageAssetFromUrl(state, tileCanvas.toDataURL("image/png"), ref);
-    tile.sourceImageRef = ref;
-    tile.sourceRect = {
-      x: 0,
-      y: 0,
-      w: state.project.tileWidth,
-      h: state.project.tileHeight,
-    };
-    tile.offsetX = 0;
-    tile.offsetY = 0;
-    tile.scaleX = 1;
-    tile.scaleY = 1;
-    tile.fitMode = "manual";
-    tile.anchorX = "center";
-    tile.anchorY = "center";
-    tile.cropLeft = 0;
-    tile.cropRight = 0;
-    tile.cropTop = 0;
-    tile.cropBottom = 0;
-    tile.clampToTile = true;
-    tile.edgeStretchLeft = 0;
-    tile.edgeStretchRight = 0;
-    tile.edgeStretchTop = 0;
-    tile.edgeStretchBottom = 0;
-    tile.edgeExtend = false;
-    tile.fillExposedColor = null;
-    tile.flipX = false;
-    tile.flipY = false;
-    tile.rotationQuarterTurns = 0;
-    tile.brightness = 0;
-    tile.contrast = 1;
-    tile.saturation = 1;
-    tile.tintColor = null;
-    tile.filterMode = "nearest";
-    tile.pixelSnap = true;
+    resetTileToBakedImage(tile, ref, state.project.tileWidth, state.project.tileHeight);
     shiftedCount += 1;
   }
 
   return shiftedCount;
+}
+
+async function bakeSelectedTilesColorReplace(
+  state: ProjectState,
+  selectedTiles: ProjectState["project"]["tiles"],
+  sourceColor: RgbaColor,
+  targetMode: ColorReplaceTargetMode,
+  targetColor: RgbaColor | null,
+  tolerance: number,
+): Promise<number> {
+  let appliedCount = 0;
+
+  for (const tile of selectedTiles) {
+    const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+    if (!image) {
+      continue;
+    }
+
+    const tileCanvas = renderTileCanvas(image, tile, state.project.tileWidth, state.project.tileHeight);
+
+    if (!tileCanvas) {
+      continue;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = tileCanvas.width;
+    canvas.height = tileCanvas.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+
+    if (!context) {
+      continue;
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(tileCanvas, 0, 0);
+
+    const changed = applyColorReplaceToCanvas(context, canvas.width, canvas.height, sourceColor, targetMode, targetColor, tolerance);
+
+    if (!changed) {
+      continue;
+    }
+
+    const ref = `runtime:color-replace:${Date.now()}:${tile.id}:${Math.random().toString(36).slice(2, 8)}`;
+    await loadImageAssetFromUrl(state, canvas.toDataURL("image/png"), ref);
+    resetTileToBakedImage(tile, ref, state.project.tileWidth, state.project.tileHeight);
+    appliedCount += 1;
+  }
+
+  return appliedCount;
+}
+
+function resetTileToBakedImage(tile: TilePlacement, ref: string, tileWidth: number, tileHeight: number): void {
+  tile.sourceImageRef = ref;
+  tile.sourceRect = {
+    x: 0,
+    y: 0,
+    w: tileWidth,
+    h: tileHeight,
+  };
+  tile.offsetX = 0;
+  tile.offsetY = 0;
+  tile.scaleX = 1;
+  tile.scaleY = 1;
+  tile.fitMode = "manual";
+  tile.anchorX = "center";
+  tile.anchorY = "center";
+  tile.cropLeft = 0;
+  tile.cropRight = 0;
+  tile.cropTop = 0;
+  tile.cropBottom = 0;
+  tile.clampToTile = true;
+  tile.edgeStretchLeft = 0;
+  tile.edgeStretchRight = 0;
+  tile.edgeStretchTop = 0;
+  tile.edgeStretchBottom = 0;
+  tile.edgeExtend = false;
+  tile.fillExposedColor = null;
+  tile.flipX = false;
+  tile.flipY = false;
+  tile.rotationQuarterTurns = 0;
+  tile.brightness = 0;
+  tile.contrast = 1;
+  tile.saturation = 1;
+  tile.tintColor = null;
+  tile.filterMode = "nearest";
+  tile.pixelSnap = true;
+}
+
+type RgbaColor = {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+};
+
+function applyColorReplaceToCanvas(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  sourceColor: RgbaColor,
+  targetMode: ColorReplaceTargetMode,
+  targetColor: RgbaColor | null,
+  tolerance: number,
+): boolean {
+  const imageData = context.getImageData(0, 0, width, height);
+  const { data } = imageData;
+  let changed = false;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const current = {
+      r: data[index],
+      g: data[index + 1],
+      b: data[index + 2],
+      a: data[index + 3],
+    };
+
+    if (getColorDistance(current, sourceColor) > tolerance) {
+      continue;
+    }
+
+    if (targetMode === "transparent") {
+      data[index + 3] = 0;
+    } else if (targetColor) {
+      data[index] = targetColor.r;
+      data[index + 1] = targetColor.g;
+      data[index + 2] = targetColor.b;
+      data[index + 3] = targetColor.a;
+    }
+
+    changed = true;
+  }
+
+  if (changed) {
+    context.putImageData(imageData, 0, 0);
+  }
+
+  return changed;
+}
+
+function getColorDistance(left: RgbaColor, right: RgbaColor): number {
+  const deltaR = left.r - right.r;
+  const deltaG = left.g - right.g;
+  const deltaB = left.b - right.b;
+  const deltaA = left.a - right.a;
+  return Math.sqrt((deltaR ** 2) + (deltaG ** 2) + (deltaB ** 2) + (deltaA ** 2));
+}
+
+function parseHexColor(value: string): RgbaColor | null {
+  const normalized = value.trim().replace(/^#/, "");
+
+  if (![3, 4, 6, 8].includes(normalized.length) || !/^[\da-fA-F]+$/.test(normalized)) {
+    return null;
+  }
+
+  const expanded = normalized.length <= 4
+    ? normalized.split("").map((character) => `${character}${character}`).join("")
+    : normalized;
+  const r = Number.parseInt(expanded.slice(0, 2), 16);
+  const g = Number.parseInt(expanded.slice(2, 4), 16);
+  const b = Number.parseInt(expanded.slice(4, 6), 16);
+  const a = expanded.length === 8 ? Number.parseInt(expanded.slice(6, 8), 16) : 255;
+
+  return { r, g, b, a };
+}
+
+function normalizeHexColor(value: string, fallback: string): string {
+  const parsed = parseHexColor(value);
+
+  if (!parsed) {
+    return fallback;
+  }
+
+  const toHex = (channel: number) => channel.toString(16).padStart(2, "0");
+  return `#${toHex(parsed.r)}${toHex(parsed.g)}${toHex(parsed.b)}`;
+}
+
+function rgbToHex(color: Pick<RgbaColor, "r" | "g" | "b">): string {
+  const toHex = (channel: number) => channel.toString(16).padStart(2, "0");
+  return `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`;
 }
 
 function getDisplayFileName(path: string | null): string | null {

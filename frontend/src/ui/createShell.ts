@@ -1,4 +1,5 @@
 import type {
+  ColorReplaceTargetMode,
   ProjectState,
   TileAnchorX,
   TileAnchorY,
@@ -60,6 +61,11 @@ type ShellOptions = {
   onRotateSelectedTile: (delta: 1 | -1) => void;
   onTrimSelectedTileTransparent: () => void;
   onTilePreviewModeChanged: (previewMode: TilePreviewMode) => void;
+  onColorReplaceSourceColorChanged: (color: string) => void;
+  onColorReplaceTargetModeChanged: (mode: ColorReplaceTargetMode) => void;
+  onColorReplaceTargetColorChanged: (color: string) => void;
+  onColorReplaceToleranceChanged: (tolerance: number) => void;
+  onApplyColorReplace: () => Promise<void>;
   onClearSelectedTile: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -149,6 +155,11 @@ export function createShell({
   onRotateSelectedTile,
   onTrimSelectedTileTransparent,
   onTilePreviewModeChanged,
+  onColorReplaceSourceColorChanged,
+  onColorReplaceTargetModeChanged,
+  onColorReplaceTargetColorChanged,
+  onColorReplaceToleranceChanged,
+  onApplyColorReplace,
   onClearSelectedTile,
   onUndo,
   onRedo,
@@ -749,6 +760,103 @@ export function createShell({
   });
   tintField.append(tintLabel, tintInput);
 
+  const colorReplaceSection = document.createElement("div");
+  colorReplaceSection.className = "editor-stack";
+
+  const colorReplaceHeading = document.createElement("p");
+  colorReplaceHeading.className = "field-label";
+  colorReplaceHeading.textContent = "Color replace";
+
+  const colorReplaceInputs = document.createElement("div");
+  colorReplaceInputs.className = "grid-inputs";
+
+  const colorReplaceSourceField = document.createElement("label");
+  colorReplaceSourceField.className = "field-group";
+  const colorReplaceSourceLabel = document.createElement("span");
+  colorReplaceSourceLabel.className = "field-label";
+  colorReplaceSourceLabel.textContent = "Source color";
+  const colorReplaceSourceInput = document.createElement("input");
+  colorReplaceSourceInput.type = "color";
+  colorReplaceSourceInput.className = "color-input";
+  colorReplaceSourceInput.value = state.session.colorReplaceSourceColor;
+  colorReplaceSourceInput.addEventListener("input", () => {
+    onColorReplaceSourceColorChanged(colorReplaceSourceInput.value);
+  });
+  colorReplaceSourceField.append(colorReplaceSourceLabel, colorReplaceSourceInput);
+
+  const colorReplaceToleranceField = createLabeledNumberField(
+    "Tolerance",
+    state.session.colorReplaceTolerance,
+    "Color replace tolerance",
+    0,
+    1,
+  );
+  colorReplaceToleranceField.input.max = "441";
+  colorReplaceToleranceField.input.addEventListener("change", () => {
+    onColorReplaceToleranceChanged(Math.max(0, Math.min(441, Number.parseInt(colorReplaceToleranceField.input.value, 10) || 0)));
+  });
+  colorReplaceInputs.append(colorReplaceSourceField, colorReplaceToleranceField.field);
+
+  const colorReplaceModeField = document.createElement("label");
+  colorReplaceModeField.className = "field-group";
+  const colorReplaceModeLabel = document.createElement("span");
+  colorReplaceModeLabel.className = "field-label";
+  colorReplaceModeLabel.textContent = "Replace with";
+  const colorReplaceModeSelect = document.createElement("select");
+  colorReplaceModeSelect.className = "tile-size-select";
+  [
+    ["transparent", "Transparent"],
+    ["color", "Color"],
+  ].forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    colorReplaceModeSelect.append(option);
+  });
+  colorReplaceModeSelect.value = state.session.colorReplaceTargetMode;
+  colorReplaceModeSelect.addEventListener("change", () => {
+    if (colorReplaceModeSelect.value === "transparent" || colorReplaceModeSelect.value === "color") {
+      onColorReplaceTargetModeChanged(colorReplaceModeSelect.value);
+      colorReplaceTargetField.hidden = colorReplaceModeSelect.value !== "color";
+    }
+  });
+  colorReplaceModeField.append(colorReplaceModeLabel, colorReplaceModeSelect);
+
+  const colorReplaceTargetField = document.createElement("label");
+  colorReplaceTargetField.className = "field-group";
+  const colorReplaceTargetLabel = document.createElement("span");
+  colorReplaceTargetLabel.className = "field-label";
+  colorReplaceTargetLabel.textContent = "Target color";
+  const colorReplaceTargetInput = document.createElement("input");
+  colorReplaceTargetInput.type = "color";
+  colorReplaceTargetInput.className = "color-input";
+  colorReplaceTargetInput.value = state.session.colorReplaceTargetColor;
+  colorReplaceTargetInput.addEventListener("input", () => {
+    onColorReplaceTargetColorChanged(colorReplaceTargetInput.value);
+  });
+  colorReplaceTargetField.append(colorReplaceTargetLabel, colorReplaceTargetInput);
+  colorReplaceTargetField.hidden = state.session.colorReplaceTargetMode !== "color";
+
+  const colorReplaceNote = document.createElement("p");
+  colorReplaceNote.className = "field-note";
+  colorReplaceNote.textContent = describeColorReplaceAction(
+    state.session.colorReplaceSourceColor,
+    state.session.colorReplaceTargetMode,
+    state.session.colorReplaceTargetColor,
+    state.session.colorReplaceTolerance,
+  );
+
+  const colorReplaceButton = createAsyncActionButton("Apply Color Replace", onApplyColorReplace);
+
+  colorReplaceSection.append(
+    colorReplaceHeading,
+    colorReplaceInputs,
+    colorReplaceModeField,
+    colorReplaceTargetField,
+    colorReplaceNote,
+    colorReplaceButton,
+  );
+
   const toggleRow = document.createElement("div");
   toggleRow.className = "toggle-row";
   const flipXToggle = createCheckboxField("Flip X", selectedTile?.flipX ?? false, (checked) => {
@@ -788,7 +896,7 @@ export function createShell({
   layoutPanel.append(tileCellInputs, offsetInputs, scaleInputs, nudgeActions, toggleRow);
   fitPanel.append(fitActions, anchorField, anchorActions, cropInputs, stretchInputs, repairOptions);
   previewPanel.append(previewField, previewNote);
-  visualPanel.append(colorInputs, filterField, tintField);
+  visualPanel.append(colorInputs, filterField, tintField, colorReplaceSection);
   metaPanel.append(metadataInputs);
 
   editorSection.append(selectedTileSummary, editorActions, editorEmpty, editorTabs, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
@@ -1055,6 +1163,17 @@ export function createShell({
       const nextSelectedTile = getSelectedOutputTile(nextState);
       const nextSelectedTiles = getSelectedOutputTiles(nextState);
       previewSelect.value = nextState.session.tilePreviewMode;
+      colorReplaceSourceInput.value = nextState.session.colorReplaceSourceColor;
+      colorReplaceModeSelect.value = nextState.session.colorReplaceTargetMode;
+      colorReplaceTargetInput.value = nextState.session.colorReplaceTargetColor;
+      colorReplaceToleranceField.input.value = `${nextState.session.colorReplaceTolerance}`;
+      colorReplaceTargetField.hidden = nextState.session.colorReplaceTargetMode !== "color";
+      colorReplaceNote.textContent = describeColorReplaceAction(
+        nextState.session.colorReplaceSourceColor,
+        nextState.session.colorReplaceTargetMode,
+        nextState.session.colorReplaceTargetColor,
+        nextState.session.colorReplaceTolerance,
+      );
       anchorXSelect.value = nextSelectedTile?.anchorX ?? "center";
       anchorYSelect.value = nextSelectedTile?.anchorY ?? "center";
       items[11].description.textContent = nextSelectedTile ? `${nextSelectedTile.id}` : "None";
@@ -1443,4 +1562,14 @@ function getDisplayFileLabel(value: string): string {
   const normalized = value.replace(/\\/g, "/");
   const segments = normalized.split("/");
   return segments[segments.length - 1] || value;
+}
+
+function describeColorReplaceAction(
+  sourceColor: string,
+  targetMode: ColorReplaceTargetMode,
+  targetColor: string,
+  tolerance: number,
+): string {
+  const targetLabel = targetMode === "transparent" ? "transparent" : targetColor;
+  return `Replace ${sourceColor} with ${targetLabel}. Tolerance ${tolerance} controls how closely nearby colors match.`;
 }

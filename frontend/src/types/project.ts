@@ -48,6 +48,10 @@ export type SessionState = {
   hoveredPanel: WorkspacePanel | null;
   tilePreviewMode: TilePreviewMode;
   showSceneGrid: boolean;
+  colorReplaceSourceColor: string;
+  colorReplaceTargetMode: ColorReplaceTargetMode;
+  colorReplaceTargetColor: string;
+  colorReplaceTolerance: number;
   sourceCamera: CameraState;
   outputCamera: CameraState;
   sourceImageAssetCache: Record<string, CachedSourceImageAsset>;
@@ -123,6 +127,7 @@ export type TileFitMode = "manual" | "stretch" | "contain";
 export type TileAnchorX = "left" | "center" | "right";
 export type TileAnchorY = "top" | "center" | "bottom";
 export type TilePreviewMode = "none" | "repeat" | "neighbors";
+export type ColorReplaceTargetMode = "transparent" | "color";
 
 export type CachedSourceImageAsset = {
   image: HTMLImageElement;

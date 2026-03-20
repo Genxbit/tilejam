@@ -44,6 +44,10 @@ export function createProjectState(): ProjectState {
       hoveredPanel: null,
       tilePreviewMode: "none",
       showSceneGrid: false,
+      colorReplaceSourceColor: "#0000ff",
+      colorReplaceTargetMode: "transparent",
+      colorReplaceTargetColor: "#000000",
+      colorReplaceTolerance: 56,
       sourceCamera: {
         zoom: 1,
         panX: 0,

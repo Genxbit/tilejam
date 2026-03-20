@@ -370,3 +370,37 @@ Move project-level actions into a persistent top horizontal bar, and add a scene
 * scene grid can be shown or hidden immediately while editing
 * grid visibility toggle helps validate the scene appearance without changing saved scene content
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 12: Color replace
+
+**Status**
+Completed
+
+**Goal**
+Improve tile repair with color replacement tools.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Add tile color replacement tools to the tile editor.
+
+**Deliverables**
+
+* replace color in selected tile or selected tiles
+* replacement target can be transparent or another chosen color
+* tolerance control for approximate color matching
+* preview and apply flow that fits naturally in the tile editor panel
+
+**Validation**
+
+* selected color can be replaced with transparent
+* selected color can be replaced with another chosen color
+* tolerance behaves predictably for near-match colors
+* controls fit naturally in the existing tile editor UX
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
