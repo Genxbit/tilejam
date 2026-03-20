@@ -47,6 +47,7 @@ const OUTPUT_FRAME_BOTTOM_INSET = 16;
 const OUTPUT_FRAME_TOP_OFFSET = 32;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 8;
+const OVERSCROLL_RATIO = 0.35;
 
 export function getWorkspaceLayout(
   canvasWidth: number,
@@ -323,10 +324,10 @@ function createViewport<TPanel extends WorkspacePanel>(
   camera: CameraState,
 ): PanelViewport & { panel: TPanel } {
   const scale = baseScale * camera.zoom;
-  const contentWidth = Math.max(1, Math.floor(worldWidth * scale));
-  const contentHeight = Math.max(1, Math.floor(worldHeight * scale));
-  const baseX = frame.x + Math.floor((frame.width - contentWidth) / 2);
-  const baseY = frame.y + Math.floor((frame.height - contentHeight) / 2);
+  const contentWidth = Math.max(1, worldWidth * scale);
+  const contentHeight = Math.max(1, worldHeight * scale);
+  const baseX = frame.x + ((frame.width - contentWidth) / 2);
+  const baseY = frame.y + ((frame.height - contentHeight) / 2);
 
   return {
     panel,
@@ -368,16 +369,17 @@ function getPanRange(
   frameSize: number,
 ): { min: number; max: number } {
   if (contentSize <= frameSize) {
-    const centered = framePosition + Math.floor((frameSize - contentSize) / 2);
     return {
-      min: centered - basePosition,
-      max: centered - basePosition,
+      min: Number.NEGATIVE_INFINITY,
+      max: Number.POSITIVE_INFINITY,
     };
   }
 
+  const overscroll = frameSize * OVERSCROLL_RATIO;
+
   return {
-    min: framePosition + frameSize - (basePosition + contentSize),
-    max: framePosition - basePosition,
+    min: framePosition + frameSize - (basePosition + contentSize) - overscroll,
+    max: framePosition - basePosition + overscroll,
   };
 }
 

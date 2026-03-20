@@ -183,6 +183,10 @@ function drawGridOverlay(
   const cellWidth = viewport.contentWidth / sourceMetrics.columns;
   const cellHeight = viewport.contentHeight / sourceMetrics.rows;
 
+  context.save();
+  context.beginPath();
+  context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+  context.clip();
   context.strokeStyle = GRID;
   context.lineWidth = 1;
 
@@ -210,6 +214,7 @@ function drawGridOverlay(
     Math.max(1, Math.round(viewport.contentWidth) - 1),
     Math.max(1, Math.round(viewport.contentHeight) - 1),
   );
+  context.restore();
 }
 
 function drawEmptyState(
@@ -299,6 +304,10 @@ function drawOutputGrid(
   const cellWidth = viewport.contentWidth / outputMetrics.columns;
   const cellHeight = viewport.contentHeight / outputMetrics.rows;
 
+  context.save();
+  context.beginPath();
+  context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
+  context.clip();
   context.strokeStyle = OUTPUT_GRID;
   context.lineWidth = 1;
 
@@ -326,6 +335,7 @@ function drawOutputGrid(
     Math.max(1, Math.round(viewport.contentWidth) - 1),
     Math.max(1, Math.round(viewport.contentHeight) - 1),
   );
+  context.restore();
 
   context.fillStyle = VIEW_HINT;
   context.fillText(

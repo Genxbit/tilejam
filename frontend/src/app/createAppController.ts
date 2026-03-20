@@ -76,6 +76,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
   let movingTileId: number | null = null;
   let movingTileOrigin: { col: number; row: number } | null = null;
   let canvasRenderQueued = false;
+  let wheelGestureDirection: -1 | 1 | null = null;
+  let wheelGestureLastAt = 0;
   const undoStack: HistoryEntry[] = [];
   const redoStack: HistoryEntry[] = [];
 
@@ -1412,7 +1414,26 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       return;
     }
 
-    const zoom = zoomWorkspacePanel(state, panel, layout, point.x, point.y, event.deltaY);
+    const now = performance.now();
+    const normalizedDelta = normalizeWheelDelta(event);
+
+    if (Math.abs(normalizedDelta) < 0.01) {
+      return;
+    }
+
+    if (now - wheelGestureLastAt > 160) {
+      wheelGestureDirection = normalizedDelta < 0 ? -1 : 1;
+    } else if (wheelGestureDirection && Math.sign(normalizedDelta) !== wheelGestureDirection && Math.abs(normalizedDelta) < 18) {
+      event.preventDefault();
+      wheelGestureLastAt = now;
+      return;
+    } else {
+      wheelGestureDirection = normalizedDelta < 0 ? -1 : 1;
+    }
+
+    wheelGestureLastAt = now;
+
+    const zoom = zoomWorkspacePanel(state, panel, layout, point.x, point.y, normalizedDelta);
 
     if (zoom === null) {
       return;
@@ -1618,6 +1639,18 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       renderAll();
     },
   };
+}
+
+function normalizeWheelDelta(event: WheelEvent): number {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    return event.deltaY * 16;
+  }
+
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+    return event.deltaY * 100;
+  }
+
+  return event.deltaY;
 }
 
 function createHistoryEntry(state: ProjectState): HistoryEntry {
