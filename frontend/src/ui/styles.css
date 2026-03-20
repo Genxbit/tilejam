@@ -122,6 +122,12 @@ textarea {
   gap: 12px;
 }
 
+.panel-actions button[data-active="true"] {
+  border-color: rgba(119, 177, 209, 0.5);
+  color: #edf4fa;
+  background: rgba(31, 63, 84, 0.88);
+}
+
 .sidebar-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

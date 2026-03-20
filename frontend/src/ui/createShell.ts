@@ -651,12 +651,22 @@ export function createShell({
 
   const fitActions = document.createElement("div");
   fitActions.className = "panel-actions";
+  const manualFitButton = createActionButton("Manual", () => { onSetSelectedTileFitMode("manual"); });
+  const stretchFitButton = createActionButton("Stretch", () => { onSetSelectedTileFitMode("stretch"); });
+  const containFitButton = createActionButton("Contain", () => { onSetSelectedTileFitMode("contain"); });
+  manualFitButton.dataset.active = selectedTile?.fitMode === "manual" ? "true" : "false";
+  stretchFitButton.dataset.active = selectedTile?.fitMode === "stretch" ? "true" : "false";
+  containFitButton.dataset.active = selectedTile?.fitMode === "contain" ? "true" : "false";
   fitActions.append(
-    createActionButton("Manual", () => { onSetSelectedTileFitMode("manual"); }),
-    createActionButton("Stretch", () => { onSetSelectedTileFitMode("stretch"); }),
-    createActionButton("Contain", () => { onSetSelectedTileFitMode("contain"); }),
+    manualFitButton,
+    stretchFitButton,
+    containFitButton,
     createActionButton("Trim Transparent", onTrimSelectedTileTransparent),
   );
+
+  const fitModeNote = document.createElement("p");
+  fitModeNote.className = "field-note";
+  fitModeNote.textContent = describeFitMode(selectedTile);
 
   const anchorField = document.createElement("div");
   anchorField.className = "grid-inputs";
@@ -1060,7 +1070,7 @@ export function createShell({
   metadataInputs.append(nameField.field, tagsField.field, collisionField.field);
 
   layoutPanel.append(tileCellInputs, offsetInputs, scaleInputs, nudgeActions, toggleRow);
-  fitPanel.append(fitActions, anchorField, anchorActions, cropInputs, stretchInputs, repairOptions);
+  fitPanel.append(fitActions, fitModeNote, anchorField, anchorActions, cropInputs, stretchInputs, repairOptions);
   previewPanel.append(previewField, previewNote);
   visualPanel.append(colorInputs, filterField, tintField, colorReplaceSection, seamRepairSection);
   metaPanel.append(metadataInputs);
@@ -1329,6 +1339,10 @@ export function createShell({
       const nextSelectedTile = getSelectedOutputTile(nextState);
       const nextSelectedTiles = getSelectedOutputTiles(nextState);
       previewSelect.value = nextState.session.tilePreviewMode;
+      manualFitButton.dataset.active = nextSelectedTile?.fitMode === "manual" ? "true" : "false";
+      stretchFitButton.dataset.active = nextSelectedTile?.fitMode === "stretch" ? "true" : "false";
+      containFitButton.dataset.active = nextSelectedTile?.fitMode === "contain" ? "true" : "false";
+      fitModeNote.textContent = describeFitMode(nextSelectedTile);
       colorReplaceSourceInput.value = nextState.session.colorReplaceSourceColor;
       colorReplaceModeSelect.value = nextState.session.colorReplaceTargetMode;
       colorReplaceTargetInput.value = nextState.session.colorReplaceTargetColor;
@@ -1749,6 +1763,20 @@ function describeColorReplaceAction(
 ): string {
   const targetLabel = targetMode === "transparent" ? "transparent" : targetColor;
   return `Replace ${sourceColor} with ${targetLabel}. Tolerance ${tolerance} controls how closely nearby colors match.`;
+}
+
+function describeFitMode(tile: ReturnType<typeof getSelectedOutputTile>): string {
+  if (!tile) {
+    return "Select a tile to switch fit mode.";
+  }
+
+  const activeLabel = tile.fitMode === "manual"
+    ? "Manual keeps the tile's current drawn size."
+    : tile.fitMode === "stretch"
+      ? "Stretch fills the tile edge to edge."
+      : "Contain keeps proportions inside the tile.";
+
+  return `${activeLabel} Square tiles with matching source and output size can look identical across these modes until crop, trim, or scale changes are introduced.`;
 }
 
 function describeSeamRepair(

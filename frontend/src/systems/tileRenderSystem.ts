@@ -41,6 +41,30 @@ export function getTileDrawRect(tile: TilePlacement, tileWidth: number, tileHeig
     return null;
   }
 
+  if (tile.fitMode === "stretch") {
+    return {
+      x: tile.offsetX - tile.edgeStretchLeft,
+      y: tile.offsetY - tile.edgeStretchTop,
+      width: tileWidth + tile.edgeStretchLeft + tile.edgeStretchRight,
+      height: tileHeight + tile.edgeStretchTop + tile.edgeStretchBottom,
+    };
+  }
+
+  if (tile.fitMode === "contain") {
+    const scaledSampleWidth = sampleRect.w * tile.scaleX;
+    const scaledSampleHeight = sampleRect.h * tile.scaleY;
+    const ratio = Math.min(tileWidth / Math.max(1, scaledSampleWidth), tileHeight / Math.max(1, scaledSampleHeight));
+    const width = scaledSampleWidth * ratio;
+    const height = scaledSampleHeight * ratio;
+
+    return {
+      x: getAnchorOffset(tile.anchorX, tileWidth, width) + tile.offsetX - tile.edgeStretchLeft,
+      y: getAnchorOffset(tile.anchorY, tileHeight, height) + tile.offsetY - tile.edgeStretchTop,
+      width: width + tile.edgeStretchLeft + tile.edgeStretchRight,
+      height: height + tile.edgeStretchTop + tile.edgeStretchBottom,
+    };
+  }
+
   const fullSourceWidth = tile.sourceRect.w * tile.scaleX;
   const fullSourceHeight = tile.sourceRect.h * tile.scaleY;
   const fitRect = getFitRect(tile.fitMode, tile.anchorX, tile.anchorY, fullSourceWidth, fullSourceHeight, tileWidth, tileHeight);
