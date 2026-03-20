@@ -1,7 +1,7 @@
 import type { ProjectState } from "../types/project";
 import { getSeamRepairPairs, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
 import { getSelectedOutputCells, getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
-import { getActiveSceneLayer, getSceneCellGid } from "../systems/sceneSystem";
+import { getActiveSceneLayer, getSceneCellGid, getSelectedSceneCells } from "../systems/sceneSystem";
 import { drawTileIntoRect, renderTileCanvas } from "../systems/tileRenderSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
 import { getResolvedSourceImageAsset, getSourceImageForRef } from "../systems/sourceImageSystem";
@@ -651,18 +651,23 @@ function drawSelectedSceneCell(
   viewport: OutputViewport,
 ): void {
   const selectedCell = state.session.selectedSceneCell;
+  const selectedCells = getSelectedSceneCells(state);
 
-  if (!selectedCell) {
+  if (selectedCells.length < 1) {
     return;
   }
 
-  const x = viewport.contentX + selectedCell.col * viewport.cellWidth;
-  const y = viewport.contentY + selectedCell.row * viewport.cellHeight;
-  context.fillStyle = SELECTED_SCENE_FILL;
-  context.fillRect(x, y, viewport.cellWidth, viewport.cellHeight);
-  context.strokeStyle = SELECTED_SCENE_STROKE;
-  context.lineWidth = 2;
-  context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
+  for (const cell of selectedCells) {
+    const x = viewport.contentX + cell.col * viewport.cellWidth;
+    const y = viewport.contentY + cell.row * viewport.cellHeight;
+    context.fillStyle = SELECTED_SCENE_FILL;
+    context.fillRect(x, y, viewport.cellWidth, viewport.cellHeight);
+    context.strokeStyle = selectedCell && cell.col === selectedCell.col && cell.row === selectedCell.row
+      ? SELECTED_SCENE_STROKE
+      : "rgba(255, 157, 87, 0.55)";
+    context.lineWidth = selectedCell && cell.col === selectedCell.col && cell.row === selectedCell.row ? 2 : 1.5;
+    context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
+  }
 }
 
 function drawHoveredOutputTile(

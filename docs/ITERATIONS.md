@@ -458,7 +458,50 @@ Add seam-aware tile edge harmonization tools for adjacent output tiles.
 
 ---
 
-## Ticket 14: Refactor grouped tile editing + tile editor UI
+## Ticket 14: Scene editor selection + clipboard workflow
+
+**Status**
+Completed
+
+**Goal**
+Make scene editing more explicit and efficient with multi-selection, copy/paste, and visible edit actions.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Add scene multi-selection, grouped move/delete, explicit copy/paste from source and scene, visible scene edit actions, and keyboard undo/redo support.
+
+**Deliverables**
+
+* add rectangle multi-selection in the scene editor
+* support moving a single selected scene cell or a selected scene-cell group
+* support deleting a single selected scene cell or a selected scene-cell group
+* support copying from source selection into the scene clipboard
+* support copying from selected scene cells into the scene clipboard
+* support explicit scene paste from the clipboard into the scene grid
+* stop direct source-to-scene placement after one paste so repeated placement uses explicit paste
+* add visible scene action buttons for copy, paste, delete, and move
+* add keyboard undo/redo support
+
+**Validation**
+
+* scene rectangle selection highlights the full selected area
+* single and multi scene move work by drag, panel controls, and keyboard where applicable
+* single and multi scene delete work correctly
+* source selection can be copied into the scene paste buffer
+* scene selection can be copied and pasted within the scene
+* scene paste is explicit and repeatable without hidden auto-stamping
+* scene edit actions are visible in the scene editor pane
+* undo and redo work from keyboard shortcuts
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 15: Refactor grouped tile editing + tile editor UI
 
 **Status**
 Planned

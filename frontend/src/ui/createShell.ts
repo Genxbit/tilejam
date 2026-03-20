@@ -35,6 +35,10 @@ type ShellOptions = {
   onSaveScene: () => Promise<void>;
   onNewScene: () => void;
   onClearScene: () => void;
+  onCopySceneSelection: () => void;
+  onPasteSceneSelection: () => void;
+  onDeleteSceneSelection: () => void;
+  onMoveSceneSelection: (deltaCol: number, deltaRow: number) => void;
   onWorkspaceModeChanged: (mode: WorkspaceMode) => void;
   onSourceGridSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
   onOutputTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
@@ -160,6 +164,10 @@ export function createShell({
   onSaveScene,
   onNewScene,
   onClearScene,
+  onCopySceneSelection,
+  onPasteSceneSelection,
+  onDeleteSceneSelection,
+  onMoveSceneSelection,
   onWorkspaceModeChanged,
   onSourceGridSizeChanged,
   onOutputTileSizeChanged,
@@ -1252,6 +1260,23 @@ export function createShell({
   const clearSceneButton = createActionButton("Clear All", onClearScene);
   sceneActions.append(sceneTilesheetButton, sceneInputLabel, saveSceneButton, newSceneButton, clearSceneButton);
 
+  const sceneEditActions = document.createElement("div");
+  sceneEditActions.className = "panel-actions";
+  const sceneCopyButton = createActionButton("Copy", onCopySceneSelection);
+  const scenePasteButton = createActionButton("Paste", onPasteSceneSelection);
+  const sceneDeleteButton = createActionButton("Delete", onDeleteSceneSelection);
+  scenePasteButton.disabled = !state.session.sceneClipboard;
+  sceneEditActions.append(sceneCopyButton, scenePasteButton, sceneDeleteButton);
+
+  const sceneMoveActions = document.createElement("div");
+  sceneMoveActions.className = "panel-actions";
+  sceneMoveActions.append(
+    createActionButton("Left", () => { onMoveSceneSelection(-1, 0); }),
+    createActionButton("Right", () => { onMoveSceneSelection(1, 0); }),
+    createActionButton("Up", () => { onMoveSceneSelection(0, -1); }),
+    createActionButton("Down", () => { onMoveSceneSelection(0, 1); }),
+  );
+
   const sceneSizeInputs = document.createElement("div");
   sceneSizeInputs.className = "grid-inputs";
   const sceneWidthField = createLabeledNumberField("Width", state.project.scene?.width ?? 32, "Scene width", 1, 1);
@@ -1366,6 +1391,8 @@ export function createShell({
 
   sceneSection.append(
     sceneActions,
+    sceneEditActions,
+    sceneMoveActions,
     sceneGridField,
     sceneSizeInputs,
     sceneTilesetField,
@@ -1470,6 +1497,9 @@ export function createShell({
       sceneLayerOffsetYField.input.value = `${nextSceneLayer?.offsetY ?? 0}`;
       sceneLayerParallaxXField.input.value = `${nextSceneLayer?.parallaxX ?? 1}`;
       sceneLayerParallaxYField.input.value = `${nextSceneLayer?.parallaxY ?? 1}`;
+      sceneCopyButton.disabled = !nextState.session.sourceSelection && nextState.session.selectedSceneCells.length < 1;
+      scenePasteButton.disabled = !nextState.session.sceneClipboard;
+      sceneDeleteButton.disabled = nextState.session.selectedSceneCells.length < 1;
       (sceneGridToggle.querySelector("input") as HTMLInputElement).checked = !nextState.session.showSceneGrid;
       sceneLayerSelect.replaceChildren();
       for (const layer of nextState.project.scene?.layers ?? []) {

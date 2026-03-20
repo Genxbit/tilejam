@@ -25,7 +25,7 @@ import {
   updateSelectedOutputTile,
 } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
-import { addSceneLayer, clearSceneLayers, deleteSelectedSceneCell, ensureScene, moveActiveSceneLayerBy, moveSceneCellTo, moveSelectedSceneCellBy, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
+import { addSceneLayer, clearSceneLayers, copySelectedSceneCells, copySourceSelectionToSceneClipboard, deleteSelectedSceneCells, ensureScene, getSelectedSceneCells, moveActiveSceneLayerBy, moveSelectedSceneCellBy, moveSelectedSceneCellsTo, pasteSceneClipboard, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneCellRectangle, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import {
   clearSourceImageAsset,
@@ -58,6 +58,7 @@ type HistoryEntry = {
   selectedOutputTileIds: number[];
   selectedOutputCells: ProjectState["session"]["selectedOutputCells"];
   selectedSceneCell: ProjectState["session"]["selectedSceneCell"];
+  selectedSceneCells: ProjectState["session"]["selectedSceneCells"];
   activeSceneLayerId: number | null;
 };
 
@@ -333,6 +334,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.sceneFileHandle = null;
         state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
         state.session.selectedSceneCell = null;
+        state.session.selectedSceneCells = [];
         state.session.activeWorkspaceMode = "scene";
         const tilesheetResolution = await resolveSceneTilesheetIfPossible(state);
         bumpRenderRevision();
@@ -376,6 +378,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.sceneFileHandle = handle;
         state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
         state.session.selectedSceneCell = null;
+        state.session.selectedSceneCells = [];
         state.session.activeWorkspaceMode = "scene";
         const tilesheetResolution = await resolveSceneTilesheetIfPossible(state);
         bumpRenderRevision();
@@ -458,6 +461,101 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = `Cleared ${clearedCount} scene tile${clearedCount === 1 ? "" : "s"} across the current scene.`;
       renderAll();
     },
+    onCopySceneSelection: () => {
+      if (state.session.activeWorkspaceMode !== "scene") {
+        return;
+      }
+
+      const clipboard = state.session.sourceSelection
+        ? copySourceSelectionToSceneClipboard(state)
+        : copySelectedSceneCells(state);
+
+      if (!clipboard) {
+        state.session.message = "Select source tiles or scene cells before copying.";
+        renderAll();
+        return;
+      }
+
+      state.session.sceneClipboard = clipboard;
+      state.session.message = `Copied a ${clipboard.width} x ${clipboard.height} scene patch.`;
+      renderAll();
+    },
+    onPasteSceneSelection: () => {
+      if (state.session.activeWorkspaceMode !== "scene" || !state.session.sceneClipboard) {
+        state.session.message = "Copy source tiles or scene cells before pasting.";
+        renderAll();
+        return;
+      }
+
+      const target = state.session.hoveredOutputTile ?? state.session.selectedSceneCell;
+
+      if (!target) {
+        state.session.message = "Hover or select a destination scene cell before pasting.";
+        renderAll();
+        return;
+      }
+
+      recordHistory();
+      const pasted = pasteSceneClipboard(state, state.session.sceneClipboard, target.col, target.row);
+
+      if (pasted < 1) {
+        undoStack.pop();
+        state.session.message = "Scene paste did not fit inside the scene grid.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = `Pasted ${pasted} scene cell${pasted === 1 ? "" : "s"} at ${target.col}, ${target.row}.`;
+      renderAll();
+    },
+    onDeleteSceneSelection: () => {
+      if (state.session.activeWorkspaceMode !== "scene" || !state.session.selectedSceneCell) {
+        state.session.message = "Select scene cells before deleting them.";
+        renderAll();
+        return;
+      }
+
+      recordHistory();
+      const deleted = deleteSelectedSceneCells(state);
+
+      if (deleted.count < 1) {
+        undoStack.pop();
+        state.session.message = "Selected scene cells were already empty.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = deleted.count > 1
+        ? `Cleared ${deleted.count} selected scene cells.`
+        : `Cleared scene cell ${deleted.primaryCell?.col ?? 0}, ${deleted.primaryCell?.row ?? 0}.`;
+      renderAll();
+    },
+    onMoveSceneSelection: (deltaCol, deltaRow) => {
+      if (state.session.activeWorkspaceMode !== "scene" || !state.session.selectedSceneCell) {
+        state.session.message = "Select scene cells before moving them.";
+        renderAll();
+        return;
+      }
+
+      recordHistory();
+      const movedCell = moveSelectedSceneCellBy(state, deltaCol, deltaRow);
+
+      if (!movedCell) {
+        undoStack.pop();
+        state.session.message = "Scene selection could not move in that direction.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      const count = getSelectedSceneCells(state).length;
+      state.session.message = count > 1
+        ? `Moved ${count} selected scene cells.`
+        : `Moved scene cell to ${movedCell.col}, ${movedCell.row}.`;
+      renderAll();
+    },
     onWorkspaceModeChanged: (mode) => {
       state.session.activeWorkspaceMode = mode;
       if (mode === "scene" && state.project.scene) {
@@ -531,6 +629,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     onSceneLayerChanged: (layerId) => {
       const layer = selectSceneLayer(state, layerId);
       state.session.selectedSceneCell = null;
+      state.session.selectedSceneCells = [];
       renderAll();
       state.session.message = layer ? `Selected scene layer ${layer.name}.` : "Scene layer not found.";
       return;
@@ -540,6 +639,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       const layer = addSceneLayer(state);
       bumpRenderRevision();
       state.session.selectedSceneCell = null;
+      state.session.selectedSceneCells = [];
       state.session.message = `Added scene layer ${layer.name}.`;
       renderAll();
     },
@@ -1306,7 +1406,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         if (assignedCount > 0) {
           bumpRenderRevision();
           state.session.selectedSceneCell = { col: outputHit.col, row: outputHit.row };
-          state.session.message = `Placed ${assignedCount} scene tile${assignedCount === 1 ? "" : "s"} starting at ${outputHit.col}, ${outputHit.row}. Selection is still active for repeated placement.`;
+          state.session.selectedSceneCells = [{ col: outputHit.col, row: outputHit.row }];
+          state.session.sourceSelection = null;
+          state.session.draftSourceSelection = null;
+          state.session.message = `Placed ${assignedCount} scene tile${assignedCount === 1 ? "" : "s"} starting at ${outputHit.col}, ${outputHit.row}. Copy source tiles again or use Paste to place another copy.`;
         } else {
           undoStack.pop();
           state.session.message = "Selection did not fit inside the scene grid.";
@@ -1316,7 +1419,26 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         return;
       }
 
-      const sceneCell = selectSceneCell(state, outputHit.col, outputHit.row);
+      if (event.shiftKey) {
+        const anchorCell = state.session.selectedSceneCell;
+        const selectedCells = selectSceneCellRectangle(
+          state,
+          anchorCell?.col ?? outputHit.col,
+          anchorCell?.row ?? outputHit.row,
+          outputHit.col,
+          outputHit.row,
+        );
+        state.session.message = `Selected ${selectedCells.length} scene cell${selectedCells.length === 1 ? "" : "s"} in a rectangle.`;
+        renderAll();
+        return;
+      }
+
+      const clickedInExistingSelection = getSelectedSceneCells(state).some(
+        (cell) => cell.col === outputHit.col && cell.row === outputHit.row,
+      );
+      const sceneCell = clickedInExistingSelection
+        ? (state.session.selectedSceneCell ?? { col: outputHit.col, row: outputHit.row })
+        : selectSceneCell(state, outputHit.col, outputHit.row);
 
       if (sceneCell) {
         activePointerId = event.pointerId;
@@ -1501,7 +1623,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         recordHistory();
       }
 
-      const movedCell = outputHit ? moveSceneCellTo(state, outputHit.col, outputHit.row) : null;
+      const movedCell = outputHit ? moveSelectedSceneCellsTo(state, outputHit.col, outputHit.row) : null;
       const moved = movedCell
         ? movedCell.col !== movingTileOrigin.col || movedCell.row !== movingTileOrigin.row
         : false;
@@ -1525,7 +1647,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
       state.session.message = movedCell
         ? moved
-          ? `Moved scene cell to ${movedCell.col}, ${movedCell.row}.`
+          ? `Moved ${getSelectedSceneCells(state).length} selected scene cell${getSelectedSceneCells(state).length === 1 ? "" : "s"} to ${movedCell.col}, ${movedCell.row}.`
           : `Selected scene cell ${movedCell.col}, ${movedCell.row}.`
         : "Scene move cancelled.";
       renderAll();
@@ -1549,8 +1671,18 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       shell.canvas.releasePointerCapture(event.pointerId);
     }
 
+    if (selection && state.session.activeWorkspaceMode === "scene") {
+      const clipboard = copySourceSelectionToSceneClipboard(state);
+
+      if (clipboard) {
+        state.session.sceneClipboard = clipboard;
+      }
+    }
+
     state.session.message = selection
-      ? `Selected ${selection.columns} x ${selection.rows} source tile${selection.columns * selection.rows === 1 ? "" : "s"}. Click the output grid to place them.`
+      ? state.session.activeWorkspaceMode === "scene"
+        ? `Selected ${selection.columns} x ${selection.rows} source tile${selection.columns * selection.rows === 1 ? "" : "s"} and copied them to the scene paste buffer.`
+        : `Selected ${selection.columns} x ${selection.rows} source tile${selection.columns * selection.rows === 1 ? "" : "s"}. Click the output grid to place them.`
       : "Source selection cleared.";
     renderAll();
   }
@@ -1621,6 +1753,20 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       return;
     }
 
+    if ((event.metaKey || event.ctrlKey) && !event.altKey) {
+      if (event.code === "KeyZ" && !event.shiftKey) {
+        event.preventDefault();
+        applyUndo();
+        return;
+      }
+
+      if ((event.code === "KeyZ" && event.shiftKey) || (event.code === "KeyY" && !event.shiftKey)) {
+        event.preventDefault();
+        applyRedo();
+        return;
+      }
+    }
+
     if ((event.code === "Digit0" || event.code === "Numpad0") && state.session.hoveredPanel) {
       resetWorkspaceView(state, state.session.hoveredPanel);
       state.session.message = `${state.session.hoveredPanel === "source" ? "Source" : "Output"} view reset.`;
@@ -1676,7 +1822,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
           if (movedCell) {
             event.preventDefault();
             bumpRenderRevision();
-            state.session.message = `Moved scene cell to ${movedCell.col}, ${movedCell.row}.`;
+            const selectedCount = getSelectedSceneCells(state).length;
+            state.session.message = selectedCount > 1
+              ? `Moved ${selectedCount} selected scene cells.`
+              : `Moved scene cell to ${movedCell.col}, ${movedCell.row}.`;
             renderAll();
           } else {
             undoStack.pop();
@@ -1727,15 +1876,17 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
         event.preventDefault();
         recordHistory();
-        const deletedCell = deleteSelectedSceneCell(state);
+        const deleted = deleteSelectedSceneCells(state);
 
-        if (!deletedCell) {
+        if (deleted.count < 1) {
           undoStack.pop();
           return;
         }
 
         bumpRenderRevision();
-        state.session.message = `Cleared scene cell ${deletedCell.col}, ${deletedCell.row}.`;
+        state.session.message = deleted.count > 1
+          ? `Cleared ${deleted.count} selected scene cells.`
+          : `Cleared scene cell ${deleted.primaryCell?.col ?? 0}, ${deleted.primaryCell?.row ?? 0}.`;
         renderAll();
         return;
       }
@@ -1764,56 +1915,96 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     }
 
     if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.code === "KeyC") {
-      if (state.session.activeWorkspaceMode !== "tilesheet") {
-        return;
-      }
+      if (state.session.activeWorkspaceMode === "scene") {
+        const clipboard = state.session.sourceSelection
+          ? copySourceSelectionToSceneClipboard(state)
+          : copySelectedSceneCells(state);
 
-      const clipboard = copySelectedOutputTiles(state);
+        if (!clipboard) {
+          return;
+        }
 
-      if (!clipboard) {
-        return;
-      }
-
-      event.preventDefault();
-      state.session.outputTileClipboard = clipboard;
-      state.session.message = clipboard.tiles.length > 1
-        ? `Copied ${clipboard.tiles.length} tiles from the working tilesheet.`
-        : "Copied 1 tile from the working tilesheet.";
-      renderAll();
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.code === "KeyV") {
-      if (state.session.activeWorkspaceMode !== "tilesheet" || !state.session.outputTileClipboard) {
-        return;
-      }
-
-      const target = state.session.hoveredOutputTile
-        ?? (() => {
-          const tile = getSelectedOutputTile(state);
-          return tile ? { col: tile.destCol, row: tile.destRow } : null;
-        })();
-
-      if (!target) {
-        return;
-      }
-
-      event.preventDefault();
-      recordHistory();
-      const pastedTiles = pasteOutputTileClipboard(state, state.session.outputTileClipboard, target.col, target.row);
-
-      if (!pastedTiles || pastedTiles.length < 1) {
-        undoStack.pop();
-        state.session.message = "Clipboard paste did not fit inside the output grid.";
+        event.preventDefault();
+        state.session.sceneClipboard = clipboard;
+        state.session.message = `Copied a ${clipboard.width} x ${clipboard.height} scene patch.`;
         renderAll();
         return;
       }
 
-      bumpRenderRevision();
-      state.session.message = pastedTiles.length > 1
-        ? `Pasted ${pastedTiles.length} tiles at ${target.col}, ${target.row}.`
-        : `Pasted tile at ${target.col}, ${target.row}.`;
-      renderAll();
+      if (state.session.activeWorkspaceMode === "tilesheet") {
+        const clipboard = copySelectedOutputTiles(state);
+
+        if (!clipboard) {
+          return;
+        }
+
+        event.preventDefault();
+        state.session.outputTileClipboard = clipboard;
+        state.session.message = clipboard.tiles.length > 1
+          ? `Copied ${clipboard.tiles.length} tiles from the working tilesheet.`
+          : "Copied 1 tile from the working tilesheet.";
+        renderAll();
+        return;
+      }
+    }
+
+    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.code === "KeyV") {
+      if (state.session.activeWorkspaceMode === "scene") {
+        if (!state.session.sceneClipboard) {
+          return;
+        }
+
+        const target = state.session.hoveredOutputTile ?? state.session.selectedSceneCell;
+
+        if (!target) {
+          return;
+        }
+
+        event.preventDefault();
+        recordHistory();
+        const pasted = pasteSceneClipboard(state, state.session.sceneClipboard, target.col, target.row);
+
+        if (pasted < 1) {
+          undoStack.pop();
+          state.session.message = "Scene paste did not fit inside the scene grid.";
+          renderAll();
+          return;
+        }
+
+        bumpRenderRevision();
+        state.session.message = `Pasted ${pasted} scene cell${pasted === 1 ? "" : "s"} at ${target.col}, ${target.row}.`;
+        renderAll();
+        return;
+      }
+
+      if (state.session.activeWorkspaceMode === "tilesheet" && state.session.outputTileClipboard) {
+        const target = state.session.hoveredOutputTile
+          ?? (() => {
+            const tile = getSelectedOutputTile(state);
+            return tile ? { col: tile.destCol, row: tile.destRow } : null;
+          })();
+
+        if (!target) {
+          return;
+        }
+
+        event.preventDefault();
+        recordHistory();
+        const pastedTiles = pasteOutputTileClipboard(state, state.session.outputTileClipboard, target.col, target.row);
+
+        if (!pastedTiles || pastedTiles.length < 1) {
+          undoStack.pop();
+          state.session.message = "Clipboard paste did not fit inside the output grid.";
+          renderAll();
+          return;
+        }
+
+        bumpRenderRevision();
+        state.session.message = pastedTiles.length > 1
+          ? `Pasted ${pastedTiles.length} tiles at ${target.col}, ${target.row}.`
+          : `Pasted tile at ${target.col}, ${target.row}.`;
+        renderAll();
+      }
     }
   }
 
@@ -1884,6 +2075,7 @@ function createHistoryEntry(state: ProjectState): HistoryEntry {
     selectedOutputTileIds: [...state.session.selectedOutputTileIds],
     selectedOutputCells: state.session.selectedOutputCells.map((cell) => ({ ...cell })),
     selectedSceneCell: state.session.selectedSceneCell ? { ...state.session.selectedSceneCell } : null,
+    selectedSceneCells: state.session.selectedSceneCells.map((cell) => ({ ...cell })),
     activeSceneLayerId: state.session.activeSceneLayerId,
   };
 }
@@ -1894,6 +2086,7 @@ function restoreHistoryEntry(state: ProjectState, entry: HistoryEntry): void {
   state.session.selectedOutputTileIds = [...entry.selectedOutputTileIds];
   state.session.selectedOutputCells = entry.selectedOutputCells.map((cell) => ({ ...cell }));
   state.session.selectedSceneCell = entry.selectedSceneCell ? { ...entry.selectedSceneCell } : null;
+  state.session.selectedSceneCells = entry.selectedSceneCells.map((cell) => ({ ...cell }));
   state.session.activeSceneLayerId = entry.activeSceneLayerId;
   normalizeProjectTilesToGrid(state);
 }
@@ -2762,6 +2955,7 @@ async function loadProjectIntoState(
   state.session.sceneFileHandle = null;
   state.session.activeSceneLayerId = project.scene?.layers[0]?.id ?? null;
   state.session.selectedSceneCell = null;
+  state.session.selectedSceneCells = [];
   syncSceneTilesetSourceToDefault(state);
 
   const resolutionMessages: string[] = [];
@@ -2826,6 +3020,7 @@ async function loadProjectIntoState(
       state.project.sceneFile = project.sceneFile;
       state.session.sceneFileName = getDisplayFileName(project.sceneFile);
       state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+      state.session.selectedSceneCells = [];
       resolutionMessages.push(`Scene resolved from ${project.sceneFile}.`);
     } catch {
       state.project.scene = null;
@@ -2836,6 +3031,7 @@ async function loadProjectIntoState(
     state.project.scene = null;
     state.session.sceneFileName = null;
     state.session.activeSceneLayerId = null;
+    state.session.selectedSceneCells = [];
   }
 
   state.session.message = `${messagePrefix} ${resolutionMessages.join(" ")}`.trim();
@@ -2913,6 +3109,7 @@ async function tryResolveProjectAssetsFromDirectory(
           state.session.sceneFileName = getDisplayFileName(unresolved.sceneFileRef);
           state.session.sceneFileHandle = null;
           state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+          state.session.selectedSceneCells = [];
           resolutionMessages.push(`Scene linked from project folder (${unresolved.sceneFileRef}).`);
         } else {
           resolutionMessages.push(`Scene "${unresolved.sceneFileRef}" was not found in the selected project folder.`);
