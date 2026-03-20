@@ -52,21 +52,61 @@ export function getSeamRepairSettings(state: ProjectState): SeamRepairSettings {
 }
 
 export function getSeamRepairPair(state: ProjectState): SeamRepairPair | null {
+  return getSeamRepairPairs(state)[0] ?? null;
+}
+
+export function getSeamRepairPairs(state: ProjectState): SeamRepairPair[] {
   const primary = state.project.tiles.find((tile) => tile.id === state.session.selectedOutputTileId)
     ?? (state.session.selectedOutputTileIds.length > 0
       ? state.project.tiles.find((tile) => tile.id === state.session.selectedOutputTileIds[0]) ?? null
       : null);
 
   if (!primary) {
-    return null;
+    return [];
   }
 
   const delta = getDirectionDelta(state.session.seamRepairDirection);
-  const neighbor = state.project.tiles.find((tile) =>
-    tile.destCol === primary.destCol + delta.col && tile.destRow === primary.destRow + delta.row,
-  ) ?? null;
+  const selectedIds = new Set(
+    state.session.selectedOutputTileIds.length > 0
+      ? state.session.selectedOutputTileIds
+      : state.session.selectedOutputTileId !== null
+        ? [state.session.selectedOutputTileId]
+        : [],
+  );
+  const selectedTiles = state.project.tiles.filter((tile) => selectedIds.has(tile.id));
 
-  return neighbor ? { primary, neighbor } : null;
+  if (selectedTiles.length <= 1) {
+    const neighbor = state.project.tiles.find((tile) =>
+      tile.destCol === primary.destCol + delta.col && tile.destRow === primary.destRow + delta.row,
+    ) ?? null;
+
+    return neighbor ? [{ primary, neighbor }] : [];
+  }
+
+  const seenPairs = new Set<string>();
+
+  return selectedTiles
+    .slice()
+    .sort((left, right) => left.destRow - right.destRow || left.destCol - right.destCol || left.id - right.id)
+    .map((tile) => ({
+      primary: tile,
+      neighbor: state.project.tiles.find((candidate) =>
+        candidate.destCol === tile.destCol + delta.col && candidate.destRow === tile.destRow + delta.row,
+      ) ?? null,
+    }))
+    .filter((pair): pair is SeamRepairPair => pair.neighbor !== null)
+    .filter((pair) => {
+      const key = pair.primary.id < pair.neighbor.id
+        ? `${pair.primary.id}:${pair.neighbor.id}`
+        : `${pair.neighbor.id}:${pair.primary.id}`;
+
+      if (seenPairs.has(key)) {
+        return false;
+      }
+
+      seenPairs.add(key);
+      return true;
+    });
 }
 
 export function repairSeamPair(

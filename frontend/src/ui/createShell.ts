@@ -1784,7 +1784,9 @@ function describeSeamRepair(
   state: ProjectState,
 ): string {
   if (!seamPair) {
-    return "Select a tile with an adjacent neighbor in the chosen direction to preview and repair that seam.";
+    return state.session.selectedOutputTileIds.length > 1
+      ? "Select tiles with adjacent neighbors in the chosen direction to preview and repair all seams across the selection."
+      : "Select a tile with an adjacent neighbor in the chosen direction to preview and repair that seam.";
   }
 
   const directionLabel = state.session.seamRepairDirection;

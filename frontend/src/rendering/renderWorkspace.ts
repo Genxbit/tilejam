@@ -1,5 +1,5 @@
 import type { ProjectState } from "../types/project";
-import { getSeamRepairPair, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
+import { getSeamRepairPairs, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
 import { getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
 import { getActiveSceneLayer, getSceneCellGid } from "../systems/sceneSystem";
 import { drawTileIntoRect, renderTileCanvas } from "../systems/tileRenderSystem";
@@ -429,34 +429,43 @@ function drawSeamRepairPreview(
     return;
   }
 
-  const seamPair = getSeamRepairPair(state);
+  const seamPairs = getSeamRepairPairs(state);
 
-  if (!seamPair) {
+  if (seamPairs.length < 1) {
     return;
   }
 
-  const primaryImage = getSourceImageForRef(state, seamPair.primary.sourceImageRef) ?? state.sourceImageAsset.image;
-  const neighborImage = getSourceImageForRef(state, seamPair.neighbor.sourceImageRef) ?? state.sourceImageAsset.image;
+  const previewCanvases = new Map<number, HTMLCanvasElement>();
 
-  if (!primaryImage || !neighborImage) {
-    return;
+  for (const seamPair of seamPairs) {
+    const primaryCanvas = previewCanvases.get(seamPair.primary.id)
+      ?? getRenderedPreviewTileCanvas(state, seamPair.primary);
+    const neighborCanvas = previewCanvases.get(seamPair.neighbor.id)
+      ?? getRenderedPreviewTileCanvas(state, seamPair.neighbor);
+
+    if (!primaryCanvas || !neighborCanvas) {
+      continue;
+    }
+
+    const repaired = repairSeamPair(primaryCanvas, neighborCanvas, getSeamRepairSettings(state));
+
+    if (!repaired) {
+      continue;
+    }
+
+    previewCanvases.set(seamPair.primary.id, repaired.primaryCanvas);
+    previewCanvases.set(seamPair.neighbor.id, repaired.neighborCanvas);
   }
 
-  const primaryCanvas = renderTileCanvas(primaryImage, seamPair.primary, state.project.tileWidth, state.project.tileHeight);
-  const neighborCanvas = renderTileCanvas(neighborImage, seamPair.neighbor, state.project.tileWidth, state.project.tileHeight);
+  for (const tile of state.project.tiles) {
+    const previewCanvas = previewCanvases.get(tile.id);
 
-  if (!primaryCanvas || !neighborCanvas) {
-    return;
+    if (!previewCanvas) {
+      continue;
+    }
+
+    drawPreviewTileCanvas(context, viewport, tile.destCol, tile.destRow, previewCanvas);
   }
-
-  const repaired = repairSeamPair(primaryCanvas, neighborCanvas, getSeamRepairSettings(state));
-
-  if (!repaired) {
-    return;
-  }
-
-  drawPreviewTileCanvas(context, viewport, seamPair.primary.destCol, seamPair.primary.destRow, repaired.primaryCanvas);
-  drawPreviewTileCanvas(context, viewport, seamPair.neighbor.destCol, seamPair.neighbor.destRow, repaired.neighborCanvas);
 }
 
 function drawTilesheetPalette(
@@ -489,6 +498,19 @@ function drawPreviewTileCanvas(
   context.imageSmoothingEnabled = false;
   context.drawImage(tileCanvas, cellRect.x, cellRect.y, cellRect.width, cellRect.height);
   context.restore();
+}
+
+function getRenderedPreviewTileCanvas(
+  state: ProjectState,
+  tile: ProjectState["project"]["tiles"][number],
+): HTMLCanvasElement | null {
+  const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+  if (!image) {
+    return null;
+  }
+
+  return renderTileCanvas(image, tile, state.project.tileWidth, state.project.tileHeight);
 }
 
 function drawSceneTiles(

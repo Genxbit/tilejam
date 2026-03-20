@@ -35,7 +35,7 @@ import {
   loadSourceImageFromUrl,
   getSourceImageForRef,
 } from "../systems/sourceImageSystem";
-import { getSeamRepairPair, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
+import { getSeamRepairPairs, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
 import { renderTileCanvas } from "../systems/tileRenderSystem";
 import { getOutputGridMetrics, getProjectPixelSize, normalizeProjectTilesToGrid, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
 import {
@@ -889,54 +889,64 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     },
     onApplySeamRepair: async () => {
       recordHistory();
-      const seamPair = getSeamRepairPair(state);
+      const seamPairs = getSeamRepairPairs(state);
 
-      if (!seamPair) {
+      if (seamPairs.length < 1) {
         undoStack.pop();
-        state.session.message = "Select a tile with an adjacent neighbor in the chosen direction before applying seam repair.";
+        state.session.message = "Select tiles with at least one adjacent neighbor in the chosen direction before applying seam repair.";
         renderAll();
         return;
       }
 
-      const primaryImage = getSourceImageForRef(state, seamPair.primary.sourceImageRef) ?? state.sourceImageAsset.image;
-      const neighborImage = getSourceImageForRef(state, seamPair.neighbor.sourceImageRef) ?? state.sourceImageAsset.image;
-
-      if (!primaryImage || !neighborImage) {
-        undoStack.pop();
-        state.session.message = "Could not apply seam repair because one of the seam tile images is unavailable.";
-        renderAll();
-        return;
-      }
-
-      const primaryCanvas = renderTileCanvas(primaryImage, seamPair.primary, state.project.tileWidth, state.project.tileHeight);
-      const neighborCanvas = renderTileCanvas(neighborImage, seamPair.neighbor, state.project.tileWidth, state.project.tileHeight);
-
-      if (!primaryCanvas || !neighborCanvas) {
-        undoStack.pop();
-        state.session.message = "Could not render the selected seam tiles for repair.";
-        renderAll();
-        return;
-      }
-
-      const repaired = repairSeamPair(primaryCanvas, neighborCanvas, getSeamRepairSettings(state));
-
-      if (!repaired) {
-        undoStack.pop();
-        state.session.message = "Seam repair preview could not be generated for the selected seam.";
-        renderAll();
-        return;
-      }
-
+      const repairedCanvases = new Map<number, HTMLCanvasElement>();
+      let repairedPairCount = 0;
       const timestamp = Date.now();
-      const primaryRef = `runtime:seam-repair:${timestamp}:${seamPair.primary.id}:${Math.random().toString(36).slice(2, 8)}`;
-      const neighborRef = `runtime:seam-repair:${timestamp}:${seamPair.neighbor.id}:${Math.random().toString(36).slice(2, 8)}`;
-      await loadImageAssetFromUrl(state, repaired.primaryCanvas.toDataURL("image/png"), primaryRef);
-      await loadImageAssetFromUrl(state, repaired.neighborCanvas.toDataURL("image/png"), neighborRef);
-      resetTileToBakedImage(seamPair.primary, primaryRef, state.project.tileWidth, state.project.tileHeight);
-      resetTileToBakedImage(seamPair.neighbor, neighborRef, state.project.tileWidth, state.project.tileHeight);
+
+      for (const seamPair of seamPairs) {
+        const primaryCanvas = repairedCanvases.get(seamPair.primary.id)
+          ?? getRenderedSeamRepairTileCanvas(state, seamPair.primary);
+        const neighborCanvas = repairedCanvases.get(seamPair.neighbor.id)
+          ?? getRenderedSeamRepairTileCanvas(state, seamPair.neighbor);
+
+        if (!primaryCanvas || !neighborCanvas) {
+          continue;
+        }
+
+        const repaired = repairSeamPair(primaryCanvas, neighborCanvas, getSeamRepairSettings(state));
+
+        if (!repaired) {
+          continue;
+        }
+
+        repairedCanvases.set(seamPair.primary.id, repaired.primaryCanvas);
+        repairedCanvases.set(seamPair.neighbor.id, repaired.neighborCanvas);
+        repairedPairCount += 1;
+      }
+
+      if (repairedPairCount < 1 || repairedCanvases.size < 1) {
+        undoStack.pop();
+        state.session.message = "Seam repair preview could not be generated for the selected seam set.";
+        renderAll();
+        return;
+      }
+
+      for (const [tileId, canvas] of repairedCanvases) {
+        const tile = state.project.tiles.find((entry) => entry.id === tileId);
+
+        if (!tile) {
+          continue;
+        }
+
+        const ref = `runtime:seam-repair:${timestamp}:${tile.id}:${Math.random().toString(36).slice(2, 8)}`;
+        await loadImageAssetFromUrl(state, canvas.toDataURL("image/png"), ref);
+        resetTileToBakedImage(tile, ref, state.project.tileWidth, state.project.tileHeight);
+      }
+
       state.session.seamRepairPreview = false;
       bumpRenderRevision();
-      state.session.message = `Applied seam repair between tile ${seamPair.primary.id} and tile ${seamPair.neighbor.id}.`;
+      state.session.message = repairedPairCount > 1
+        ? `Applied seam repair across ${repairedPairCount} seam pairs in the selection.`
+        : `Applied seam repair across ${repairedPairCount} seam pair.`;
       renderAll();
     },
     onClearSelectedTile: () => {
@@ -1815,6 +1825,19 @@ function resetTileToBakedImage(tile: TilePlacement, ref: string, tileWidth: numb
   tile.tintColor = null;
   tile.filterMode = "nearest";
   tile.pixelSnap = true;
+}
+
+function getRenderedSeamRepairTileCanvas(
+  state: ProjectState,
+  tile: TilePlacement,
+): HTMLCanvasElement | null {
+  const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+  if (!image) {
+    return null;
+  }
+
+  return renderTileCanvas(image, tile, state.project.tileWidth, state.project.tileHeight);
 }
 
 type RgbaColor = {

@@ -430,6 +430,7 @@ Add seam-aware tile edge harmonization tools for adjacent output tiles.
 * support seam strip width control and directional falloff from the seam inward
 * support choosing whether the seam should match toward the selected tile, the neighbor tile, or a balanced midpoint
 * support repair strength control
+* support seam preview and repair across all touching seam pairs inside a selected tile group
 * preserve sharp edges and pixel structure without blur or global smoothing
 * support palette-aware or quantized correction so repaired pixels stay crisp
 * support repair modes for full color, luminance-only, or chroma-only adjustment
@@ -446,6 +447,7 @@ Add seam-aware tile edge harmonization tools for adjacent output tiles.
 * only the seam region or a small edge strip is modified
 * seam strip width and directional falloff behave predictably
 * reference-side matching and repair strength behave predictably
+* multi-selection seam repair processes all touching seam pairs in the chosen direction deterministically
 * the result preserves pixel-art sharpness and does not smear detail
 * palette-aware or quantized correction keeps repaired pixels crisp
 * full color, luminance-only, and chroma-only modes behave distinctly and predictably
