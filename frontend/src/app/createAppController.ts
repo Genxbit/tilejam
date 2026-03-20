@@ -56,6 +56,7 @@ type HistoryEntry = {
   project: ProjectState["project"];
   selectedOutputTileId: number | null;
   selectedOutputTileIds: number[];
+  selectedOutputCells: ProjectState["session"]["selectedOutputCells"];
   selectedSceneCell: ProjectState["session"]["selectedSceneCell"];
   activeSceneLayerId: number | null;
 };
@@ -296,6 +297,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.workingImageFileHandle = null;
       state.session.selectedOutputTileId = null;
       state.session.selectedOutputTileIds = [];
+      state.session.selectedOutputCells = [];
       state.session.hoveredOutputTile = null;
       clearSelectionState(state);
       state.session.outputCamera = { ...freshState.session.outputCamera };
@@ -1123,6 +1125,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.project.tiles = [];
       state.session.selectedOutputTileId = null;
       state.session.selectedOutputTileIds = [];
+      state.session.selectedOutputCells = [];
       state.session.hoveredOutputTile = null;
       state.project.workingImage = null;
       state.session.workingImageFileName = null;
@@ -1831,6 +1834,7 @@ function createHistoryEntry(state: ProjectState): HistoryEntry {
     project: JSON.parse(JSON.stringify(state.project)) as ProjectState["project"],
     selectedOutputTileId: state.session.selectedOutputTileId,
     selectedOutputTileIds: [...state.session.selectedOutputTileIds],
+    selectedOutputCells: state.session.selectedOutputCells.map((cell) => ({ ...cell })),
     selectedSceneCell: state.session.selectedSceneCell ? { ...state.session.selectedSceneCell } : null,
     activeSceneLayerId: state.session.activeSceneLayerId,
   };
@@ -1840,6 +1844,7 @@ function restoreHistoryEntry(state: ProjectState, entry: HistoryEntry): void {
   state.project = JSON.parse(JSON.stringify(entry.project)) as ProjectState["project"];
   state.session.selectedOutputTileId = entry.selectedOutputTileId;
   state.session.selectedOutputTileIds = [...entry.selectedOutputTileIds];
+  state.session.selectedOutputCells = entry.selectedOutputCells.map((cell) => ({ ...cell }));
   state.session.selectedSceneCell = entry.selectedSceneCell ? { ...entry.selectedSceneCell } : null;
   state.session.activeSceneLayerId = entry.activeSceneLayerId;
   normalizeProjectTilesToGrid(state);
@@ -1861,10 +1866,13 @@ async function bakeSelectedTilesGroupShift(
     return 0;
   }
 
-  const minCol = Math.min(...selectedTiles.map((tile) => tile.destCol));
-  const maxCol = Math.max(...selectedTiles.map((tile) => tile.destCol));
-  const minRow = Math.min(...selectedTiles.map((tile) => tile.destRow));
-  const maxRow = Math.max(...selectedTiles.map((tile) => tile.destRow));
+  const selectionBounds = getSelectedOutputCellBounds(state) ?? {
+    minCol: Math.min(...selectedTiles.map((tile) => tile.destCol)),
+    maxCol: Math.max(...selectedTiles.map((tile) => tile.destCol)),
+    minRow: Math.min(...selectedTiles.map((tile) => tile.destRow)),
+    maxRow: Math.max(...selectedTiles.map((tile) => tile.destRow)),
+  };
+  const { minCol, maxCol, minRow, maxRow } = selectionBounds;
   const columns = maxCol - minCol + 1;
   const rows = maxRow - minRow + 1;
   const groupCanvas = document.createElement("canvas");
@@ -1956,10 +1964,13 @@ async function bakeSelectedTilesGroupFlip(
     return 0;
   }
 
-  const minCol = Math.min(...selectedTiles.map((tile) => tile.destCol));
-  const maxCol = Math.max(...selectedTiles.map((tile) => tile.destCol));
-  const minRow = Math.min(...selectedTiles.map((tile) => tile.destRow));
-  const maxRow = Math.max(...selectedTiles.map((tile) => tile.destRow));
+  const selectionBounds = getSelectedOutputCellBounds(state) ?? {
+    minCol: Math.min(...selectedTiles.map((tile) => tile.destCol)),
+    maxCol: Math.max(...selectedTiles.map((tile) => tile.destCol)),
+    minRow: Math.min(...selectedTiles.map((tile) => tile.destRow)),
+    maxRow: Math.max(...selectedTiles.map((tile) => tile.destRow)),
+  };
+  const { minCol, maxCol, minRow, maxRow } = selectionBounds;
   const columns = maxCol - minCol + 1;
   const rows = maxRow - minRow + 1;
   const groupCanvas = document.createElement("canvas");
@@ -2058,10 +2069,13 @@ async function bakeSelectedTilesGroupScale(
   const tileWidth = state.project.tileWidth;
   const tileHeight = state.project.tileHeight;
   const outputGrid = getOutputGridMetrics(state.project);
-  const minCol = Math.min(...selectedTiles.map((tile) => tile.destCol));
-  const maxCol = Math.max(...selectedTiles.map((tile) => tile.destCol));
-  const minRow = Math.min(...selectedTiles.map((tile) => tile.destRow));
-  const maxRow = Math.max(...selectedTiles.map((tile) => tile.destRow));
+  const selectionBounds = getSelectedOutputCellBounds(state) ?? {
+    minCol: Math.min(...selectedTiles.map((tile) => tile.destCol)),
+    maxCol: Math.max(...selectedTiles.map((tile) => tile.destCol)),
+    minRow: Math.min(...selectedTiles.map((tile) => tile.destRow)),
+    maxRow: Math.max(...selectedTiles.map((tile) => tile.destRow)),
+  };
+  const { minCol, maxCol, minRow, maxRow } = selectionBounds;
   const groupColumns = maxCol - minCol + 1;
   const groupRows = maxRow - minRow + 1;
   const groupCanvas = document.createElement("canvas");
@@ -2323,6 +2337,23 @@ function createBakedOutputTile(destCol: number, destRow: number, tileWidth: numb
     name: `tile_${destCol}_${destRow}`,
     tags: [],
     collision: "none",
+  };
+}
+
+function getSelectedOutputCellBounds(
+  state: ProjectState,
+): { minCol: number; maxCol: number; minRow: number; maxRow: number } | null {
+  const cells = state.session.selectedOutputCells;
+
+  if (cells.length < 1) {
+    return null;
+  }
+
+  return {
+    minCol: Math.min(...cells.map((cell) => cell.col)),
+    maxCol: Math.max(...cells.map((cell) => cell.col)),
+    minRow: Math.min(...cells.map((cell) => cell.row)),
+    maxRow: Math.max(...cells.map((cell) => cell.row)),
   };
 }
 

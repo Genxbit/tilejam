@@ -40,6 +40,7 @@ type EditableTileFields = Pick<
 
 export function selectOutputTileAtCell(state: ProjectState, col: number, row: number): TilePlacement | null {
   const tile = state.project.tiles.find((entry) => entry.destCol === col && entry.destRow === row) ?? null;
+  state.session.selectedOutputCells = [{ col, row }];
   state.session.selectedOutputTileId = tile?.id ?? null;
   state.session.selectedOutputTileIds = tile ? [tile.id] : [];
   return tile;
@@ -47,6 +48,13 @@ export function selectOutputTileAtCell(state: ProjectState, col: number, row: nu
 
 export function toggleOutputTileSelectionAtCell(state: ProjectState, col: number, row: number): TilePlacement | null {
   const tile = state.project.tiles.find((entry) => entry.destCol === col && entry.destRow === row) ?? null;
+  const existingCellIndex = state.session.selectedOutputCells.findIndex((cell) => cell.col === col && cell.row === row);
+
+  if (existingCellIndex >= 0) {
+    state.session.selectedOutputCells = state.session.selectedOutputCells.filter((_, index) => index !== existingCellIndex);
+  } else {
+    state.session.selectedOutputCells = [...state.session.selectedOutputCells, { col, row }];
+  }
 
   if (!tile) {
     return null;
@@ -74,6 +82,14 @@ export function selectOutputTileRectangle(
   const endCol = Math.max(anchorCol, currentCol);
   const startRow = Math.min(anchorRow, currentRow);
   const endRow = Math.max(anchorRow, currentRow);
+  const selectedCells = [];
+
+  for (let row = startRow; row <= endRow; row += 1) {
+    for (let col = startCol; col <= endCol; col += 1) {
+      selectedCells.push({ col, row });
+    }
+  }
+
   const selectedTiles = state.project.tiles.filter((tile) =>
     tile.destCol >= startCol
     && tile.destCol <= endCol
@@ -81,6 +97,7 @@ export function selectOutputTileRectangle(
     && tile.destRow <= endRow,
   );
 
+  state.session.selectedOutputCells = selectedCells;
   state.session.selectedOutputTileIds = selectedTiles.map((tile) => tile.id);
   state.session.selectedOutputTileId = selectedTiles[0]?.id ?? null;
 
@@ -88,21 +105,23 @@ export function selectOutputTileRectangle(
 }
 
 export function clearSelectedOutputTile(state: ProjectState): void {
+  state.session.selectedOutputCells = [];
   state.session.selectedOutputTileId = null;
   state.session.selectedOutputTileIds = [];
 }
 
 export function copySelectedOutputTiles(state: ProjectState): OutputTileClipboard | null {
   const selectedTiles = getSelectedOutputTiles(state);
+  const selectedCells = getSelectedOutputCells(state);
 
-  if (selectedTiles.length < 1) {
+  if (selectedTiles.length < 1 && selectedCells.length < 1) {
     return null;
   }
 
-  const minCol = Math.min(...selectedTiles.map((tile) => tile.destCol));
-  const minRow = Math.min(...selectedTiles.map((tile) => tile.destRow));
-  const maxCol = Math.max(...selectedTiles.map((tile) => tile.destCol));
-  const maxRow = Math.max(...selectedTiles.map((tile) => tile.destRow));
+  const minCol = Math.min(...selectedCells.map((cell) => cell.col));
+  const minRow = Math.min(...selectedCells.map((cell) => cell.row));
+  const maxCol = Math.max(...selectedCells.map((cell) => cell.col));
+  const maxRow = Math.max(...selectedCells.map((cell) => cell.row));
 
   return {
     width: maxCol - minCol + 1,
@@ -161,25 +180,40 @@ export function pasteOutputTileClipboard(
 
   state.session.selectedOutputTileIds = pastedTiles.map((tile) => tile.id);
   state.session.selectedOutputTileId = pastedTiles[0]?.id ?? null;
+  state.session.selectedOutputCells = pastedTiles.map((tile) => ({ col: tile.destCol, row: tile.destRow }));
 
   return pastedTiles;
 }
 
 export function getSelectedOutputTile(state: ProjectState): TilePlacement | null {
   const primaryId = state.session.selectedOutputTileId ?? state.session.selectedOutputTileIds[0] ?? null;
-  return primaryId === null ? null : state.project.tiles.find((tile) => tile.id === primaryId) ?? null;
+
+  if (primaryId !== null) {
+    return state.project.tiles.find((tile) => tile.id === primaryId) ?? null;
+  }
+
+  const primaryCell = state.session.selectedOutputCells[0] ?? null;
+  return primaryCell
+    ? state.project.tiles.find((tile) => tile.destCol === primaryCell.col && tile.destRow === primaryCell.row) ?? null
+    : null;
 }
 
 export function getSelectedOutputTiles(state: ProjectState): TilePlacement[] {
-  const selectedIds = new Set(
-    state.session.selectedOutputTileIds.length > 0
-      ? state.session.selectedOutputTileIds
-      : state.session.selectedOutputTileId !== null
-        ? [state.session.selectedOutputTileId]
-        : [],
-  );
+  const selectedIds = new Set(state.session.selectedOutputTileIds);
+  const selectedCellKeys = new Set(state.session.selectedOutputCells.map((cell) => `${cell.col}:${cell.row}`));
 
-  return state.project.tiles.filter((tile) => selectedIds.has(tile.id));
+  return state.project.tiles.filter((tile) =>
+    selectedIds.has(tile.id) || selectedCellKeys.has(`${tile.destCol}:${tile.destRow}`),
+  );
+}
+
+export function getSelectedOutputCells(state: ProjectState): ProjectState["session"]["selectedOutputCells"] {
+  if (state.session.selectedOutputCells.length > 0) {
+    return state.session.selectedOutputCells;
+  }
+
+  const tile = getSelectedOutputTile(state);
+  return tile ? [{ col: tile.destCol, row: tile.destRow }] : [];
 }
 
 export function updateSelectedOutputTile(state: ProjectState, patch: Partial<EditableTileFields>): TilePlacement | null {
@@ -432,6 +466,7 @@ export function deleteSelectedOutputTile(state: ProjectState): TilePlacement | n
 
   const selectedIds = new Set(selectedTiles.map((selectedTile) => selectedTile.id));
   state.project.tiles = state.project.tiles.filter((entry) => !selectedIds.has(entry.id));
+  state.session.selectedOutputCells = [];
   state.session.selectedOutputTileId = null;
   state.session.selectedOutputTileIds = [];
   reindexTiles(state);
@@ -467,6 +502,7 @@ export function moveTileToCell(state: ProjectState, tileId: number, destCol: num
   nextTile.destCol = clampedCol;
   nextTile.destRow = clampedRow;
   reindexTiles(state);
+  state.session.selectedOutputCells = [{ col: nextTile.destCol, row: nextTile.destRow }];
   state.session.selectedOutputTileId = nextTile.id;
   state.session.selectedOutputTileIds = [nextTile.id];
 

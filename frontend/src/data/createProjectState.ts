@@ -40,6 +40,7 @@ export function createProjectState(): ProjectState {
       hoveredOutputTile: null,
       selectedOutputTileId: null,
       selectedOutputTileIds: [],
+      selectedOutputCells: [],
       outputTileClipboard: null,
       groupScaleX: 1,
       groupScaleY: 1,

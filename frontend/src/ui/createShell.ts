@@ -1441,7 +1441,10 @@ export function createShell({
       syncSelectedTileEditor(
         nextSelectedTile,
         {
-          selectionCount: nextSelectedTiles.length,
+          selectionCount: nextState.session.selectedOutputCells.length > 0
+            ? nextState.session.selectedOutputCells.length
+            : nextSelectedTiles.length,
+          tileCount: nextSelectedTiles.length,
           summary: selectedTileSummary,
           copyButton: copyTileButton,
           pasteButton: pasteTileButton,
@@ -1660,6 +1663,7 @@ function syncSelectedTileEditor(
   tile: ReturnType<typeof getSelectedOutputTile>,
   controls: {
     selectionCount: number;
+    tileCount: number;
     summary: HTMLDivElement;
     copyButton: HTMLButtonElement;
     pasteButton: HTMLButtonElement;
@@ -1735,10 +1739,14 @@ function syncSelectedTileEditor(
   ];
 
   if (!tile) {
-    controls.summary.textContent = "No selection";
+    controls.summary.textContent = controls.selectionCount > 0
+      ? `${controls.selectionCount} cells selected · no placed tile in primary cell`
+      : "No selection";
     controls.copyButton.disabled = true;
     controls.clearButton.disabled = true;
-    controls.empty.textContent = "No output tile selected yet. Hold Shift and click to build a multi-selection.";
+    controls.empty.textContent = controls.selectionCount > 0
+      ? "The selected grid area includes no placed tile in the primary cell. Placed tiles inside the selection are still part of the selected patch."
+      : "No output tile selected yet. Hold Shift and click to build a multi-selection.";
     for (const input of inputs) {
       input.disabled = true;
     }
@@ -1746,7 +1754,7 @@ function syncSelectedTileEditor(
   }
 
   controls.summary.textContent = controls.selectionCount > 1
-    ? `${controls.selectionCount} tiles selected · primary ${tile.id} at ${tile.destCol}, ${tile.destRow}`
+    ? `${controls.selectionCount} cells selected · ${controls.tileCount} tiles populated · primary ${tile.id} at ${tile.destCol}, ${tile.destRow}`
     : `Tile ${tile.id} at ${tile.destCol}, ${tile.destRow}`;
   controls.copyButton.disabled = false;
   controls.pasteButton.disabled = false;

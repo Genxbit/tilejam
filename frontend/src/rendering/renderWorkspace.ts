@@ -1,6 +1,6 @@
 import type { ProjectState } from "../types/project";
 import { getSeamRepairPairs, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
-import { getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
+import { getSelectedOutputCells, getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
 import { getActiveSceneLayer, getSceneCellGid } from "../systems/sceneSystem";
 import { drawTileIntoRect, renderTileCanvas } from "../systems/tileRenderSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
@@ -619,20 +619,28 @@ function drawSelectedOutputTile(
   state: ProjectState,
   viewport: OutputViewport,
 ): void {
+  const selectedCells = getSelectedOutputCells(state);
   const selectedTiles = getSelectedOutputTiles(state);
   const selectedTile = getSelectedOutputTile(state);
 
-  if (selectedTiles.length < 1) {
+  if (selectedCells.length < 1) {
     return;
   }
 
-  for (const tile of selectedTiles) {
-    const x = viewport.contentX + tile.destCol * viewport.cellWidth;
-    const y = viewport.contentY + tile.destRow * viewport.cellHeight;
+  const selectedIds = new Set(selectedTiles.map((tile) => tile.id));
+
+  for (const cell of selectedCells) {
+    const tile = state.project.tiles.find((entry) => entry.destCol === cell.col && entry.destRow === cell.row) ?? null;
+    const x = viewport.contentX + cell.col * viewport.cellWidth;
+    const y = viewport.contentY + cell.row * viewport.cellHeight;
     context.fillStyle = SELECTED_TILE_FILL;
     context.fillRect(x, y, viewport.cellWidth, viewport.cellHeight);
-    context.strokeStyle = tile.id === selectedTile?.id ? SELECTED_TILE_STROKE : "rgba(119, 241, 178, 0.55)";
-    context.lineWidth = tile.id === selectedTile?.id ? 2 : 1.5;
+    context.strokeStyle = tile?.id === selectedTile?.id
+      ? SELECTED_TILE_STROKE
+      : selectedIds.has(tile?.id ?? -1)
+        ? "rgba(119, 241, 178, 0.55)"
+        : "rgba(119, 241, 178, 0.35)";
+    context.lineWidth = tile?.id === selectedTile?.id ? 2 : 1.5;
     context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
   }
 }

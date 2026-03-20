@@ -44,6 +44,7 @@ export type SessionState = {
   hoveredOutputTile: GridCoordinate | null;
   selectedOutputTileId: number | null;
   selectedOutputTileIds: number[];
+  selectedOutputCells: GridCoordinate[];
   outputTileClipboard: OutputTileClipboard | null;
   groupScaleX: number;
   groupScaleY: number;
