@@ -97,6 +97,7 @@ type ShellOptions = {
   onApplySeamRepair: () => Promise<void>;
   onCopySelectedTiles: () => void;
   onPasteSelectedTiles: () => void;
+  onMoveSelectedTiles: (deltaCol: number, deltaRow: number) => void;
   onClearSelectedTile: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -213,6 +214,7 @@ export function createShell({
   onApplySeamRepair,
   onCopySelectedTiles,
   onPasteSelectedTiles,
+  onMoveSelectedTiles,
   onClearSelectedTile,
   onUndo,
   onRedo,

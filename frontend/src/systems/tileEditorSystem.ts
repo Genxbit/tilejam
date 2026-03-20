@@ -257,14 +257,26 @@ export function updateSelectedOutputTile(state: ProjectState, patch: Partial<Edi
 
 export function moveSelectedOutputTileBy(state: ProjectState, deltaCol: number, deltaRow: number): TilePlacement | null {
   const tile = getSelectedOutputTile(state);
+  const selectedCells = getSelectedOutputCells(state);
   const selectedTiles = getSelectedOutputTiles(state);
 
-  if (!tile || selectedTiles.length < 1) {
+  if (selectedCells.length < 1) {
     return null;
   }
 
-  if (selectedTiles.length > 1) {
-    const outputGrid = getOutputGridMetrics(state.project);
+  const outputGrid = getOutputGridMetrics(state.project);
+  const destinationsForCells = selectedCells.map((cell) => ({
+    col: cell.col + deltaCol,
+    row: cell.row + deltaRow,
+  }));
+
+  if (destinationsForCells.some(({ col, row }) =>
+    col < 0 || col >= outputGrid.columns || row < 0 || row >= outputGrid.rows,
+  )) {
+    return null;
+  }
+
+  if (selectedTiles.length > 1 || selectedCells.length > 1) {
     const destinations = selectedTiles.map((selectedTile) => ({
       tile: selectedTile,
       destCol: selectedTile.destCol + deltaCol,
@@ -291,8 +303,26 @@ export function moveSelectedOutputTileBy(state: ProjectState, deltaCol: number, 
       destination.tile.destRow = destination.destRow;
     }
 
+    state.session.selectedOutputCells = destinationsForCells;
     reindexTiles(state);
-    return getSelectedOutputTile(state);
+    const primaryCell = state.session.selectedOutputCells[0] ?? null;
+    const primaryTile = primaryCell
+      ? state.project.tiles.find((entry) => entry.destCol === primaryCell.col && entry.destRow === primaryCell.row) ?? null
+      : null;
+    state.session.selectedOutputTileId = primaryTile?.id ?? state.project.tiles.find((entry) =>
+      state.session.selectedOutputCells.some((cell) => cell.col === entry.destCol && cell.row === entry.destRow),
+    )?.id ?? null;
+    state.session.selectedOutputTileIds = state.project.tiles
+      .filter((entry) => state.session.selectedOutputCells.some((cell) => cell.col === entry.destCol && cell.row === entry.destRow))
+      .map((entry) => entry.id);
+    return primaryTile ?? getSelectedOutputTile(state);
+  }
+
+  if (!tile) {
+    state.session.selectedOutputCells = destinationsForCells;
+    state.session.selectedOutputTileId = null;
+    state.session.selectedOutputTileIds = [];
+    return null;
   }
 
   return moveTileToCell(state, tile.id, tile.destCol + deltaCol, tile.destRow + deltaRow);

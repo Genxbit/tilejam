@@ -24,7 +24,7 @@ import {
   trimSelectedOutputTileTransparentBounds,
   updateSelectedOutputTile,
 } from "../systems/tileEditorSystem";
-import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
+import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, copySourceSelectionToOutputClipboard, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
 import { addSceneLayer, clearSceneLayers, copySelectedSceneCells, copySourceSelectionToSceneClipboard, deleteSelectedSceneCells, ensureScene, getSelectedSceneCells, moveActiveSceneLayerBy, moveSelectedSceneCellBy, moveSelectedSceneCellsTo, pasteSceneClipboard, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneCellRectangle, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import {
@@ -1221,6 +1221,36 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         : `Pasted tile at ${target.col}, ${target.row}.`;
       renderAll();
     },
+    onMoveSelectedTiles: (deltaCol, deltaRow) => {
+      if (state.session.activeWorkspaceMode !== "tilesheet") {
+        return;
+      }
+
+      const selectedTile = getSelectedOutputTile(state);
+
+      if (!selectedTile) {
+        state.session.message = "Select tiles before moving them.";
+        renderAll();
+        return;
+      }
+
+      recordHistory();
+      const movedTile = moveSelectedOutputTileBy(state, deltaCol, deltaRow);
+
+      if (!movedTile) {
+        undoStack.pop();
+        state.session.message = "Selected tiles could not move in that direction.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      const selectedCount = state.session.selectedOutputCells.length || state.session.selectedOutputTileIds.length || 1;
+      state.session.message = selectedCount > 1
+        ? `Moved ${selectedCount} selected tiles.`
+        : `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`;
+      renderAll();
+    },
     onClearSelectedTile: () => {
       recordHistory();
       const deletedTile = deleteSelectedOutputTile(state);
@@ -1469,7 +1499,12 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         return;
       }
 
-      const selectedTile = selectOutputTileAtCell(state, outputHit.col, outputHit.row);
+      const clickedInExistingSelection = state.session.selectedOutputCells.some(
+        (cell) => cell.col === outputHit.col && cell.row === outputHit.row,
+      );
+      const selectedTile = clickedInExistingSelection
+        ? getSelectedOutputTile(state)
+        : selectOutputTileAtCell(state, outputHit.col, outputHit.row);
       if (selectedTile) {
         activePointerId = event.pointerId;
         dragMode = "move-tile";
@@ -1576,6 +1611,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       const point = getCanvasPoint(shell.canvas, event);
       const layout = getWorkspaceLayout(shell.canvas.width, shell.canvas.height, state);
       const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
+      const selectedCellCount = state.session.selectedOutputCells.length;
       const shouldMove = outputHit && movingTileOrigin
         ? outputHit.col !== movingTileOrigin.col || outputHit.row !== movingTileOrigin.row
         : false;
@@ -1584,7 +1620,11 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         recordHistory();
       }
 
-      const movedTile = outputHit ? moveTileToCell(state, movingTileId, outputHit.col, outputHit.row) : null;
+      const movedTile = outputHit
+        ? selectedCellCount > 1 && movingTileOrigin
+          ? moveSelectedOutputTileBy(state, outputHit.col - movingTileOrigin.col, outputHit.row - movingTileOrigin.row)
+          : moveTileToCell(state, movingTileId, outputHit.col, outputHit.row)
+        : null;
       const moved = movedTile && movingTileOrigin
         ? movedTile.destCol !== movingTileOrigin.col || movedTile.destRow !== movingTileOrigin.row
         : false;
@@ -1601,7 +1641,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
       state.session.message = movedTile
         ? moved
-          ? `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`
+          ? selectedCellCount > 1
+            ? `Moved ${selectedCellCount} selected tiles.`
+            : `Moved tile ${movedTile.id} to ${movedTile.destCol}, ${movedTile.destRow}.`
           : `Selected tile ${movedTile.id} at ${movedTile.destCol}, ${movedTile.destRow}.`
         : "Tile move cancelled.";
       if (moved) {
@@ -1671,18 +1713,26 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       shell.canvas.releasePointerCapture(event.pointerId);
     }
 
-    if (selection && state.session.activeWorkspaceMode === "scene") {
-      const clipboard = copySourceSelectionToSceneClipboard(state);
+      if (selection) {
+        if (state.session.activeWorkspaceMode === "scene") {
+          const clipboard = copySourceSelectionToSceneClipboard(state);
 
-      if (clipboard) {
-        state.session.sceneClipboard = clipboard;
-      }
+          if (clipboard) {
+            state.session.sceneClipboard = clipboard;
+          }
+        } else {
+          const clipboard = copySourceSelectionToOutputClipboard(state, selection);
+
+          if (clipboard) {
+            state.session.outputTileClipboard = clipboard;
+          }
+        }
     }
 
     state.session.message = selection
       ? state.session.activeWorkspaceMode === "scene"
         ? `Selected ${selection.columns} x ${selection.rows} source tile${selection.columns * selection.rows === 1 ? "" : "s"} and copied them to the scene paste buffer.`
-        : `Selected ${selection.columns} x ${selection.rows} source tile${selection.columns * selection.rows === 1 ? "" : "s"}. Click the output grid to place them.`
+        : `Selected ${selection.columns} x ${selection.rows} source tile${selection.columns * selection.rows === 1 ? "" : "s"} and copied them to the tilesheet paste buffer.`
       : "Source selection cleared.";
     renderAll();
   }

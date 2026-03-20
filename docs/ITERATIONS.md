@@ -501,7 +501,45 @@ Add scene multi-selection, grouped move/delete, explicit copy/paste from source 
 
 ---
 
-## Ticket 15: Refactor grouped tile editing + tile editor UI
+## Ticket 15: Tilesheet and scene selection workflow alignment
+
+**Status**
+Completed
+
+**Goal**
+Align tilesheet and scene editing around explicit selection, clipboard, and move behavior.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Align the tilesheet editor with the newer scene workflow by making source selection feed the paste buffer, keeping panel controls focused on content edits, and making drag-based movement preserve grouped selections.
+
+**Deliverables**
+
+* copy source selection into the tilesheet paste buffer automatically
+* keep tilesheet copy/paste explicit and repeatable
+* preserve grouped tile selection when starting drag inside the selected area
+* make drag release move the whole selected tile patch instead of falling back to single-tile movement
+* keep tile editor directional controls focused on shifting image content inside the selected tile or patch
+* remove conflicting tile-position move buttons from the tile editor panel
+* keep scene and tilesheet selection/copy/paste semantics more consistent
+
+**Validation**
+
+* source selection in tilesheet mode is immediately ready for explicit paste
+* grouped tilesheet drag-move preserves the current selection and moves the whole patch
+* tile editor nudge controls still shift image content instead of moving tile positions
+* tilesheet and scene copy/paste workflows feel aligned and explicit
+* no regressions are introduced in tilesheet or scene editing
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 16: Refactor grouped tile editing + tile editor UI
 
 **Status**
 Planned

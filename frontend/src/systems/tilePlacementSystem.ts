@@ -1,4 +1,4 @@
-import type { ProjectState, SourceSelection, TilePlacement } from "../types/project";
+import type { OutputTileClipboard, ProjectState, SourceSelection, TilePlacement } from "../types/project";
 import { getOutputGridMetrics, getSourceGridMetrics, getTileIndex } from "./tileGridSystem";
 
 export function assignSelectionToOutputTile(
@@ -62,6 +62,52 @@ export function assignSelectionToOutputTile(
 
 export function getAssignedTileCount(state: ProjectState): number {
   return state.project.tiles.length;
+}
+
+export function copySourceSelectionToOutputClipboard(
+  state: ProjectState,
+  selection: SourceSelection,
+): OutputTileClipboard | null {
+  const placementGrid = getPlacementGrid(state);
+  const tiles: OutputTileClipboard["tiles"] = [];
+
+  for (let rowOffset = 0; rowOffset < selection.rows; rowOffset += 1) {
+    for (let colOffset = 0; colOffset < selection.columns; colOffset += 1) {
+      for (let subRow = 0; subRow < placementGrid.rowsPerSourceTile; subRow += 1) {
+        for (let subCol = 0; subCol < placementGrid.columnsPerSourceTile; subCol += 1) {
+          const col = colOffset * placementGrid.columnsPerSourceTile + subCol;
+          const row = rowOffset * placementGrid.rowsPerSourceTile + subRow;
+          tiles.push({
+            colOffset: col,
+            rowOffset: row,
+            tile: createTilePlacement(
+              state,
+              selection,
+              colOffset,
+              rowOffset,
+              subCol,
+              subRow,
+              col,
+              row,
+              Math.max(1, selection.columns * placementGrid.columnsPerSourceTile),
+            ),
+          });
+        }
+      }
+    }
+  }
+
+  if (tiles.length < 1) {
+    return null;
+  }
+
+  return {
+    width: selection.columns * placementGrid.columnsPerSourceTile,
+    height: selection.rows * placementGrid.rowsPerSourceTile,
+    anchorCol: 0,
+    anchorRow: 0,
+    tiles,
+  };
 }
 
 export function assignAllSourceTilesToOutputGrid(state: ProjectState): number {
