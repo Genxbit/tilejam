@@ -35,6 +35,7 @@ import {
   loadSourceImageFromUrl,
   getSourceImageForRef,
 } from "../systems/sourceImageSystem";
+import { getSeamRepairPair, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
 import { renderTileCanvas } from "../systems/tileRenderSystem";
 import { getOutputGridMetrics, getProjectPixelSize, normalizeProjectTilesToGrid, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
 import {
@@ -844,6 +845,98 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = appliedCount > 1
         ? `Applied color replace to ${appliedCount} selected tiles.`
         : `Applied color replace to tile ${selectedTiles[0]?.id ?? ""}.`;
+      renderAll();
+    },
+    onSeamRepairDirectionChanged: (direction) => {
+      state.session.seamRepairDirection = direction;
+      renderAll();
+    },
+    onSeamRepairStripWidthChanged: (width) => {
+      state.session.seamRepairStripWidth = Math.max(1, Math.round(width));
+      renderAll();
+    },
+    onSeamRepairFalloffChanged: (falloff) => {
+      state.session.seamRepairFalloff = Math.max(1, Math.round(falloff));
+      renderAll();
+    },
+    onSeamRepairModeChanged: (mode) => {
+      state.session.seamRepairMode = mode;
+      renderAll();
+    },
+    onSeamRepairReferenceChanged: (reference) => {
+      state.session.seamRepairReference = reference;
+      renderAll();
+    },
+    onSeamRepairStrengthChanged: (strength) => {
+      state.session.seamRepairStrength = Math.max(0, Math.min(1, strength));
+      renderAll();
+    },
+    onSeamRepairQuantizeChanged: (enabled) => {
+      state.session.seamRepairQuantize = enabled;
+      renderAll();
+    },
+    onSeamRepairPreserveContrastChanged: (enabled) => {
+      state.session.seamRepairPreserveContrast = enabled;
+      renderAll();
+    },
+    onSeamRepairContinueRampChanged: (enabled) => {
+      state.session.seamRepairContinueRamp = enabled;
+      renderAll();
+    },
+    onSeamRepairPreviewChanged: (enabled) => {
+      state.session.seamRepairPreview = enabled;
+      renderAll();
+    },
+    onApplySeamRepair: async () => {
+      recordHistory();
+      const seamPair = getSeamRepairPair(state);
+
+      if (!seamPair) {
+        undoStack.pop();
+        state.session.message = "Select a tile with an adjacent neighbor in the chosen direction before applying seam repair.";
+        renderAll();
+        return;
+      }
+
+      const primaryImage = getSourceImageForRef(state, seamPair.primary.sourceImageRef) ?? state.sourceImageAsset.image;
+      const neighborImage = getSourceImageForRef(state, seamPair.neighbor.sourceImageRef) ?? state.sourceImageAsset.image;
+
+      if (!primaryImage || !neighborImage) {
+        undoStack.pop();
+        state.session.message = "Could not apply seam repair because one of the seam tile images is unavailable.";
+        renderAll();
+        return;
+      }
+
+      const primaryCanvas = renderTileCanvas(primaryImage, seamPair.primary, state.project.tileWidth, state.project.tileHeight);
+      const neighborCanvas = renderTileCanvas(neighborImage, seamPair.neighbor, state.project.tileWidth, state.project.tileHeight);
+
+      if (!primaryCanvas || !neighborCanvas) {
+        undoStack.pop();
+        state.session.message = "Could not render the selected seam tiles for repair.";
+        renderAll();
+        return;
+      }
+
+      const repaired = repairSeamPair(primaryCanvas, neighborCanvas, getSeamRepairSettings(state));
+
+      if (!repaired) {
+        undoStack.pop();
+        state.session.message = "Seam repair preview could not be generated for the selected seam.";
+        renderAll();
+        return;
+      }
+
+      const timestamp = Date.now();
+      const primaryRef = `runtime:seam-repair:${timestamp}:${seamPair.primary.id}:${Math.random().toString(36).slice(2, 8)}`;
+      const neighborRef = `runtime:seam-repair:${timestamp}:${seamPair.neighbor.id}:${Math.random().toString(36).slice(2, 8)}`;
+      await loadImageAssetFromUrl(state, repaired.primaryCanvas.toDataURL("image/png"), primaryRef);
+      await loadImageAssetFromUrl(state, repaired.neighborCanvas.toDataURL("image/png"), neighborRef);
+      resetTileToBakedImage(seamPair.primary, primaryRef, state.project.tileWidth, state.project.tileHeight);
+      resetTileToBakedImage(seamPair.neighbor, neighborRef, state.project.tileWidth, state.project.tileHeight);
+      state.session.seamRepairPreview = false;
+      bumpRenderRevision();
+      state.session.message = `Applied seam repair between tile ${seamPair.primary.id} and tile ${seamPair.neighbor.id}.`;
       renderAll();
     },
     onClearSelectedTile: () => {

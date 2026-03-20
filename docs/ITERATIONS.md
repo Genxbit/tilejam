@@ -404,3 +404,52 @@ Add tile color replacement tools to the tile editor.
 * tolerance behaves predictably for near-match colors
 * controls fit naturally in the existing tile editor UX
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+## Ticket 13: Seam repair
+
+**Status**
+Completed
+
+**Goal**
+Repair visible seams between adjacent tiles while preserving pixel-art sharpness.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Add seam-aware tile edge harmonization tools for adjacent output tiles.
+
+**Deliverables**
+
+* analyze color differences between touching edges of adjacent tiles
+* support both horizontal and vertical seam repair
+* apply color harmonization only in a small seam strip near the shared boundary
+* support seam strip width control and directional falloff from the seam inward
+* support choosing whether the seam should match toward the selected tile, the neighbor tile, or a balanced midpoint
+* support repair strength control
+* preserve sharp edges and pixel structure without blur or global smoothing
+* support palette-aware or quantized correction so repaired pixels stay crisp
+* support repair modes for full color, luminance-only, or chroma-only adjustment
+* preserve local contrast while aligning seam tones
+* optionally continue local ramps or tones across the seam when helpful
+* keep the result deterministic and repeatable
+* provide preview before applying
+* fit the seam-repair controls naturally into the tile editor UX
+
+**Validation**
+
+* horizontal seams can be previewed and repaired locally
+* vertical seams can be previewed and repaired locally
+* only the seam region or a small edge strip is modified
+* seam strip width and directional falloff behave predictably
+* reference-side matching and repair strength behave predictably
+* the result preserves pixel-art sharpness and does not smear detail
+* palette-aware or quantized correction keeps repaired pixels crisp
+* full color, luminance-only, and chroma-only modes behave distinctly and predictably
+* contrast is preserved near the seam rather than flattened
+* no standard blur or full-image smoothing is used
+* behavior is predictable and repeatable for the same tiles and settings
+* matches architecture rules in `docs/TECH_WORKFLOW.md`

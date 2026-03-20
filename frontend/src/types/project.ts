@@ -52,6 +52,16 @@ export type SessionState = {
   colorReplaceTargetMode: ColorReplaceTargetMode;
   colorReplaceTargetColor: string;
   colorReplaceTolerance: number;
+  seamRepairDirection: SeamDirection;
+  seamRepairStripWidth: number;
+  seamRepairFalloff: number;
+  seamRepairMode: SeamRepairMode;
+  seamRepairReference: SeamRepairReference;
+  seamRepairStrength: number;
+  seamRepairQuantize: boolean;
+  seamRepairPreserveContrast: boolean;
+  seamRepairContinueRamp: boolean;
+  seamRepairPreview: boolean;
   sourceCamera: CameraState;
   outputCamera: CameraState;
   sourceImageAssetCache: Record<string, CachedSourceImageAsset>;
@@ -128,6 +138,9 @@ export type TileAnchorX = "left" | "center" | "right";
 export type TileAnchorY = "top" | "center" | "bottom";
 export type TilePreviewMode = "none" | "repeat" | "neighbors";
 export type ColorReplaceTargetMode = "transparent" | "color";
+export type SeamDirection = "left" | "right" | "top" | "bottom";
+export type SeamRepairMode = "full" | "luminance" | "chroma";
+export type SeamRepairReference = "balanced" | "primary" | "neighbor";
 
 export type CachedSourceImageAsset = {
   image: HTMLImageElement;

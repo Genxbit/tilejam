@@ -1,7 +1,8 @@
 import type { ProjectState } from "../types/project";
+import { getSeamRepairPair, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
 import { getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
 import { getActiveSceneLayer, getSceneCellGid } from "../systems/sceneSystem";
-import { drawTileIntoRect } from "../systems/tileRenderSystem";
+import { drawTileIntoRect, renderTileCanvas } from "../systems/tileRenderSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
 import { getResolvedSourceImageAsset, getSourceImageForRef } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, getSourceGridMetrics } from "../systems/tileGridSystem";
@@ -262,6 +263,7 @@ function drawOutputGrid(
   const isScenePreview = state.session.activeWorkspaceMode === "scene" && !state.session.showSceneGrid;
 
   if (!isScenePreview) {
+    drawSeamRepairPreview(context, state, viewport);
     drawHoveredOutputTile(context, state, viewport);
   }
   if (state.session.activeWorkspaceMode === "scene") {
@@ -418,6 +420,45 @@ function drawPlacedTiles(
   }
 }
 
+function drawSeamRepairPreview(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  if (state.session.activeWorkspaceMode !== "tilesheet" || !state.session.seamRepairPreview) {
+    return;
+  }
+
+  const seamPair = getSeamRepairPair(state);
+
+  if (!seamPair) {
+    return;
+  }
+
+  const primaryImage = getSourceImageForRef(state, seamPair.primary.sourceImageRef) ?? state.sourceImageAsset.image;
+  const neighborImage = getSourceImageForRef(state, seamPair.neighbor.sourceImageRef) ?? state.sourceImageAsset.image;
+
+  if (!primaryImage || !neighborImage) {
+    return;
+  }
+
+  const primaryCanvas = renderTileCanvas(primaryImage, seamPair.primary, state.project.tileWidth, state.project.tileHeight);
+  const neighborCanvas = renderTileCanvas(neighborImage, seamPair.neighbor, state.project.tileWidth, state.project.tileHeight);
+
+  if (!primaryCanvas || !neighborCanvas) {
+    return;
+  }
+
+  const repaired = repairSeamPair(primaryCanvas, neighborCanvas, getSeamRepairSettings(state));
+
+  if (!repaired) {
+    return;
+  }
+
+  drawPreviewTileCanvas(context, viewport, seamPair.primary.destCol, seamPair.primary.destRow, repaired.primaryCanvas);
+  drawPreviewTileCanvas(context, viewport, seamPair.neighbor.destCol, seamPair.neighbor.destRow, repaired.neighborCanvas);
+}
+
 function drawTilesheetPalette(
   context: CanvasRenderingContext2D,
   state: ProjectState,
@@ -433,6 +474,21 @@ function drawTilesheetPalette(
   };
 
   drawPlacedTiles(context, state, paletteViewport);
+}
+
+function drawPreviewTileCanvas(
+  context: CanvasRenderingContext2D,
+  viewport: OutputViewport,
+  destCol: number,
+  destRow: number,
+  tileCanvas: HTMLCanvasElement,
+): void {
+  const cellRect = getAlignedCellRect(viewport, destCol, destRow);
+
+  context.save();
+  context.imageSmoothingEnabled = false;
+  context.drawImage(tileCanvas, cellRect.x, cellRect.y, cellRect.width, cellRect.height);
+  context.restore();
 }
 
 function drawSceneTiles(

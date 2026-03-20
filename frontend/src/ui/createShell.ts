@@ -1,6 +1,9 @@
 import type {
   ColorReplaceTargetMode,
   ProjectState,
+  SeamDirection,
+  SeamRepairMode,
+  SeamRepairReference,
   TileAnchorX,
   TileAnchorY,
   TileFilterMode,
@@ -9,6 +12,7 @@ import type {
   WorkspaceMode,
 } from "../types/project";
 import { getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
+import { getSeamRepairPair } from "../systems/seamRepairSystem";
 import { getOutputGridMetrics, getProjectIndexRange, getProjectPixelSize, getProjectTileCount, TILE_SIZE_OPTIONS } from "../systems/tileGridSystem";
 import { getAssignedTileCount } from "../systems/tilePlacementSystem";
 import { getActiveSceneLayer } from "../systems/sceneSystem";
@@ -66,6 +70,17 @@ type ShellOptions = {
   onColorReplaceTargetColorChanged: (color: string) => void;
   onColorReplaceToleranceChanged: (tolerance: number) => void;
   onApplyColorReplace: () => Promise<void>;
+  onSeamRepairDirectionChanged: (direction: SeamDirection) => void;
+  onSeamRepairStripWidthChanged: (width: number) => void;
+  onSeamRepairFalloffChanged: (falloff: number) => void;
+  onSeamRepairModeChanged: (mode: SeamRepairMode) => void;
+  onSeamRepairReferenceChanged: (reference: SeamRepairReference) => void;
+  onSeamRepairStrengthChanged: (strength: number) => void;
+  onSeamRepairQuantizeChanged: (enabled: boolean) => void;
+  onSeamRepairPreserveContrastChanged: (enabled: boolean) => void;
+  onSeamRepairContinueRampChanged: (enabled: boolean) => void;
+  onSeamRepairPreviewChanged: (enabled: boolean) => void;
+  onApplySeamRepair: () => Promise<void>;
   onClearSelectedTile: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -160,6 +175,17 @@ export function createShell({
   onColorReplaceTargetColorChanged,
   onColorReplaceToleranceChanged,
   onApplyColorReplace,
+  onSeamRepairDirectionChanged,
+  onSeamRepairStripWidthChanged,
+  onSeamRepairFalloffChanged,
+  onSeamRepairModeChanged,
+  onSeamRepairReferenceChanged,
+  onSeamRepairStrengthChanged,
+  onSeamRepairQuantizeChanged,
+  onSeamRepairPreserveContrastChanged,
+  onSeamRepairContinueRampChanged,
+  onSeamRepairPreviewChanged,
+  onApplySeamRepair,
   onClearSelectedTile,
   onUndo,
   onRedo,
@@ -857,6 +883,146 @@ export function createShell({
     colorReplaceButton,
   );
 
+  const seamRepairSection = document.createElement("div");
+  seamRepairSection.className = "editor-stack";
+
+  const seamRepairHeading = document.createElement("p");
+  seamRepairHeading.className = "field-label";
+  seamRepairHeading.textContent = "Seam repair";
+
+  const seamPair = getSeamRepairPair(state);
+
+  const seamRepairDirectionField = document.createElement("label");
+  seamRepairDirectionField.className = "field-group";
+  const seamRepairDirectionLabel = document.createElement("span");
+  seamRepairDirectionLabel.className = "field-label";
+  seamRepairDirectionLabel.textContent = "Neighbor";
+  const seamRepairDirectionSelect = document.createElement("select");
+  seamRepairDirectionSelect.className = "tile-size-select";
+  [
+    ["left", "Left"],
+    ["right", "Right"],
+    ["top", "Top"],
+    ["bottom", "Bottom"],
+  ].forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    seamRepairDirectionSelect.append(option);
+  });
+  seamRepairDirectionSelect.value = state.session.seamRepairDirection;
+  seamRepairDirectionSelect.addEventListener("change", () => {
+    if (
+      seamRepairDirectionSelect.value === "left"
+      || seamRepairDirectionSelect.value === "right"
+      || seamRepairDirectionSelect.value === "top"
+      || seamRepairDirectionSelect.value === "bottom"
+    ) {
+      onSeamRepairDirectionChanged(seamRepairDirectionSelect.value);
+    }
+  });
+  seamRepairDirectionField.append(seamRepairDirectionLabel, seamRepairDirectionSelect);
+
+  const seamRepairModeField = document.createElement("label");
+  seamRepairModeField.className = "field-group";
+  const seamRepairModeLabel = document.createElement("span");
+  seamRepairModeLabel.className = "field-label";
+  seamRepairModeLabel.textContent = "Mode";
+  const seamRepairModeSelect = document.createElement("select");
+  seamRepairModeSelect.className = "tile-size-select";
+  [
+    ["full", "Full color"],
+    ["luminance", "Luminance"],
+    ["chroma", "Chroma"],
+  ].forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    seamRepairModeSelect.append(option);
+  });
+  seamRepairModeSelect.value = state.session.seamRepairMode;
+  seamRepairModeSelect.addEventListener("change", () => {
+    if (seamRepairModeSelect.value === "full" || seamRepairModeSelect.value === "luminance" || seamRepairModeSelect.value === "chroma") {
+      onSeamRepairModeChanged(seamRepairModeSelect.value);
+    }
+  });
+  seamRepairModeField.append(seamRepairModeLabel, seamRepairModeSelect);
+
+  const seamRepairReferenceField = document.createElement("label");
+  seamRepairReferenceField.className = "field-group";
+  const seamRepairReferenceLabel = document.createElement("span");
+  seamRepairReferenceLabel.className = "field-label";
+  seamRepairReferenceLabel.textContent = "Reference";
+  const seamRepairReferenceSelect = document.createElement("select");
+  seamRepairReferenceSelect.className = "tile-size-select";
+  [
+    ["balanced", "Balanced"],
+    ["primary", "Selected tile"],
+    ["neighbor", "Neighbor tile"],
+  ].forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    seamRepairReferenceSelect.append(option);
+  });
+  seamRepairReferenceSelect.value = state.session.seamRepairReference;
+  seamRepairReferenceSelect.addEventListener("change", () => {
+    if (seamRepairReferenceSelect.value === "balanced" || seamRepairReferenceSelect.value === "primary" || seamRepairReferenceSelect.value === "neighbor") {
+      onSeamRepairReferenceChanged(seamRepairReferenceSelect.value);
+    }
+  });
+  seamRepairReferenceField.append(seamRepairReferenceLabel, seamRepairReferenceSelect);
+
+  const seamRepairInputs = document.createElement("div");
+  seamRepairInputs.className = "grid-inputs";
+  const seamRepairStripField = createLabeledNumberField("Strip width", state.session.seamRepairStripWidth, "Seam strip width", 1, 1);
+  seamRepairStripField.input.addEventListener("change", () => {
+    onSeamRepairStripWidthChanged(Math.max(1, Number.parseInt(seamRepairStripField.input.value, 10) || 1));
+  });
+  const seamRepairFalloffField = createLabeledNumberField("Falloff", state.session.seamRepairFalloff, "Seam falloff", 1, 1);
+  seamRepairFalloffField.input.addEventListener("change", () => {
+    onSeamRepairFalloffChanged(Math.max(1, Number.parseInt(seamRepairFalloffField.input.value, 10) || 1));
+  });
+  const seamRepairStrengthField = createLabeledNumberField("Strength", state.session.seamRepairStrength, "Seam repair strength", 0, 0.05);
+  seamRepairStrengthField.input.max = "1";
+  seamRepairStrengthField.input.addEventListener("change", () => {
+    onSeamRepairStrengthChanged(Math.max(0, Math.min(1, Number.parseFloat(seamRepairStrengthField.input.value) || 0)));
+  });
+  seamRepairInputs.append(seamRepairStripField.field, seamRepairFalloffField.field, seamRepairStrengthField.field);
+
+  const seamRepairToggles = document.createElement("div");
+  seamRepairToggles.className = "toggle-row";
+  const seamPreviewToggle = createCheckboxField("Preview", state.session.seamRepairPreview, (checked) => {
+    onSeamRepairPreviewChanged(checked);
+  });
+  const seamQuantizeToggle = createCheckboxField("Quantize", state.session.seamRepairQuantize, (checked) => {
+    onSeamRepairQuantizeChanged(checked);
+  });
+  const seamContrastToggle = createCheckboxField("Preserve contrast", state.session.seamRepairPreserveContrast, (checked) => {
+    onSeamRepairPreserveContrastChanged(checked);
+  });
+  const seamRampToggle = createCheckboxField("Continue ramp", state.session.seamRepairContinueRamp, (checked) => {
+    onSeamRepairContinueRampChanged(checked);
+  });
+  seamRepairToggles.append(seamPreviewToggle, seamQuantizeToggle, seamContrastToggle, seamRampToggle);
+
+  const seamRepairNote = document.createElement("p");
+  seamRepairNote.className = "field-note";
+  seamRepairNote.textContent = describeSeamRepair(seamPair, state);
+
+  const seamRepairButton = createAsyncActionButton("Apply Seam Repair", onApplySeamRepair);
+
+  seamRepairSection.append(
+    seamRepairHeading,
+    seamRepairDirectionField,
+    seamRepairModeField,
+    seamRepairReferenceField,
+    seamRepairInputs,
+    seamRepairToggles,
+    seamRepairNote,
+    seamRepairButton,
+  );
+
   const toggleRow = document.createElement("div");
   toggleRow.className = "toggle-row";
   const flipXToggle = createCheckboxField("Flip X", selectedTile?.flipX ?? false, (checked) => {
@@ -896,7 +1062,7 @@ export function createShell({
   layoutPanel.append(tileCellInputs, offsetInputs, scaleInputs, nudgeActions, toggleRow);
   fitPanel.append(fitActions, anchorField, anchorActions, cropInputs, stretchInputs, repairOptions);
   previewPanel.append(previewField, previewNote);
-  visualPanel.append(colorInputs, filterField, tintField, colorReplaceSection);
+  visualPanel.append(colorInputs, filterField, tintField, colorReplaceSection, seamRepairSection);
   metaPanel.append(metadataInputs);
 
   editorSection.append(selectedTileSummary, editorActions, editorEmpty, editorTabs, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
@@ -1174,6 +1340,17 @@ export function createShell({
         nextState.session.colorReplaceTargetColor,
         nextState.session.colorReplaceTolerance,
       );
+      seamRepairDirectionSelect.value = nextState.session.seamRepairDirection;
+      seamRepairModeSelect.value = nextState.session.seamRepairMode;
+      seamRepairReferenceSelect.value = nextState.session.seamRepairReference;
+      seamRepairStripField.input.value = `${nextState.session.seamRepairStripWidth}`;
+      seamRepairFalloffField.input.value = `${nextState.session.seamRepairFalloff}`;
+      seamRepairStrengthField.input.value = `${nextState.session.seamRepairStrength}`;
+      (seamPreviewToggle.querySelector("input") as HTMLInputElement).checked = nextState.session.seamRepairPreview;
+      (seamQuantizeToggle.querySelector("input") as HTMLInputElement).checked = nextState.session.seamRepairQuantize;
+      (seamContrastToggle.querySelector("input") as HTMLInputElement).checked = nextState.session.seamRepairPreserveContrast;
+      (seamRampToggle.querySelector("input") as HTMLInputElement).checked = nextState.session.seamRepairContinueRamp;
+      seamRepairNote.textContent = describeSeamRepair(getSeamRepairPair(nextState), nextState);
       anchorXSelect.value = nextSelectedTile?.anchorX ?? "center";
       anchorYSelect.value = nextSelectedTile?.anchorY ?? "center";
       items[11].description.textContent = nextSelectedTile ? `${nextSelectedTile.id}` : "None";
@@ -1572,4 +1749,22 @@ function describeColorReplaceAction(
 ): string {
   const targetLabel = targetMode === "transparent" ? "transparent" : targetColor;
   return `Replace ${sourceColor} with ${targetLabel}. Tolerance ${tolerance} controls how closely nearby colors match.`;
+}
+
+function describeSeamRepair(
+  seamPair: ReturnType<typeof getSeamRepairPair>,
+  state: ProjectState,
+): string {
+  if (!seamPair) {
+    return "Select a tile with an adjacent neighbor in the chosen direction to preview and repair that seam.";
+  }
+
+  const directionLabel = state.session.seamRepairDirection;
+  const referenceLabel = state.session.seamRepairReference === "primary"
+    ? "Selected tile is the reference."
+    : state.session.seamRepairReference === "neighbor"
+      ? "Neighbor tile is the reference."
+      : "Both tiles meet in the middle.";
+  const previewLabel = state.session.seamRepairPreview ? "Preview is visible on canvas." : "Enable Preview to inspect before baking.";
+  return `Tile ${seamPair.primary.id} and tile ${seamPair.neighbor.id} share the ${directionLabel} seam. ${referenceLabel} Strength ${state.session.seamRepairStrength.toFixed(2)}. ${previewLabel}`;
 }
