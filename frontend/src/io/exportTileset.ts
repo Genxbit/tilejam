@@ -130,7 +130,33 @@ export async function saveTilesetTsjWithPicker(
 
 function createTsjBlob(state: ProjectState, filename: string): Blob {
   const outputGrid = getOutputGridMetrics(state.project);
-  const imageName = filename.replace(/\.tsj$/i, ".png");
+  const imageName = getTsjImageName(state, filename);
+  const tiles = state.project.tiles
+    .map((tile) => {
+      const properties = [];
+
+      if (tile.name.trim() !== `tile_${tile.id}`) {
+        properties.push({ name: "name", type: "string", value: tile.name });
+      }
+
+      if (tile.tags.length > 0) {
+        properties.push({ name: "tags", type: "string", value: tile.tags.join(",") });
+      }
+
+      if (tile.collision !== "none") {
+        properties.push({ name: "collision", type: "string", value: tile.collision });
+      }
+
+      if (properties.length < 1) {
+        return null;
+      }
+
+      return {
+        id: tile.id,
+        properties,
+      };
+    })
+    .filter((tile): tile is { id: number; properties: { name: string; type: string; value: string }[] } => tile !== null);
   const tsj = {
     name: filename.replace(/\.tsj$/i, ""),
     tilewidth: state.project.tileWidth,
@@ -142,17 +168,24 @@ function createTsjBlob(state: ProjectState, filename: string): Blob {
     imageheight: state.project.outputHeight,
     margin: 0,
     spacing: 0,
-    tiles: state.project.tiles.map((tile) => ({
-      id: tile.id,
-      properties: [
-        { name: "name", type: "string", value: tile.name },
-        { name: "tags", type: "string", value: tile.tags.join(",") },
-        { name: "collision", type: "string", value: tile.collision },
-      ],
-    })),
+    tiles,
   };
 
   return new Blob([JSON.stringify(tsj, null, 2)], { type: "application/json" });
+}
+
+function getTsjImageName(state: ProjectState, filename: string): string {
+  const workingImageRef = state.session.workingImageFileName ?? state.project.workingImage;
+
+  if (workingImageRef && workingImageRef.trim().length > 0) {
+    return getBaseName(workingImageRef);
+  }
+
+  return filename.replace(/\.tsj$/i, ".png");
+}
+
+function getBaseName(path: string): string {
+  return path.split(/[\\/]/).pop() || path;
 }
 
 function drawExportTile(

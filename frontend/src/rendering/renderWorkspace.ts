@@ -558,8 +558,11 @@ function drawSceneTiles(
 
     context.save();
     context.globalAlpha = layer.opacity;
-    const layerOffsetX = layer.offsetX * viewport.scaleX + state.session.outputCamera.panX * (layer.parallaxX - 1);
-    const layerOffsetY = layer.offsetY * viewport.scaleY + state.session.outputCamera.panY * (layer.parallaxY - 1);
+    // TMJ parallax values are exported data for the game/runtime.
+    // The Tilejam scene editor keeps layers in editor space and should not
+    // reposition them based on parallax while previewing or editing.
+    const layerOffsetX = layer.offsetX * viewport.scaleX;
+    const layerOffsetY = layer.offsetY * viewport.scaleY;
 
     for (let row = 0; row < scene.height; row += 1) {
       for (let col = 0; col < scene.width; col += 1) {

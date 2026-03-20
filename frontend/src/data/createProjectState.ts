@@ -54,6 +54,7 @@ export function createProjectState(): ProjectState {
       hoveredPanel: null,
       tilePreviewMode: "none",
       showSceneGrid: false,
+      fillTileColor: "#000000",
       colorReplaceSourceColor: "#0000ff",
       colorReplaceTargetMode: "transparent",
       colorReplaceTargetColor: "#000000",

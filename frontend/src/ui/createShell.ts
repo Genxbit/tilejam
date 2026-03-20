@@ -79,6 +79,8 @@ type ShellOptions = {
   onRotateSelectedTile: (delta: 1 | -1) => void;
   onTrimSelectedTileTransparent: () => void;
   onTilePreviewModeChanged: (previewMode: TilePreviewMode) => void;
+  onFillTileColorChanged: (color: string) => void;
+  onApplyTileFill: () => Promise<void>;
   onColorReplaceSourceColorChanged: (color: string) => void;
   onColorReplaceTargetModeChanged: (mode: ColorReplaceTargetMode) => void;
   onColorReplaceTargetColorChanged: (color: string) => void;
@@ -196,6 +198,8 @@ export function createShell({
   onRotateSelectedTile,
   onTrimSelectedTileTransparent,
   onTilePreviewModeChanged,
+  onFillTileColorChanged,
+  onApplyTileFill,
   onColorReplaceSourceColorChanged,
   onColorReplaceTargetModeChanged,
   onColorReplaceTargetColorChanged,
@@ -896,6 +900,35 @@ export function createShell({
   const colorReplaceSection = document.createElement("div");
   colorReplaceSection.className = "editor-stack";
 
+  const fillTileSection = document.createElement("div");
+  fillTileSection.className = "editor-stack";
+
+  const fillTileHeading = document.createElement("p");
+  fillTileHeading.className = "field-label";
+  fillTileHeading.textContent = "Fill tile";
+
+  const fillTileField = document.createElement("label");
+  fillTileField.className = "field-group";
+  const fillTileLabel = document.createElement("span");
+  fillTileLabel.className = "field-label";
+  fillTileLabel.textContent = "Fill color";
+  const fillTileInput = document.createElement("input");
+  fillTileInput.type = "color";
+  fillTileInput.className = "color-input";
+  fillTileInput.value = state.session.fillTileColor;
+  fillTileInput.addEventListener("input", () => {
+    onFillTileColorChanged(fillTileInput.value);
+  });
+  fillTileField.append(fillTileLabel, fillTileInput);
+
+  const fillTileNote = document.createElement("p");
+  fillTileNote.className = "field-note";
+  fillTileNote.textContent = "Create or replace the selected output cells with a solid tile color.";
+
+  const fillTileButton = createAsyncActionButton("Fill Selected Tiles", onApplyTileFill);
+
+  fillTileSection.append(fillTileHeading, fillTileField, fillTileNote, fillTileButton);
+
   const colorReplaceHeading = document.createElement("p");
   colorReplaceHeading.className = "field-label";
   colorReplaceHeading.textContent = "Color replace";
@@ -1169,7 +1202,7 @@ export function createShell({
   layoutPanel.append(tileCellInputs, offsetInputs, scaleInputs, scaleNote, groupScaleSection, nudgeActions, toggleRow);
   fitPanel.append(fitActions, fitModeNote, anchorField, anchorActions, cropInputs, stretchInputs, groupStretchSection, repairOptions);
   previewPanel.append(previewField, previewNote);
-  visualPanel.append(colorInputs, filterField, tintField, colorReplaceSection, seamRepairSection);
+  visualPanel.append(colorInputs, filterField, tintField, fillTileSection, colorReplaceSection, seamRepairSection);
   metaPanel.append(metadataInputs);
 
   editorSection.append(selectedTileSummary, editorActions, editorEmpty, editorTabs, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
@@ -1368,10 +1401,12 @@ export function createShell({
   const sceneLayerParallaxXField = createLabeledNumberField("Parallax X", selectedSceneLayer?.parallaxX ?? 1, "Scene layer parallax x", undefined, 0.1);
   const sceneLayerParallaxYField = createLabeledNumberField("Parallax Y", selectedSceneLayer?.parallaxY ?? 1, "Scene layer parallax y", undefined, 0.1);
   sceneLayerParallaxXField.input.addEventListener("change", () => {
-    onSceneLayerUpdated({ parallaxX: Number.parseFloat(sceneLayerParallaxXField.input.value) || 1 });
+    const value = Number.parseFloat(sceneLayerParallaxXField.input.value);
+    onSceneLayerUpdated({ parallaxX: Number.isFinite(value) ? value : 1 });
   });
   sceneLayerParallaxYField.input.addEventListener("change", () => {
-    onSceneLayerUpdated({ parallaxY: Number.parseFloat(sceneLayerParallaxYField.input.value) || 1 });
+    const value = Number.parseFloat(sceneLayerParallaxYField.input.value);
+    onSceneLayerUpdated({ parallaxY: Number.isFinite(value) ? value : 1 });
   });
   sceneLayerParallaxSettings.append(sceneLayerParallaxXField.field, sceneLayerParallaxYField.field);
 
@@ -1459,6 +1494,7 @@ export function createShell({
       stretchFitButton.dataset.active = nextSelectedTile?.fitMode === "stretch" ? "true" : "false";
       containFitButton.dataset.active = nextSelectedTile?.fitMode === "contain" ? "true" : "false";
       fitModeNote.textContent = describeFitMode(nextSelectedTile);
+      fillTileInput.value = nextState.session.fillTileColor;
       colorReplaceSourceInput.value = nextState.session.colorReplaceSourceColor;
       colorReplaceModeSelect.value = nextState.session.colorReplaceTargetMode;
       colorReplaceTargetInput.value = nextState.session.colorReplaceTargetColor;

@@ -10,6 +10,7 @@ import {
   clearSelectedOutputTile,
   copySelectedOutputTiles,
   deleteSelectedOutputTile,
+  getSelectedOutputCells,
   getSelectedOutputTile,
   getSelectedOutputTiles,
   moveSelectedOutputTileBy,
@@ -1004,6 +1005,36 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.tilePreviewMode = previewMode;
       renderAll();
     },
+    onFillTileColorChanged: (color) => {
+      state.session.fillTileColor = normalizeHexColor(color, "#000000");
+      renderAll();
+    },
+    onApplyTileFill: async () => {
+      recordHistory();
+      const selectedCells = getSelectedOutputCells(state);
+
+      if (selectedCells.length < 1) {
+        undoStack.pop();
+        state.session.message = "Select one or more output cells before filling them.";
+        renderAll();
+        return;
+      }
+
+      const appliedCount = await fillSelectedOutputCells(state, selectedCells, state.session.fillTileColor);
+
+      if (appliedCount < 1) {
+        undoStack.pop();
+        state.session.message = "Could not fill the selected output cells.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = appliedCount > 1
+        ? `Filled ${appliedCount} selected output cells.`
+        : "Filled 1 selected output cell.";
+      renderAll();
+    },
     onColorReplaceSourceColorChanged: (color) => {
       state.session.colorReplaceSourceColor = normalizeHexColor(color, "#0000ff");
       renderAll();
@@ -1485,16 +1516,20 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     if (!state.session.sourceSelection) {
       if (event.shiftKey) {
         const anchorTile = getSelectedOutputTile(state);
+        const anchorCell = state.session.selectedOutputCells[0] ?? null;
         const selectedTiles = selectOutputTileRectangle(
           state,
-          anchorTile?.destCol ?? outputHit.col,
-          anchorTile?.destRow ?? outputHit.row,
+          anchorTile?.destCol ?? anchorCell?.col ?? outputHit.col,
+          anchorTile?.destRow ?? anchorCell?.row ?? outputHit.row,
           outputHit.col,
           outputHit.row,
         );
-        state.session.message = selectedTiles.length > 0
-          ? `Selected ${selectedTiles.length} tile${selectedTiles.length === 1 ? "" : "s"} in a rectangle.`
-          : "No placed tiles inside the selected rectangle.";
+        const selectedCellCount = state.session.selectedOutputCells.length;
+        state.session.message = selectedCellCount > 0
+          ? selectedTiles.length > 0
+            ? `Selected ${selectedCellCount} cells with ${selectedTiles.length} placed tile${selectedTiles.length === 1 ? "" : "s"} in the rectangle.`
+            : `Selected ${selectedCellCount} empty cell${selectedCellCount === 1 ? "" : "s"} in a rectangle.`
+          : "No output cells inside the selected rectangle.";
         renderAll();
         return;
       }
@@ -1513,8 +1548,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         shell.canvas.setPointerCapture(event.pointerId);
         state.session.message = `Selected tile ${selectedTile.id} at ${selectedTile.destCol}, ${selectedTile.destRow}. Drag to move it.`;
       } else {
-        clearSelectedOutputTile(state);
-        state.session.message = "No placed tile at that output cell.";
+        movingTileId = null;
+        movingTileOrigin = { col: outputHit.col, row: outputHit.row };
+        state.session.message = `Selected empty output cell ${outputHit.col}, ${outputHit.row}.`;
       }
       renderAll();
       return;
@@ -2704,6 +2740,53 @@ async function bakeSelectedTilesColorReplace(
   }
 
   return appliedCount;
+}
+
+async function fillSelectedOutputCells(
+  state: ProjectState,
+  selectedCells: ProjectState["session"]["selectedOutputCells"],
+  fillColor: string,
+): Promise<number> {
+  if (selectedCells.length < 1) {
+    return 0;
+  }
+
+  const tileWidth = state.project.tileWidth;
+  const tileHeight = state.project.tileHeight;
+  const fillCanvas = document.createElement("canvas");
+  fillCanvas.width = tileWidth;
+  fillCanvas.height = tileHeight;
+  const fillContext = fillCanvas.getContext("2d");
+
+  if (!fillContext) {
+    return 0;
+  }
+
+  fillContext.clearRect(0, 0, tileWidth, tileHeight);
+  fillContext.fillStyle = fillColor;
+  fillContext.fillRect(0, 0, tileWidth, tileHeight);
+
+  const ref = `runtime:fill-tile:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  await loadImageAssetFromUrl(state, fillCanvas.toDataURL("image/png"), ref);
+
+  const selectedKeys = new Set(selectedCells.map((cell) => `${cell.col}:${cell.row}`));
+  const remainingTiles = state.project.tiles.filter((tile) => !selectedKeys.has(`${tile.destCol}:${tile.destRow}`));
+  const nextTiles: TilePlacement[] = selectedCells.map((cell) => {
+    const tile = createBakedOutputTile(cell.col, cell.row, tileWidth, tileHeight);
+    resetTileToBakedImage(tile, ref, tileWidth, tileHeight);
+    return tile;
+  });
+
+  state.project.tiles = [...remainingTiles, ...nextTiles];
+  normalizeProjectTilesToGrid(state);
+  state.session.selectedOutputCells = selectedCells.map((cell) => ({ ...cell }));
+  state.session.selectedOutputTileIds = state.project.tiles
+    .filter((tile) => selectedKeys.has(`${tile.destCol}:${tile.destRow}`))
+    .map((tile) => tile.id);
+  state.session.selectedOutputTileId = state.project.tiles.find((tile) =>
+    selectedKeys.has(`${tile.destCol}:${tile.destRow}`),
+  )?.id ?? null;
+  return nextTiles.length;
 }
 
 function resetTileToBakedImage(tile: TilePlacement, ref: string, tileWidth: number, tileHeight: number): void {
