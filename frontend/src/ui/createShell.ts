@@ -61,6 +61,13 @@ type ShellOptions = {
   onGroupScaleXChanged: (value: number) => void;
   onGroupScaleYChanged: (value: number) => void;
   onApplyGroupScale: () => Promise<void>;
+  onGroupStretchUpdated: (patch: {
+    left?: number;
+    right?: number;
+    top?: number;
+    bottom?: number;
+  }) => void;
+  onApplyGroupStretch: () => Promise<void>;
   onSetSelectedTileFitMode: (fitMode: TileFitMode) => void;
   onAlignSelectedTile: (anchorX: TileAnchorX, anchorY: TileAnchorY) => void;
   onSnapSelectedTileToEdges: () => void;
@@ -171,6 +178,8 @@ export function createShell({
   onGroupScaleXChanged,
   onGroupScaleYChanged,
   onApplyGroupScale,
+  onGroupStretchUpdated,
+  onApplyGroupStretch,
   onSetSelectedTileFitMode,
   onAlignSelectedTile,
   onSnapSelectedTileToEdges,
@@ -664,6 +673,42 @@ export function createShell({
   edgeStretchBottomField.input.addEventListener("change", () => { onSelectedTileUpdated({ edgeStretchBottom: Number.parseFloat(edgeStretchBottomField.input.value) || 0 }); });
   stretchInputs.append(edgeStretchLeftField.field, edgeStretchRightField.field, edgeStretchTopField.field, edgeStretchBottomField.field);
 
+  const groupStretchSection = document.createElement("div");
+  groupStretchSection.className = "editor-stack";
+  groupStretchSection.hidden = selectedTiles.length <= 1;
+  const groupStretchHeading = document.createElement("p");
+  groupStretchHeading.className = "field-label";
+  groupStretchHeading.textContent = "Group Stretch";
+  const groupStretchInputs = document.createElement("div");
+  groupStretchInputs.className = "grid-inputs";
+  const groupStretchLeftField = createLabeledNumberField("Stretch L", state.session.groupStretchLeft, "Group stretch left", undefined, 1);
+  const groupStretchRightField = createLabeledNumberField("Stretch R", state.session.groupStretchRight, "Group stretch right", undefined, 1);
+  const groupStretchTopField = createLabeledNumberField("Stretch T", state.session.groupStretchTop, "Group stretch top", undefined, 1);
+  const groupStretchBottomField = createLabeledNumberField("Stretch B", state.session.groupStretchBottom, "Group stretch bottom", undefined, 1);
+  groupStretchLeftField.input.addEventListener("change", () => {
+    onGroupStretchUpdated({ left: Number.parseFloat(groupStretchLeftField.input.value) || 0 });
+  });
+  groupStretchRightField.input.addEventListener("change", () => {
+    onGroupStretchUpdated({ right: Number.parseFloat(groupStretchRightField.input.value) || 0 });
+  });
+  groupStretchTopField.input.addEventListener("change", () => {
+    onGroupStretchUpdated({ top: Number.parseFloat(groupStretchTopField.input.value) || 0 });
+  });
+  groupStretchBottomField.input.addEventListener("change", () => {
+    onGroupStretchUpdated({ bottom: Number.parseFloat(groupStretchBottomField.input.value) || 0 });
+  });
+  groupStretchInputs.append(
+    groupStretchLeftField.field,
+    groupStretchRightField.field,
+    groupStretchTopField.field,
+    groupStretchBottomField.field,
+  );
+  const groupStretchNote = document.createElement("p");
+  groupStretchNote.className = "field-note";
+  groupStretchNote.textContent = "Applies edge stretch to the whole selected patch and can spill into neighboring tiles. Positive values expand, negative values shrink.";
+  const groupStretchButton = createAsyncActionButton("Apply Group Stretch", onApplyGroupStretch);
+  groupStretchSection.append(groupStretchHeading, groupStretchInputs, groupStretchNote, groupStretchButton);
+
   const repairOptions = document.createElement("div");
   repairOptions.className = "grid-inputs";
   const fillExposedField = document.createElement("label");
@@ -1112,7 +1157,7 @@ export function createShell({
   metadataInputs.append(nameField.field, tagsField.field, collisionField.field);
 
   layoutPanel.append(tileCellInputs, offsetInputs, scaleInputs, scaleNote, groupScaleSection, nudgeActions, toggleRow);
-  fitPanel.append(fitActions, fitModeNote, anchorField, anchorActions, cropInputs, stretchInputs, repairOptions);
+  fitPanel.append(fitActions, fitModeNote, anchorField, anchorActions, cropInputs, stretchInputs, groupStretchSection, repairOptions);
   previewPanel.append(previewField, previewNote);
   visualPanel.append(colorInputs, filterField, tintField, colorReplaceSection, seamRepairSection);
   metaPanel.append(metadataInputs);
@@ -1470,6 +1515,15 @@ export function createShell({
           edgeStretchRightInput: edgeStretchRightField.input,
           edgeStretchTopInput: edgeStretchTopField.input,
           edgeStretchBottomInput: edgeStretchBottomField.input,
+          groupStretchSection,
+          groupStretchLeftInput: groupStretchLeftField.input,
+          groupStretchRightInput: groupStretchRightField.input,
+          groupStretchTopInput: groupStretchTopField.input,
+          groupStretchBottomInput: groupStretchBottomField.input,
+          groupStretchLeftValue: nextState.session.groupStretchLeft,
+          groupStretchRightValue: nextState.session.groupStretchRight,
+          groupStretchTopValue: nextState.session.groupStretchTop,
+          groupStretchBottomValue: nextState.session.groupStretchBottom,
           fillExposedInput,
           anchorXSelect,
           anchorYSelect,
@@ -1689,6 +1743,15 @@ function syncSelectedTileEditor(
     edgeStretchRightInput: HTMLInputElement;
     edgeStretchTopInput: HTMLInputElement;
     edgeStretchBottomInput: HTMLInputElement;
+    groupStretchSection: HTMLDivElement;
+    groupStretchLeftInput: HTMLInputElement;
+    groupStretchRightInput: HTMLInputElement;
+    groupStretchTopInput: HTMLInputElement;
+    groupStretchBottomInput: HTMLInputElement;
+    groupStretchLeftValue: number;
+    groupStretchRightValue: number;
+    groupStretchTopValue: number;
+    groupStretchBottomValue: number;
     fillExposedInput: HTMLInputElement;
     anchorXSelect: HTMLSelectElement;
     anchorYSelect: HTMLSelectElement;
@@ -1782,6 +1845,11 @@ function syncSelectedTileEditor(
   controls.edgeStretchRightInput.value = `${tile.edgeStretchRight}`;
   controls.edgeStretchTopInput.value = `${tile.edgeStretchTop}`;
   controls.edgeStretchBottomInput.value = `${tile.edgeStretchBottom}`;
+  controls.groupStretchSection.hidden = controls.selectionCount <= 1;
+  controls.groupStretchLeftInput.value = `${controls.groupStretchLeftValue}`;
+  controls.groupStretchRightInput.value = `${controls.groupStretchRightValue}`;
+  controls.groupStretchTopInput.value = `${controls.groupStretchTopValue}`;
+  controls.groupStretchBottomInput.value = `${controls.groupStretchBottomValue}`;
   controls.fillExposedInput.value = tile.fillExposedColor ?? "";
   controls.anchorXSelect.value = tile.anchorX;
   controls.anchorYSelect.value = tile.anchorY;
@@ -1807,6 +1875,10 @@ function syncSelectedTileEditor(
   controls.offsetYInput.disabled = controls.selectionCount > 1;
   controls.scaleXInput.disabled = controls.selectionCount > 1;
   controls.scaleYInput.disabled = controls.selectionCount > 1;
+  controls.edgeStretchLeftInput.disabled = controls.selectionCount > 1;
+  controls.edgeStretchRightInput.disabled = controls.selectionCount > 1;
+  controls.edgeStretchTopInput.disabled = controls.selectionCount > 1;
+  controls.edgeStretchBottomInput.disabled = controls.selectionCount > 1;
   controls.nameInput.disabled = controls.selectionCount > 1;
 }
 

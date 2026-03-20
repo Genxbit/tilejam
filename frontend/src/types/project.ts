@@ -48,6 +48,10 @@ export type SessionState = {
   outputTileClipboard: OutputTileClipboard | null;
   groupScaleX: number;
   groupScaleY: number;
+  groupStretchLeft: number;
+  groupStretchRight: number;
+  groupStretchTop: number;
+  groupStretchBottom: number;
   selectedSceneCell: GridCoordinate | null;
   hoveredPanel: WorkspacePanel | null;
   tilePreviewMode: TilePreviewMode;

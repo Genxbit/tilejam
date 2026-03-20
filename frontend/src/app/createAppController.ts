@@ -690,6 +690,54 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         : "Scaled the selected patch.";
       renderAll();
     },
+    onGroupStretchUpdated: (patch) => {
+      if (typeof patch.left === "number") {
+        state.session.groupStretchLeft = patch.left;
+      }
+      if (typeof patch.right === "number") {
+        state.session.groupStretchRight = patch.right;
+      }
+      if (typeof patch.top === "number") {
+        state.session.groupStretchTop = patch.top;
+      }
+      if (typeof patch.bottom === "number") {
+        state.session.groupStretchBottom = patch.bottom;
+      }
+      renderAll();
+    },
+    onApplyGroupStretch: async () => {
+      recordHistory();
+      const selectedTiles = getSelectedOutputTiles(state);
+
+      if (selectedTiles.length < 2) {
+        undoStack.pop();
+        state.session.message = "Select multiple output tiles before applying group stretch.";
+        renderAll();
+        return;
+      }
+
+      const stretchedCount = await bakeSelectedTilesGroupStretch(
+        state,
+        selectedTiles,
+        state.session.groupStretchLeft,
+        state.session.groupStretchRight,
+        state.session.groupStretchTop,
+        state.session.groupStretchBottom,
+      );
+
+      if (stretchedCount < 1) {
+        undoStack.pop();
+        state.session.message = "Unable to stretch the selected patch. Check that the stretch keeps a visible result.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = stretchedCount > 1
+        ? `Stretched the selected patch into ${stretchedCount} tiles. Use Undo to restore the previous patch.`
+        : "Stretched the selected patch.";
+      renderAll();
+    },
     onSetSelectedTileFitMode: (fitMode) => {
       recordHistory();
       const tile = setSelectedOutputTileFitMode(state, fitMode);
@@ -2195,6 +2243,163 @@ async function bakeSelectedTilesGroupScale(
 
       const tile = createBakedOutputTile(destCol, destRow, tileWidth, tileHeight);
       const ref = `runtime:group-scale:${Date.now()}:${destCol}:${destRow}:${Math.random().toString(36).slice(2, 8)}`;
+      await loadImageAssetFromUrl(state, tileCanvas.toDataURL("image/png"), ref);
+      resetTileToBakedImage(tile, ref, tileWidth, tileHeight);
+      nextTiles.push(tile);
+    }
+  }
+
+  state.project.tiles = [...remainingTiles, ...nextTiles];
+  normalizeProjectTilesToGrid(state);
+  state.session.selectedOutputTileIds = nextTiles.map((tile) => tile.id);
+  state.session.selectedOutputTileId = state.session.selectedOutputTileIds[0] ?? null;
+  return nextTiles.length;
+}
+
+async function bakeSelectedTilesGroupStretch(
+  state: ProjectState,
+  selectedTiles: ProjectState["project"]["tiles"],
+  stretchLeft: number,
+  stretchRight: number,
+  stretchTop: number,
+  stretchBottom: number,
+): Promise<number> {
+  if (selectedTiles.length < 1) {
+    return 0;
+  }
+
+  const tileWidth = state.project.tileWidth;
+  const tileHeight = state.project.tileHeight;
+  const outputGrid = getOutputGridMetrics(state.project);
+  const selectionBounds = getSelectedOutputCellBounds(state) ?? {
+    minCol: Math.min(...selectedTiles.map((tile) => tile.destCol)),
+    maxCol: Math.max(...selectedTiles.map((tile) => tile.destCol)),
+    minRow: Math.min(...selectedTiles.map((tile) => tile.destRow)),
+    maxRow: Math.max(...selectedTiles.map((tile) => tile.destRow)),
+  };
+  const { minCol, maxCol, minRow, maxRow } = selectionBounds;
+  const groupColumns = maxCol - minCol + 1;
+  const groupRows = maxRow - minRow + 1;
+  const groupCanvas = document.createElement("canvas");
+  groupCanvas.width = groupColumns * tileWidth;
+  groupCanvas.height = groupRows * tileHeight;
+  const groupContext = groupCanvas.getContext("2d");
+
+  if (!groupContext) {
+    return 0;
+  }
+
+  groupContext.clearRect(0, 0, groupCanvas.width, groupCanvas.height);
+  groupContext.imageSmoothingEnabled = false;
+
+  for (const tile of selectedTiles) {
+    const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+    if (!image) {
+      continue;
+    }
+
+    const renderedTile = renderTileCanvas(image, tile, tileWidth, tileHeight);
+
+    if (!renderedTile) {
+      continue;
+    }
+
+    groupContext.drawImage(
+      renderedTile,
+      (tile.destCol - minCol) * tileWidth,
+      (tile.destRow - minRow) * tileHeight,
+    );
+  }
+
+  const drawX = -stretchLeft;
+  const drawY = -stretchTop;
+  const drawWidth = groupCanvas.width + stretchLeft + stretchRight;
+  const drawHeight = groupCanvas.height + stretchTop + stretchBottom;
+
+  if (drawWidth <= 0 || drawHeight <= 0) {
+    return 0;
+  }
+
+  const localMinX = Math.floor(Math.min(0, drawX));
+  const localMinY = Math.floor(Math.min(0, drawY));
+  const localMaxX = Math.ceil(Math.max(groupCanvas.width, drawX + drawWidth));
+  const localMaxY = Math.ceil(Math.max(groupCanvas.height, drawY + drawHeight));
+  const cellStartOffsetCol = Math.floor(localMinX / tileWidth);
+  const cellStartOffsetRow = Math.floor(localMinY / tileHeight);
+  const cellEndOffsetCol = Math.ceil(localMaxX / tileWidth) - 1;
+  const cellEndOffsetRow = Math.ceil(localMaxY / tileHeight) - 1;
+  const affectedStartCol = minCol + cellStartOffsetCol;
+  const affectedStartRow = minRow + cellStartOffsetRow;
+  const affectedEndCol = maxCol + (cellEndOffsetCol - (groupColumns - 1));
+  const affectedEndRow = maxRow + (cellEndOffsetRow - (groupRows - 1));
+  const expandedColumns = cellEndOffsetCol - cellStartOffsetCol + 1;
+  const expandedRows = cellEndOffsetRow - cellStartOffsetRow + 1;
+  const expandedCanvas = document.createElement("canvas");
+  expandedCanvas.width = expandedColumns * tileWidth;
+  expandedCanvas.height = expandedRows * tileHeight;
+  const expandedContext = expandedCanvas.getContext("2d");
+
+  if (!expandedContext) {
+    return 0;
+  }
+
+  expandedContext.clearRect(0, 0, expandedCanvas.width, expandedCanvas.height);
+  expandedContext.imageSmoothingEnabled = false;
+  expandedContext.drawImage(
+    groupCanvas,
+    -cellStartOffsetCol * tileWidth + drawX,
+    -cellStartOffsetRow * tileHeight + drawY,
+    drawWidth,
+    drawHeight,
+  );
+
+  const remainingTiles = state.project.tiles.filter((tile) =>
+    tile.destCol < affectedStartCol
+    || tile.destCol > affectedEndCol
+    || tile.destRow < affectedStartRow
+    || tile.destRow > affectedEndRow,
+  );
+  const nextTiles: TilePlacement[] = [];
+
+  for (let rowOffset = 0; rowOffset < expandedRows; rowOffset += 1) {
+    for (let colOffset = 0; colOffset < expandedColumns; colOffset += 1) {
+      const destCol = affectedStartCol + colOffset;
+      const destRow = affectedStartRow + rowOffset;
+
+      if (destCol < 0 || destCol >= outputGrid.columns || destRow < 0 || destRow >= outputGrid.rows) {
+        continue;
+      }
+
+      const tileCanvas = document.createElement("canvas");
+      tileCanvas.width = tileWidth;
+      tileCanvas.height = tileHeight;
+      const tileContext = tileCanvas.getContext("2d", { willReadFrequently: true });
+
+      if (!tileContext) {
+        continue;
+      }
+
+      tileContext.clearRect(0, 0, tileWidth, tileHeight);
+      tileContext.imageSmoothingEnabled = false;
+      tileContext.drawImage(
+        expandedCanvas,
+        colOffset * tileWidth,
+        rowOffset * tileHeight,
+        tileWidth,
+        tileHeight,
+        0,
+        0,
+        tileWidth,
+        tileHeight,
+      );
+
+      if (!canvasHasVisiblePixels(tileContext, tileWidth, tileHeight)) {
+        continue;
+      }
+
+      const tile = createBakedOutputTile(destCol, destRow, tileWidth, tileHeight);
+      const ref = `runtime:group-stretch:${Date.now()}:${destCol}:${destRow}:${Math.random().toString(36).slice(2, 8)}`;
       await loadImageAssetFromUrl(state, tileCanvas.toDataURL("image/png"), ref);
       resetTileToBakedImage(tile, ref, tileWidth, tileHeight);
       nextTiles.push(tile);
