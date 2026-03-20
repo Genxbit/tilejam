@@ -1,4 +1,4 @@
-import type { ProjectState, TilePlacement } from "../types/project";
+import type { OutputTileClipboard, ProjectState, TilePlacement } from "../types/project";
 import { getOutputGridMetrics, normalizeProjectTilesToGrid } from "./tileGridSystem";
 import { applyAnchor, applyFitMode, getTileDrawRect, getTileSampleRect } from "./tileRenderSystem";
 
@@ -90,6 +90,79 @@ export function selectOutputTileRectangle(
 export function clearSelectedOutputTile(state: ProjectState): void {
   state.session.selectedOutputTileId = null;
   state.session.selectedOutputTileIds = [];
+}
+
+export function copySelectedOutputTiles(state: ProjectState): OutputTileClipboard | null {
+  const selectedTiles = getSelectedOutputTiles(state);
+
+  if (selectedTiles.length < 1) {
+    return null;
+  }
+
+  const minCol = Math.min(...selectedTiles.map((tile) => tile.destCol));
+  const minRow = Math.min(...selectedTiles.map((tile) => tile.destRow));
+  const maxCol = Math.max(...selectedTiles.map((tile) => tile.destCol));
+  const maxRow = Math.max(...selectedTiles.map((tile) => tile.destRow));
+
+  return {
+    width: maxCol - minCol + 1,
+    height: maxRow - minRow + 1,
+    anchorCol: minCol,
+    anchorRow: minRow,
+    tiles: selectedTiles
+      .slice()
+      .sort((left, right) => left.destRow - right.destRow || left.destCol - right.destCol || left.id - right.id)
+      .map((tile) => ({
+        colOffset: tile.destCol - minCol,
+        rowOffset: tile.destRow - minRow,
+        tile: JSON.parse(JSON.stringify(tile)) as TilePlacement,
+      })),
+  };
+}
+
+export function pasteOutputTileClipboard(
+  state: ProjectState,
+  clipboard: OutputTileClipboard,
+  targetCol: number,
+  targetRow: number,
+): TilePlacement[] | null {
+  if (clipboard.tiles.length < 1) {
+    return null;
+  }
+
+  const outputGrid = getOutputGridMetrics(state.project);
+  const destinations = clipboard.tiles.map((entry) => ({
+    tile: entry.tile,
+    destCol: targetCol + entry.colOffset,
+    destRow: targetRow + entry.rowOffset,
+  }));
+
+  if (destinations.some(({ destCol, destRow }) =>
+    destCol < 0 || destCol >= outputGrid.columns || destRow < 0 || destRow >= outputGrid.rows,
+  )) {
+    return null;
+  }
+
+  const destinationKeys = new Set(destinations.map(({ destCol, destRow }) => `${destCol}:${destRow}`));
+  state.project.tiles = state.project.tiles.filter((entry) => !destinationKeys.has(`${entry.destCol}:${entry.destRow}`));
+
+  const nextTiles = destinations.map(({ tile, destCol, destRow }) => ({
+    ...JSON.parse(JSON.stringify(tile)) as TilePlacement,
+    destCol,
+    destRow,
+  }));
+
+  state.project.tiles.push(...nextTiles);
+  reindexTiles(state);
+
+  const pastedTiles = nextTiles
+    .map((tile) => state.project.tiles.find((entry) => entry.destCol === tile.destCol && entry.destRow === tile.destRow) ?? null)
+    .filter((tile): tile is TilePlacement => tile !== null);
+
+  state.session.selectedOutputTileIds = pastedTiles.map((tile) => tile.id);
+  state.session.selectedOutputTileId = pastedTiles[0]?.id ?? null;
+
+  return pastedTiles;
 }
 
 export function getSelectedOutputTile(state: ProjectState): TilePlacement | null {

@@ -44,6 +44,9 @@ export type SessionState = {
   hoveredOutputTile: GridCoordinate | null;
   selectedOutputTileId: number | null;
   selectedOutputTileIds: number[];
+  outputTileClipboard: OutputTileClipboard | null;
+  groupScaleX: number;
+  groupScaleY: number;
   selectedSceneCell: GridCoordinate | null;
   hoveredPanel: WorkspacePanel | null;
   tilePreviewMode: TilePreviewMode;
@@ -92,6 +95,20 @@ export type SourceSelection = {
   columns: number;
   rows: number;
   sourceRect: SourceRect;
+};
+
+export type OutputTileClipboard = {
+  width: number;
+  height: number;
+  anchorCol: number;
+  anchorRow: number;
+  tiles: OutputTileClipboardEntry[];
+};
+
+export type OutputTileClipboardEntry = {
+  colOffset: number;
+  rowOffset: number;
+  tile: TilePlacement;
 };
 
 export type TilePlacement = {

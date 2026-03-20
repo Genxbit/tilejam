@@ -56,8 +56,11 @@ type ShellOptions = {
   }) => void;
   onSceneLayerMoved: (delta: -1 | 1) => void;
   onSceneGridVisibilityChanged: (visible: boolean) => void;
-  onSelectedTileUpdated: (patch: SelectedTilePatch) => void;
+  onSelectedTileUpdated: (patch: SelectedTilePatch) => Promise<void>;
   onNudgeSelectedTile: (deltaX: number, deltaY: number) => Promise<void>;
+  onGroupScaleXChanged: (value: number) => void;
+  onGroupScaleYChanged: (value: number) => void;
+  onApplyGroupScale: () => Promise<void>;
   onSetSelectedTileFitMode: (fitMode: TileFitMode) => void;
   onAlignSelectedTile: (anchorX: TileAnchorX, anchorY: TileAnchorY) => void;
   onSnapSelectedTileToEdges: () => void;
@@ -81,6 +84,8 @@ type ShellOptions = {
   onSeamRepairContinueRampChanged: (enabled: boolean) => void;
   onSeamRepairPreviewChanged: (enabled: boolean) => void;
   onApplySeamRepair: () => Promise<void>;
+  onCopySelectedTiles: () => void;
+  onPasteSelectedTiles: () => void;
   onClearSelectedTile: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -163,6 +168,9 @@ export function createShell({
   onSceneGridVisibilityChanged,
   onSelectedTileUpdated,
   onNudgeSelectedTile,
+  onGroupScaleXChanged,
+  onGroupScaleYChanged,
+  onApplyGroupScale,
   onSetSelectedTileFitMode,
   onAlignSelectedTile,
   onSnapSelectedTileToEdges,
@@ -186,6 +194,8 @@ export function createShell({
   onSeamRepairContinueRampChanged,
   onSeamRepairPreviewChanged,
   onApplySeamRepair,
+  onCopySelectedTiles,
+  onPasteSelectedTiles,
   onClearSelectedTile,
   onUndo,
   onRedo,
@@ -529,9 +539,13 @@ export function createShell({
 
   const editorActions = document.createElement("div");
   editorActions.className = "panel-actions";
+  const copyTileButton = createActionButton("Copy", onCopySelectedTiles);
+  copyTileButton.disabled = selectedTiles.length < 1;
+  const pasteTileButton = createActionButton("Paste", onPasteSelectedTiles);
+  pasteTileButton.disabled = !state.session.outputTileClipboard;
   const clearTileButton = createActionButton("Clear Tile", onClearSelectedTile);
   clearTileButton.disabled = !selectedTile;
-  editorActions.append(clearTileButton);
+  editorActions.append(copyTileButton, pasteTileButton, clearTileButton);
 
   const editorTabs = document.createElement("div");
   editorTabs.className = "editor-tabs";
@@ -581,13 +595,41 @@ export function createShell({
   scaleInputs.className = "grid-inputs";
   const scaleXField = createLabeledNumberField("Scale X", selectedTile?.scaleX ?? 1, "Scale X", 0.1, 0.1);
   const scaleYField = createLabeledNumberField("Scale Y", selectedTile?.scaleY ?? 1, "Scale Y", 0.1, 0.1);
-  scaleXField.input.addEventListener("change", () => {
-    onSelectedTileUpdated({ scaleX: Math.max(0.1, Number.parseFloat(scaleXField.input.value) || 1) });
+  const scaleNote = document.createElement("p");
+  scaleNote.className = "field-note";
+  scaleNote.textContent = selectedTiles.length > 1
+    ? "Scale X/Y are tile-local controls and are disabled for multi-selection. Use Nudge, Flip, and Copy/Paste for group edits."
+    : "Scale X/Y are persistent per-tile values for a single selected tile.";
+  scaleXField.input.addEventListener("change", async () => {
+    await onSelectedTileUpdated({ scaleX: Math.max(0.1, Number.parseFloat(scaleXField.input.value) || 1) });
   });
-  scaleYField.input.addEventListener("change", () => {
-    onSelectedTileUpdated({ scaleY: Math.max(0.1, Number.parseFloat(scaleYField.input.value) || 1) });
+  scaleYField.input.addEventListener("change", async () => {
+    await onSelectedTileUpdated({ scaleY: Math.max(0.1, Number.parseFloat(scaleYField.input.value) || 1) });
   });
   scaleInputs.append(scaleXField.field, scaleYField.field);
+
+  const groupScaleSection = document.createElement("div");
+  groupScaleSection.className = "editor-stack";
+  groupScaleSection.hidden = selectedTiles.length <= 1;
+  const groupScaleHeading = document.createElement("p");
+  groupScaleHeading.className = "field-label";
+  groupScaleHeading.textContent = "Group Scale";
+  const groupScaleInputs = document.createElement("div");
+  groupScaleInputs.className = "grid-inputs";
+  const groupScaleXField = createLabeledNumberField("Scale X", state.session.groupScaleX, "Group scale X", 0.1, 0.1);
+  const groupScaleYField = createLabeledNumberField("Scale Y", state.session.groupScaleY, "Group scale Y", 0.1, 0.1);
+  groupScaleXField.input.addEventListener("change", () => {
+    onGroupScaleXChanged(Math.max(0.1, Number.parseFloat(groupScaleXField.input.value) || 1));
+  });
+  groupScaleYField.input.addEventListener("change", () => {
+    onGroupScaleYChanged(Math.max(0.1, Number.parseFloat(groupScaleYField.input.value) || 1));
+  });
+  groupScaleInputs.append(groupScaleXField.field, groupScaleYField.field);
+  const groupScaleNote = document.createElement("p");
+  groupScaleNote.className = "field-note";
+  groupScaleNote.textContent = "Applies to the whole selected patch and can spill into neighboring tiles. Use Undo to restore the previous patch.";
+  const groupScaleButton = createAsyncActionButton("Apply Group Scale", onApplyGroupScale);
+  groupScaleSection.append(groupScaleHeading, groupScaleInputs, groupScaleNote, groupScaleButton);
 
   const nudgeActions = document.createElement("div");
   nudgeActions.className = "panel-actions";
@@ -1069,7 +1111,7 @@ export function createShell({
   });
   metadataInputs.append(nameField.field, tagsField.field, collisionField.field);
 
-  layoutPanel.append(tileCellInputs, offsetInputs, scaleInputs, nudgeActions, toggleRow);
+  layoutPanel.append(tileCellInputs, offsetInputs, scaleInputs, scaleNote, groupScaleSection, nudgeActions, toggleRow);
   fitPanel.append(fitActions, fitModeNote, anchorField, anchorActions, cropInputs, stretchInputs, repairOptions);
   previewPanel.append(previewField, previewNote);
   visualPanel.append(colorInputs, filterField, tintField, colorReplaceSection, seamRepairSection);
@@ -1401,6 +1443,8 @@ export function createShell({
         {
           selectionCount: nextSelectedTiles.length,
           summary: selectedTileSummary,
+          copyButton: copyTileButton,
+          pasteButton: pasteTileButton,
           clearButton: clearTileButton,
           empty: editorEmpty,
           tileColInput: tileColField.input,
@@ -1409,6 +1453,12 @@ export function createShell({
           offsetYInput: offsetYField.input,
           scaleXInput: scaleXField.input,
           scaleYInput: scaleYField.input,
+          scaleNote,
+          groupScaleSection,
+          groupScaleXInput: groupScaleXField.input,
+          groupScaleYInput: groupScaleYField.input,
+          groupScaleXValue: nextState.session.groupScaleX,
+          groupScaleYValue: nextState.session.groupScaleY,
           cropLeftInput: cropLeftField.input,
           cropRightInput: cropRightField.input,
           cropTopInput: cropTopField.input,
@@ -1611,6 +1661,8 @@ function syncSelectedTileEditor(
   controls: {
     selectionCount: number;
     summary: HTMLDivElement;
+    copyButton: HTMLButtonElement;
+    pasteButton: HTMLButtonElement;
     clearButton: HTMLButtonElement;
     empty: HTMLParagraphElement;
     tileColInput: HTMLInputElement;
@@ -1619,6 +1671,12 @@ function syncSelectedTileEditor(
     offsetYInput: HTMLInputElement;
     scaleXInput: HTMLInputElement;
     scaleYInput: HTMLInputElement;
+    scaleNote: HTMLParagraphElement;
+    groupScaleSection: HTMLDivElement;
+    groupScaleXInput: HTMLInputElement;
+    groupScaleYInput: HTMLInputElement;
+    groupScaleXValue: number;
+    groupScaleYValue: number;
     cropLeftInput: HTMLInputElement;
     cropRightInput: HTMLInputElement;
     cropTopInput: HTMLInputElement;
@@ -1678,6 +1736,7 @@ function syncSelectedTileEditor(
 
   if (!tile) {
     controls.summary.textContent = "No selection";
+    controls.copyButton.disabled = true;
     controls.clearButton.disabled = true;
     controls.empty.textContent = "No output tile selected yet. Hold Shift and click to build a multi-selection.";
     for (const input of inputs) {
@@ -1689,9 +1748,11 @@ function syncSelectedTileEditor(
   controls.summary.textContent = controls.selectionCount > 1
     ? `${controls.selectionCount} tiles selected · primary ${tile.id} at ${tile.destCol}, ${tile.destRow}`
     : `Tile ${tile.id} at ${tile.destCol}, ${tile.destRow}`;
+  controls.copyButton.disabled = false;
+  controls.pasteButton.disabled = false;
   controls.clearButton.disabled = false;
   controls.empty.textContent = controls.selectionCount > 1
-    ? "Batch edits apply to all selected tiles. Use nudge to shift the whole group together. Tile position, local offset, and name stay primary-tile only."
+    ? "Batch edits apply to all selected tiles. Nudge, scale, and flip work on the whole selected group together. Tile position, local offset, and name stay primary-tile only."
     : "";
   controls.tileColInput.value = `${tile.destCol}`;
   controls.tileRowInput.value = `${tile.destRow}`;
@@ -1699,6 +1760,12 @@ function syncSelectedTileEditor(
   controls.offsetYInput.value = `${tile.offsetY}`;
   controls.scaleXInput.value = `${tile.scaleX}`;
   controls.scaleYInput.value = `${tile.scaleY}`;
+  controls.scaleNote.textContent = controls.selectionCount > 1
+    ? "Scale X/Y are tile-local controls and are disabled for multi-selection. Use Nudge, Flip, and Copy/Paste for group edits."
+    : "Scale X/Y are persistent per-tile values for a single selected tile.";
+  controls.groupScaleSection.hidden = controls.selectionCount <= 1;
+  controls.groupScaleXInput.value = `${controls.groupScaleXValue}`;
+  controls.groupScaleYInput.value = `${controls.groupScaleYValue}`;
   controls.cropLeftInput.value = `${tile.cropLeft}`;
   controls.cropRightInput.value = `${tile.cropRight}`;
   controls.cropTopInput.value = `${tile.cropTop}`;
@@ -1730,6 +1797,8 @@ function syncSelectedTileEditor(
   controls.tileRowInput.disabled = controls.selectionCount > 1;
   controls.offsetXInput.disabled = controls.selectionCount > 1;
   controls.offsetYInput.disabled = controls.selectionCount > 1;
+  controls.scaleXInput.disabled = controls.selectionCount > 1;
+  controls.scaleYInput.disabled = controls.selectionCount > 1;
   controls.nameInput.disabled = controls.selectionCount > 1;
 }
 

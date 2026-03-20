@@ -8,12 +8,14 @@ import { createProjectState } from "../data/createProjectState";
 import {
   alignSelectedOutputTile,
   clearSelectedOutputTile,
+  copySelectedOutputTiles,
   deleteSelectedOutputTile,
   getSelectedOutputTile,
   getSelectedOutputTiles,
   moveSelectedOutputTileBy,
   moveTileToCell,
   nudgeSelectedOutputTile,
+  pasteOutputTileClipboard,
   rotateSelectedOutputTileByQuarterTurns,
   selectOutputTileAtCell,
   selectOutputTileRectangle,
@@ -574,8 +576,33 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = visible ? "Scene editing grid shown." : "Scene preview enabled.";
       renderCanvas();
     },
-    onSelectedTileUpdated: (patch) => {
+    onSelectedTileUpdated: async (patch) => {
       recordHistory();
+      const selectedTiles = getSelectedOutputTiles(state);
+
+      if (selectedTiles.length > 1 && (typeof patch.flipX === "boolean" || typeof patch.flipY === "boolean")) {
+        const flippedCount = await bakeSelectedTilesGroupFlip(
+          state,
+          selectedTiles,
+          patch.flipX === true,
+          patch.flipY === true,
+        );
+
+        if (flippedCount < 1) {
+          undoStack.pop();
+          state.session.message = "Select output tiles with resolved images before flipping the group.";
+          renderAll();
+          return;
+        }
+
+        bumpRenderRevision();
+        state.session.message = flippedCount > 1
+          ? `Flipped ${flippedCount} selected tiles as one group.`
+          : "Flipped 1 selected tile.";
+        renderAll();
+        return;
+      }
+
       const tile = updateSelectedOutputTile(state, patch);
 
       if (!tile) {
@@ -620,6 +647,45 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
       bumpRenderRevision();
       state.session.message = `Nudged tile ${tile.id} by ${deltaX}, ${deltaY}.`;
+      renderAll();
+    },
+    onGroupScaleXChanged: (value) => {
+      state.session.groupScaleX = Math.max(0.1, value);
+      renderAll();
+    },
+    onGroupScaleYChanged: (value) => {
+      state.session.groupScaleY = Math.max(0.1, value);
+      renderAll();
+    },
+    onApplyGroupScale: async () => {
+      recordHistory();
+      const selectedTiles = getSelectedOutputTiles(state);
+
+      if (selectedTiles.length < 2) {
+        undoStack.pop();
+        state.session.message = "Select multiple output tiles before applying group scale.";
+        renderAll();
+        return;
+      }
+
+      const scaledCount = await bakeSelectedTilesGroupScale(
+        state,
+        selectedTiles,
+        state.session.groupScaleX,
+        state.session.groupScaleY,
+      );
+
+      if (scaledCount < 1) {
+        undoStack.pop();
+        state.session.message = "Unable to scale the selected patch. Check that the selected tiles have resolved images.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = scaledCount > 1
+        ? `Scaled the selected patch into ${scaledCount} tiles. Use Undo to restore the previous patch.`
+        : "Scaled the selected patch.";
       renderAll();
     },
     onSetSelectedTileFitMode: (fitMode) => {
@@ -949,6 +1015,60 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = repairedPairCount > 1
         ? `Applied seam repair across ${repairedPairCount} seam pairs in the selection.`
         : `Applied seam repair across ${repairedPairCount} seam pair.`;
+      renderAll();
+    },
+    onCopySelectedTiles: () => {
+      if (state.session.activeWorkspaceMode !== "tilesheet") {
+        return;
+      }
+
+      const clipboard = copySelectedOutputTiles(state);
+
+      if (!clipboard) {
+        state.session.message = "Select one or more tiles before copying.";
+        renderAll();
+        return;
+      }
+
+      state.session.outputTileClipboard = clipboard;
+      state.session.message = clipboard.tiles.length > 1
+        ? `Copied ${clipboard.tiles.length} tiles from the working tilesheet.`
+        : "Copied 1 tile from the working tilesheet.";
+      renderAll();
+    },
+    onPasteSelectedTiles: () => {
+      if (state.session.activeWorkspaceMode !== "tilesheet" || !state.session.outputTileClipboard) {
+        state.session.message = "Copy tiles before pasting them.";
+        renderAll();
+        return;
+      }
+
+      const target = state.session.hoveredOutputTile
+        ?? (() => {
+          const tile = getSelectedOutputTile(state);
+          return tile ? { col: tile.destCol, row: tile.destRow } : null;
+        })();
+
+      if (!target) {
+        state.session.message = "Hover or select a destination tile before pasting.";
+        renderAll();
+        return;
+      }
+
+      recordHistory();
+      const pastedTiles = pasteOutputTileClipboard(state, state.session.outputTileClipboard, target.col, target.row);
+
+      if (!pastedTiles || pastedTiles.length < 1) {
+        undoStack.pop();
+        state.session.message = "Clipboard paste did not fit inside the output grid.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = pastedTiles.length > 1
+        ? `Pasted ${pastedTiles.length} tiles at ${target.col}, ${target.row}.`
+        : `Pasted tile at ${target.col}, ${target.row}.`;
       renderAll();
     },
     onClearSelectedTile: () => {
@@ -1591,6 +1711,59 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         : `Cleared tile ${deletedTile.id} from ${deletedTile.destCol}, ${deletedTile.destRow}.`;
       renderAll();
     }
+
+    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.code === "KeyC") {
+      if (state.session.activeWorkspaceMode !== "tilesheet") {
+        return;
+      }
+
+      const clipboard = copySelectedOutputTiles(state);
+
+      if (!clipboard) {
+        return;
+      }
+
+      event.preventDefault();
+      state.session.outputTileClipboard = clipboard;
+      state.session.message = clipboard.tiles.length > 1
+        ? `Copied ${clipboard.tiles.length} tiles from the working tilesheet.`
+        : "Copied 1 tile from the working tilesheet.";
+      renderAll();
+      return;
+    }
+
+    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.code === "KeyV") {
+      if (state.session.activeWorkspaceMode !== "tilesheet" || !state.session.outputTileClipboard) {
+        return;
+      }
+
+      const target = state.session.hoveredOutputTile
+        ?? (() => {
+          const tile = getSelectedOutputTile(state);
+          return tile ? { col: tile.destCol, row: tile.destRow } : null;
+        })();
+
+      if (!target) {
+        return;
+      }
+
+      event.preventDefault();
+      recordHistory();
+      const pastedTiles = pasteOutputTileClipboard(state, state.session.outputTileClipboard, target.col, target.row);
+
+      if (!pastedTiles || pastedTiles.length < 1) {
+        undoStack.pop();
+        state.session.message = "Clipboard paste did not fit inside the output grid.";
+        renderAll();
+        return;
+      }
+
+      bumpRenderRevision();
+      state.session.message = pastedTiles.length > 1
+        ? `Pasted ${pastedTiles.length} tiles at ${target.col}, ${target.row}.`
+        : `Pasted tile at ${target.col}, ${target.row}.`;
+      renderAll();
+    }
   }
 
   return {
@@ -1773,6 +1946,254 @@ async function bakeSelectedTilesGroupShift(
   return shiftedCount;
 }
 
+async function bakeSelectedTilesGroupFlip(
+  state: ProjectState,
+  selectedTiles: ProjectState["project"]["tiles"],
+  flipX: boolean,
+  flipY: boolean,
+): Promise<number> {
+  if (selectedTiles.length < 1 || (!flipX && !flipY)) {
+    return 0;
+  }
+
+  const minCol = Math.min(...selectedTiles.map((tile) => tile.destCol));
+  const maxCol = Math.max(...selectedTiles.map((tile) => tile.destCol));
+  const minRow = Math.min(...selectedTiles.map((tile) => tile.destRow));
+  const maxRow = Math.max(...selectedTiles.map((tile) => tile.destRow));
+  const columns = maxCol - minCol + 1;
+  const rows = maxRow - minRow + 1;
+  const groupCanvas = document.createElement("canvas");
+  groupCanvas.width = columns * state.project.tileWidth;
+  groupCanvas.height = rows * state.project.tileHeight;
+  const groupContext = groupCanvas.getContext("2d");
+
+  if (!groupContext) {
+    return 0;
+  }
+
+  groupContext.clearRect(0, 0, groupCanvas.width, groupCanvas.height);
+
+  for (const tile of selectedTiles) {
+    const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+    if (!image) {
+      continue;
+    }
+
+    const renderedTile = renderTileCanvas(image, tile, state.project.tileWidth, state.project.tileHeight);
+
+    if (!renderedTile) {
+      continue;
+    }
+
+    groupContext.drawImage(
+      renderedTile,
+      (tile.destCol - minCol) * state.project.tileWidth,
+      (tile.destRow - minRow) * state.project.tileHeight,
+    );
+  }
+
+  const flippedCanvas = document.createElement("canvas");
+  flippedCanvas.width = groupCanvas.width;
+  flippedCanvas.height = groupCanvas.height;
+  const flippedContext = flippedCanvas.getContext("2d");
+
+  if (!flippedContext) {
+    return 0;
+  }
+
+  flippedContext.save();
+  flippedContext.translate(flipX ? flippedCanvas.width : 0, flipY ? flippedCanvas.height : 0);
+  flippedContext.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+  flippedContext.drawImage(groupCanvas, 0, 0);
+  flippedContext.restore();
+
+  let flippedCount = 0;
+
+  for (const tile of selectedTiles) {
+    const tileCanvas = document.createElement("canvas");
+    tileCanvas.width = state.project.tileWidth;
+    tileCanvas.height = state.project.tileHeight;
+    const tileContext = tileCanvas.getContext("2d");
+
+    if (!tileContext) {
+      continue;
+    }
+
+    const sourceX = (tile.destCol - minCol) * state.project.tileWidth;
+    const sourceY = (tile.destRow - minRow) * state.project.tileHeight;
+    tileContext.clearRect(0, 0, tileCanvas.width, tileCanvas.height);
+    tileContext.drawImage(
+      flippedCanvas,
+      sourceX,
+      sourceY,
+      state.project.tileWidth,
+      state.project.tileHeight,
+      0,
+      0,
+      state.project.tileWidth,
+      state.project.tileHeight,
+    );
+
+    const ref = `runtime:group-flip:${Date.now()}:${tile.id}:${Math.random().toString(36).slice(2, 8)}`;
+    const dataUrl = tileCanvas.toDataURL("image/png");
+    await loadImageAssetFromUrl(state, dataUrl, ref);
+    resetTileToBakedImage(tile, ref, state.project.tileWidth, state.project.tileHeight);
+    flippedCount += 1;
+  }
+
+  return flippedCount;
+}
+
+async function bakeSelectedTilesGroupScale(
+  state: ProjectState,
+  selectedTiles: ProjectState["project"]["tiles"],
+  scaleX: number,
+  scaleY: number,
+): Promise<number> {
+  if (selectedTiles.length < 1) {
+    return 0;
+  }
+
+  const tileWidth = state.project.tileWidth;
+  const tileHeight = state.project.tileHeight;
+  const outputGrid = getOutputGridMetrics(state.project);
+  const minCol = Math.min(...selectedTiles.map((tile) => tile.destCol));
+  const maxCol = Math.max(...selectedTiles.map((tile) => tile.destCol));
+  const minRow = Math.min(...selectedTiles.map((tile) => tile.destRow));
+  const maxRow = Math.max(...selectedTiles.map((tile) => tile.destRow));
+  const groupColumns = maxCol - minCol + 1;
+  const groupRows = maxRow - minRow + 1;
+  const groupCanvas = document.createElement("canvas");
+  groupCanvas.width = groupColumns * tileWidth;
+  groupCanvas.height = groupRows * tileHeight;
+  const groupContext = groupCanvas.getContext("2d");
+
+  if (!groupContext) {
+    return 0;
+  }
+
+  groupContext.clearRect(0, 0, groupCanvas.width, groupCanvas.height);
+  groupContext.imageSmoothingEnabled = false;
+
+  for (const tile of selectedTiles) {
+    const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+    if (!image) {
+      continue;
+    }
+
+    const renderedTile = renderTileCanvas(image, tile, tileWidth, tileHeight);
+
+    if (!renderedTile) {
+      continue;
+    }
+
+    groupContext.drawImage(
+      renderedTile,
+      (tile.destCol - minCol) * tileWidth,
+      (tile.destRow - minRow) * tileHeight,
+    );
+  }
+
+  const safeScaleX = Math.max(0.1, scaleX);
+  const safeScaleY = Math.max(0.1, scaleY);
+  const scaledWidth = groupCanvas.width * safeScaleX;
+  const scaledHeight = groupCanvas.height * safeScaleY;
+  const drawX = (groupCanvas.width - scaledWidth) / 2;
+  const drawY = (groupCanvas.height - scaledHeight) / 2;
+  const localMinX = Math.floor(Math.min(0, drawX));
+  const localMinY = Math.floor(Math.min(0, drawY));
+  const localMaxX = Math.ceil(Math.max(groupCanvas.width, drawX + scaledWidth));
+  const localMaxY = Math.ceil(Math.max(groupCanvas.height, drawY + scaledHeight));
+  const cellStartOffsetCol = Math.floor(localMinX / tileWidth);
+  const cellStartOffsetRow = Math.floor(localMinY / tileHeight);
+  const cellEndOffsetCol = Math.ceil(localMaxX / tileWidth) - 1;
+  const cellEndOffsetRow = Math.ceil(localMaxY / tileHeight) - 1;
+  const affectedStartCol = minCol + cellStartOffsetCol;
+  const affectedStartRow = minRow + cellStartOffsetRow;
+  const affectedEndCol = maxCol + (cellEndOffsetCol - (groupColumns - 1));
+  const affectedEndRow = maxRow + (cellEndOffsetRow - (groupRows - 1));
+  const expandedColumns = cellEndOffsetCol - cellStartOffsetCol + 1;
+  const expandedRows = cellEndOffsetRow - cellStartOffsetRow + 1;
+  const expandedCanvas = document.createElement("canvas");
+  expandedCanvas.width = expandedColumns * tileWidth;
+  expandedCanvas.height = expandedRows * tileHeight;
+  const expandedContext = expandedCanvas.getContext("2d");
+
+  if (!expandedContext) {
+    return 0;
+  }
+
+  expandedContext.clearRect(0, 0, expandedCanvas.width, expandedCanvas.height);
+  expandedContext.imageSmoothingEnabled = false;
+  expandedContext.drawImage(
+    groupCanvas,
+    -cellStartOffsetCol * tileWidth + drawX,
+    -cellStartOffsetRow * tileHeight + drawY,
+    scaledWidth,
+    scaledHeight,
+  );
+
+  const remainingTiles = state.project.tiles.filter((tile) =>
+    tile.destCol < affectedStartCol
+    || tile.destCol > affectedEndCol
+    || tile.destRow < affectedStartRow
+    || tile.destRow > affectedEndRow,
+  );
+  const nextTiles: TilePlacement[] = [];
+
+  for (let rowOffset = 0; rowOffset < expandedRows; rowOffset += 1) {
+    for (let colOffset = 0; colOffset < expandedColumns; colOffset += 1) {
+      const destCol = affectedStartCol + colOffset;
+      const destRow = affectedStartRow + rowOffset;
+
+      if (destCol < 0 || destCol >= outputGrid.columns || destRow < 0 || destRow >= outputGrid.rows) {
+        continue;
+      }
+
+      const tileCanvas = document.createElement("canvas");
+      tileCanvas.width = tileWidth;
+      tileCanvas.height = tileHeight;
+      const tileContext = tileCanvas.getContext("2d", { willReadFrequently: true });
+
+      if (!tileContext) {
+        continue;
+      }
+
+      tileContext.clearRect(0, 0, tileWidth, tileHeight);
+      tileContext.imageSmoothingEnabled = false;
+      tileContext.drawImage(
+        expandedCanvas,
+        colOffset * tileWidth,
+        rowOffset * tileHeight,
+        tileWidth,
+        tileHeight,
+        0,
+        0,
+        tileWidth,
+        tileHeight,
+      );
+
+      if (!canvasHasVisiblePixels(tileContext, tileWidth, tileHeight)) {
+        continue;
+      }
+
+      const tile = createBakedOutputTile(destCol, destRow, tileWidth, tileHeight);
+      const ref = `runtime:group-scale:${Date.now()}:${destCol}:${destRow}:${Math.random().toString(36).slice(2, 8)}`;
+      await loadImageAssetFromUrl(state, tileCanvas.toDataURL("image/png"), ref);
+      resetTileToBakedImage(tile, ref, tileWidth, tileHeight);
+      nextTiles.push(tile);
+    }
+  }
+
+  state.project.tiles = [...remainingTiles, ...nextTiles];
+  normalizeProjectTilesToGrid(state);
+  state.session.selectedOutputTileIds = nextTiles.map((tile) => tile.id);
+  state.session.selectedOutputTileId = state.session.selectedOutputTileIds[0] ?? null;
+  return nextTiles.length;
+}
+
 async function bakeSelectedTilesColorReplace(
   state: ProjectState,
   selectedTiles: ProjectState["project"]["tiles"],
@@ -1858,6 +2279,63 @@ function resetTileToBakedImage(tile: TilePlacement, ref: string, tileWidth: numb
   tile.tintColor = null;
   tile.filterMode = "nearest";
   tile.pixelSnap = true;
+}
+
+function createBakedOutputTile(destCol: number, destRow: number, tileWidth: number, tileHeight: number): TilePlacement {
+  return {
+    id: 0,
+    destCol,
+    destRow,
+    sourceImageRef: null,
+    sourceRect: {
+      x: 0,
+      y: 0,
+      w: tileWidth,
+      h: tileHeight,
+    },
+    offsetX: 0,
+    offsetY: 0,
+    scaleX: 1,
+    scaleY: 1,
+    fitMode: "manual",
+    anchorX: "center",
+    anchorY: "center",
+    cropLeft: 0,
+    cropRight: 0,
+    cropTop: 0,
+    cropBottom: 0,
+    clampToTile: true,
+    edgeStretchLeft: 0,
+    edgeStretchRight: 0,
+    edgeStretchTop: 0,
+    edgeStretchBottom: 0,
+    edgeExtend: false,
+    fillExposedColor: null,
+    flipX: false,
+    flipY: false,
+    rotationQuarterTurns: 0,
+    brightness: 0,
+    contrast: 1,
+    saturation: 1,
+    tintColor: null,
+    filterMode: "nearest",
+    pixelSnap: true,
+    name: `tile_${destCol}_${destRow}`,
+    tags: [],
+    collision: "none",
+  };
+}
+
+function canvasHasVisiblePixels(context: CanvasRenderingContext2D, width: number, height: number): boolean {
+  const imageData = context.getImageData(0, 0, width, height).data;
+
+  for (let index = 3; index < imageData.length; index += 4) {
+    if (imageData[index] > 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function getRenderedSeamRepairTileCanvas(
