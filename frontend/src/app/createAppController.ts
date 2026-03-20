@@ -1582,6 +1582,28 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     const layout = getWorkspaceLayout(shell.canvas.width, shell.canvas.height, state);
     state.session.hoveredPanel = getPanelAtPoint(layout, point.x, point.y);
 
+    if (state.session.activeWorkspaceMode === "scene" && !state.session.showSceneGrid) {
+      const outputFrame = layout.outputViewport.frame;
+      const isOverOutput = point.x >= outputFrame.x
+        && point.x <= outputFrame.x + outputFrame.width
+        && point.y >= outputFrame.y
+        && point.y <= outputFrame.y + outputFrame.height;
+      const nextPreviewPointer = isOverOutput
+        ? {
+          x: Math.max(-1, Math.min(1, ((point.x - outputFrame.x) / Math.max(1, outputFrame.width)) * 2 - 1)),
+          y: Math.max(-1, Math.min(1, ((point.y - outputFrame.y) / Math.max(1, outputFrame.height)) * 2 - 1)),
+        }
+        : null;
+
+      if (
+        state.session.scenePreviewPointer?.x !== nextPreviewPointer?.x
+        || state.session.scenePreviewPointer?.y !== nextPreviewPointer?.y
+      ) {
+        state.session.scenePreviewPointer = nextPreviewPointer;
+        requestCanvasRender();
+      }
+    }
+
     if (activePointerId === event.pointerId && dragMode === "pan" && panPanel && lastPointerPoint) {
       panWorkspacePanel(state, panPanel, point.x - lastPointerPoint.x, point.y - lastPointerPoint.y, layout);
       lastPointerPoint = point;
@@ -1622,6 +1644,13 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
     setHoveredOutputTile(state, outputHit);
     requestCanvasRender();
+  }
+
+  function handlePointerLeave(): void {
+    if (state.session.scenePreviewPointer) {
+      state.session.scenePreviewPointer = null;
+      requestCanvasRender();
+    }
   }
 
   function handlePointerUp(event: PointerEvent): void {
@@ -2105,6 +2134,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       window.addEventListener("keydown", handleKeyDown);
       shell.canvas.addEventListener("pointerdown", handlePointerDown);
       shell.canvas.addEventListener("pointermove", handlePointerMove);
+      shell.canvas.addEventListener("pointerleave", handlePointerLeave);
       shell.canvas.addEventListener("pointerup", handlePointerUp);
       shell.canvas.addEventListener("pointercancel", handlePointerCancel);
       shell.canvas.addEventListener("wheel", handleWheel, { passive: false });

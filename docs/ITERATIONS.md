@@ -539,7 +539,42 @@ Align the tilesheet editor with the newer scene workflow by making source select
 
 ---
 
-## Ticket 16: Refactor grouped tile editing + tile editor UI
+## Ticket 16: Scene preview parallax interaction
+
+**Status**
+Completed
+
+**Goal**
+Make scene preview reflect configured layer parallax without destabilizing scene editing.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Add preview-only scene parallax driven by mouse movement over the scene view, while keeping edit-mode layer positioning stable and preserving valid parallax values like `0`.
+
+**Deliverables**
+
+* keep scene edit mode independent of layer parallax values
+* add preview-only parallax response for scene layers based on mouse position over the scene view
+* use each layer’s configured `parallaxX` and `parallaxY` in preview mode
+* keep parallax behavior runtime-only in the editor and preserve TMJ data as the source of truth
+* accept `0` as a valid value for `parallaxX` and `parallaxY`
+
+**Validation**
+
+* scene edit mode does not shift layers based on parallax values
+* preview mode shows parallax movement when moving the mouse over the scene
+* layers with different parallax values move distinctly in preview
+* `0` is preserved as a valid parallax value in the editor UI and scene data
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 17: Refactor grouped tile editing + tile editor UI
 
 **Status**
 Planned

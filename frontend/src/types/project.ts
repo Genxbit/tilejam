@@ -58,6 +58,7 @@ export type SessionState = {
   hoveredPanel: WorkspacePanel | null;
   tilePreviewMode: TilePreviewMode;
   showSceneGrid: boolean;
+  scenePreviewPointer: { x: number; y: number } | null;
   fillTileColor: string;
   colorReplaceSourceColor: string;
   colorReplaceTargetMode: ColorReplaceTargetMode;

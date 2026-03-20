@@ -354,6 +354,12 @@ function drawOutputBase(
   const outputKey = [
     state.session.renderRevision,
     state.session.activeWorkspaceMode,
+    state.session.activeWorkspaceMode === "scene" && !state.session.showSceneGrid
+      ? state.session.scenePreviewPointer?.x ?? 0
+      : "no-preview-x",
+    state.session.activeWorkspaceMode === "scene" && !state.session.showSceneGrid
+      ? state.session.scenePreviewPointer?.y ?? 0
+      : "no-preview-y",
     viewport.frame.x,
     viewport.frame.y,
     viewport.frame.width,
@@ -558,11 +564,9 @@ function drawSceneTiles(
 
     context.save();
     context.globalAlpha = layer.opacity;
-    // TMJ parallax values are exported data for the game/runtime.
-    // The Tilejam scene editor keeps layers in editor space and should not
-    // reposition them based on parallax while previewing or editing.
-    const layerOffsetX = layer.offsetX * viewport.scaleX;
-    const layerOffsetY = layer.offsetY * viewport.scaleY;
+    const previewParallax = getScenePreviewParallaxOffset(state, viewport, layer.parallaxX, layer.parallaxY);
+    const layerOffsetX = layer.offsetX * viewport.scaleX + previewParallax.x;
+    const layerOffsetY = layer.offsetY * viewport.scaleY + previewParallax.y;
 
     for (let row = 0; row < scene.height; row += 1) {
       for (let col = 0; col < scene.width; col += 1) {
@@ -584,6 +588,31 @@ function drawSceneTiles(
 
     context.restore();
   }
+}
+
+function getScenePreviewParallaxOffset(
+  state: ProjectState,
+  viewport: OutputViewport,
+  parallaxX: number,
+  parallaxY: number,
+): { x: number; y: number } {
+  if (state.session.activeWorkspaceMode !== "scene" || state.session.showSceneGrid) {
+    return { x: 0, y: 0 };
+  }
+
+  const pointer = state.session.scenePreviewPointer;
+
+  if (!pointer) {
+    return { x: 0, y: 0 };
+  }
+
+  const maxOffsetX = viewport.cellWidth * 0.75;
+  const maxOffsetY = viewport.cellHeight * 0.75;
+
+  return {
+    x: pointer.x * maxOffsetX * (1 - parallaxX),
+    y: pointer.y * maxOffsetY * (1 - parallaxY),
+  };
 }
 
 function drawTileInstance(
