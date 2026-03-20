@@ -180,31 +180,36 @@ function drawGridOverlay(
     return;
   }
 
-  const cellWidth = sourceMetrics.tileWidth * viewport.scaleX;
-  const cellHeight = sourceMetrics.tileHeight * viewport.scaleY;
+  const cellWidth = viewport.contentWidth / sourceMetrics.columns;
+  const cellHeight = viewport.contentHeight / sourceMetrics.rows;
 
   context.strokeStyle = GRID;
   context.lineWidth = 1;
 
   for (let column = 1; column < sourceMetrics.columns; column += 1) {
-    const lineX = viewport.contentX + Math.round(column * cellWidth) + 0.5;
+    const lineX = Math.round(viewport.contentX + column * cellWidth) + 0.5;
     context.beginPath();
-    context.moveTo(lineX, viewport.frame.y);
-    context.lineTo(lineX, viewport.frame.y + viewport.frame.height);
+    context.moveTo(lineX, viewport.contentY);
+    context.lineTo(lineX, viewport.contentY + viewport.contentHeight);
     context.stroke();
   }
 
   for (let row = 1; row < sourceMetrics.rows; row += 1) {
-    const lineY = viewport.contentY + Math.round(row * cellHeight) + 0.5;
+    const lineY = Math.round(viewport.contentY + row * cellHeight) + 0.5;
     context.beginPath();
-    context.moveTo(viewport.frame.x, lineY);
-    context.lineTo(viewport.frame.x + viewport.frame.width, lineY);
+    context.moveTo(viewport.contentX, lineY);
+    context.lineTo(viewport.contentX + viewport.contentWidth, lineY);
     context.stroke();
   }
 
   context.strokeStyle = GRID_STRONG;
   context.lineWidth = 1.5;
-  context.strokeRect(viewport.frame.x + 0.5, viewport.frame.y + 0.5, viewport.frame.width - 1, viewport.frame.height - 1);
+  context.strokeRect(
+    Math.round(viewport.contentX) + 0.5,
+    Math.round(viewport.contentY) + 0.5,
+    Math.max(1, Math.round(viewport.contentWidth) - 1),
+    Math.max(1, Math.round(viewport.contentHeight) - 1),
+  );
 }
 
 function drawEmptyState(
@@ -291,24 +296,36 @@ function drawOutputGrid(
     return;
   }
 
+  const cellWidth = viewport.contentWidth / outputMetrics.columns;
+  const cellHeight = viewport.contentHeight / outputMetrics.rows;
+
   context.strokeStyle = OUTPUT_GRID;
   context.lineWidth = 1;
 
   for (let column = 1; column < outputMetrics.columns; column += 1) {
-    const lineX = viewport.contentX + Math.round(column * viewport.cellWidth) + 0.5;
+    const lineX = Math.round(viewport.contentX + column * cellWidth) + 0.5;
     context.beginPath();
-    context.moveTo(lineX, viewport.frame.y);
-    context.lineTo(lineX, viewport.frame.y + viewport.frame.height);
+    context.moveTo(lineX, viewport.contentY);
+    context.lineTo(lineX, viewport.contentY + viewport.contentHeight);
     context.stroke();
   }
 
   for (let row = 1; row < outputMetrics.rows; row += 1) {
-    const lineY = viewport.contentY + Math.round(row * viewport.cellHeight) + 0.5;
+    const lineY = Math.round(viewport.contentY + row * cellHeight) + 0.5;
     context.beginPath();
-    context.moveTo(viewport.frame.x, lineY);
-    context.lineTo(viewport.frame.x + viewport.frame.width, lineY);
+    context.moveTo(viewport.contentX, lineY);
+    context.lineTo(viewport.contentX + viewport.contentWidth, lineY);
     context.stroke();
   }
+
+  context.strokeStyle = GRID_STRONG;
+  context.lineWidth = 1.5;
+  context.strokeRect(
+    Math.round(viewport.contentX) + 0.5,
+    Math.round(viewport.contentY) + 0.5,
+    Math.max(1, Math.round(viewport.contentWidth) - 1),
+    Math.max(1, Math.round(viewport.contentHeight) - 1),
+  );
 
   context.fillStyle = VIEW_HINT;
   context.fillText(
@@ -766,7 +783,9 @@ function getSourcePanelLabel(state: ProjectState): string {
   const sourceAsset = getResolvedSourceImageAsset(state);
   const image = sourceAsset.image;
   const label = getDisplayFileLabel(sourceAsset.name ?? state.project.sourceImage ?? "image");
-  return `Source: ${label} · ${image?.width ?? 0} x ${image?.height ?? 0}`;
+  const columns = image ? Math.max(1, Math.floor(image.width / state.project.sourceTileWidth)) : 0;
+  const rows = image ? Math.max(1, Math.floor(image.height / state.project.sourceTileHeight)) : 0;
+  return `Source: ${label} · ${columns} x ${rows} tiles · ${image?.width ?? 0} x ${image?.height ?? 0}px`;
 }
 
 function getOutputPanelLabel(
