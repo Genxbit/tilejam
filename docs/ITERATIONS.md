@@ -455,3 +455,39 @@ Add seam-aware tile edge harmonization tools for adjacent output tiles.
 * no standard blur or full-image smoothing is used
 * behavior is predictable and repeatable for the same tiles and settings
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 14: Refactor grouped tile editing + tile editor UI
+
+**Status**
+Planned
+
+**Goal**
+Reduce complexity in grouped tile editing and the tile editor UI without changing behavior.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Refactor grouped tile bake/edit operations out of the app controller, and split the tile editor UI construction into smaller focused helpers while preserving current behavior.
+
+**Deliverables**
+
+* extract grouped tile bake operations from `frontend/src/app/createAppController.ts` into a dedicated system or helper module
+* keep grouped nudge, flip, scale, color replace, seam repair, and related tile-bake behavior functionally unchanged
+* reduce orchestration complexity in `frontend/src/app/createAppController.ts`
+* split tile editor UI construction in `frontend/src/ui/createShell.ts` into smaller focused helpers
+* preserve current tile editor layout, control behavior, and editor messaging
+* keep runtime-only editor/session state separate from persisted project data
+
+**Validation**
+
+* grouped tile edit behavior matches current behavior before the refactor
+* `frontend/src/app/createAppController.ts` has less grouped-edit implementation detail and remains focused on orchestration
+* `frontend/src/ui/createShell.ts` is easier to navigate and the tile editor UI is split into clearer helper units
+* no project format or workflow regressions are introduced
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
