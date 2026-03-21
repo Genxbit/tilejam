@@ -139,6 +139,64 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       renderAll();
       return true;
     },
+    onNewProject: () => {
+      const freshState = createProjectState();
+      state.project = freshState.project;
+      state.sourceImageAsset = freshState.sourceImageAsset;
+      state.session.message = "Started a new project.";
+      state.session.projectFileName = null;
+      state.session.projectFileHandle = null;
+      state.session.projectDirectoryHandle = null;
+      state.session.projectBaseUrl = null;
+      state.session.workingImageFileName = null;
+      state.session.workingImageFileHandle = null;
+      state.session.sceneFileName = null;
+      state.session.sceneFileHandle = null;
+      state.session.activeWorkspaceMode = freshState.session.activeWorkspaceMode;
+      state.session.activeSceneLayerId = freshState.session.activeSceneLayerId;
+      state.session.sourceSelection = freshState.session.sourceSelection;
+      state.session.draftSourceSelection = freshState.session.draftSourceSelection;
+      state.session.hoveredOutputTile = freshState.session.hoveredOutputTile;
+      state.session.selectedOutputTileId = freshState.session.selectedOutputTileId;
+      state.session.selectedOutputTileIds = freshState.session.selectedOutputTileIds;
+      state.session.selectedOutputCells = freshState.session.selectedOutputCells;
+      state.session.outputTileClipboard = freshState.session.outputTileClipboard;
+      state.session.sceneClipboard = freshState.session.sceneClipboard;
+      state.session.groupScaleX = freshState.session.groupScaleX;
+      state.session.groupScaleY = freshState.session.groupScaleY;
+      state.session.groupStretchLeft = freshState.session.groupStretchLeft;
+      state.session.groupStretchRight = freshState.session.groupStretchRight;
+      state.session.groupStretchTop = freshState.session.groupStretchTop;
+      state.session.groupStretchBottom = freshState.session.groupStretchBottom;
+      state.session.selectedSceneCell = freshState.session.selectedSceneCell;
+      state.session.selectedSceneCells = freshState.session.selectedSceneCells;
+      state.session.hoveredPanel = freshState.session.hoveredPanel;
+      state.session.tilePreviewMode = freshState.session.tilePreviewMode;
+      state.session.showSceneGrid = freshState.session.showSceneGrid;
+      state.session.scenePreviewPointer = freshState.session.scenePreviewPointer;
+      state.session.fillTileColor = freshState.session.fillTileColor;
+      state.session.colorReplaceSourceColor = freshState.session.colorReplaceSourceColor;
+      state.session.colorReplaceTargetMode = freshState.session.colorReplaceTargetMode;
+      state.session.colorReplaceTargetColor = freshState.session.colorReplaceTargetColor;
+      state.session.colorReplaceTolerance = freshState.session.colorReplaceTolerance;
+      state.session.seamRepairDirection = freshState.session.seamRepairDirection;
+      state.session.seamRepairStripWidth = freshState.session.seamRepairStripWidth;
+      state.session.seamRepairFalloff = freshState.session.seamRepairFalloff;
+      state.session.seamRepairMode = freshState.session.seamRepairMode;
+      state.session.seamRepairReference = freshState.session.seamRepairReference;
+      state.session.seamRepairStrength = freshState.session.seamRepairStrength;
+      state.session.seamRepairQuantize = freshState.session.seamRepairQuantize;
+      state.session.seamRepairPreserveContrast = freshState.session.seamRepairPreserveContrast;
+      state.session.seamRepairContinueRamp = freshState.session.seamRepairContinueRamp;
+      state.session.seamRepairPreview = freshState.session.seamRepairPreview;
+      state.session.sourceCamera = freshState.session.sourceCamera;
+      state.session.outputCamera = freshState.session.outputCamera;
+      state.session.sourceImageAssetCache = freshState.session.sourceImageAssetCache;
+      state.session.renderRevision += 1;
+      undoStack.length = 0;
+      redoStack.length = 0;
+      renderAll();
+    },
     onProjectSelected: async (file) => {
       try {
         const project = await loadProjectFile(file);
@@ -603,7 +661,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     },
     onWorkspaceModeChanged: (mode) => {
       state.session.activeWorkspaceMode = mode;
-      if (mode === "scene" && state.project.scene) {
+      if (mode === "scene") {
+        ensureScene(state);
         syncSceneTilesetSourceToDefault(state);
       }
       clearSelectionState(state);
@@ -699,12 +758,65 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         return;
       }
 
-      const imagePath = await deriveSceneRelativeImagePath(state, file) ?? file.name;
+      const imagePath = file.name;
       await loadImageAssetFromFile(state, file, imagePath);
       updateActiveSceneLayer(state, { image: imagePath });
       bumpRenderRevision();
       state.session.message = `Loaded image layer source ${imagePath}.`;
       renderAll();
+    },
+    onOpenSceneLayerImage: async () => {
+      if (!window.showOpenFilePicker) {
+        return false;
+      }
+
+      try {
+        const layer = getActiveSceneLayer(state);
+
+        if (!layer || layer.type !== "imagelayer") {
+          state.session.message = "Select an image layer before choosing an image.";
+          renderAll();
+          return true;
+        }
+
+        const [handle] = await window.showOpenFilePicker({
+          excludeAcceptAllOption: false,
+          multiple: false,
+          types: [
+            {
+              description: "Image",
+              accept: {
+                "image/*": [".png", ".jpg", ".jpeg", ".gif", ".webp"],
+              },
+            },
+          ],
+        });
+
+        if (!handle) {
+          return true;
+        }
+
+        const file = await handle.getFile();
+        recordHistory();
+        const projectRelativePath = await deriveProjectRelativePathFromHandle(state, handle);
+        const imagePath = state.project.sceneFile && projectRelativePath
+          ? makePathRelativeToSceneFile(state.project.sceneFile, projectRelativePath)
+          : file.name;
+        await loadImageAssetFromFile(state, file, imagePath);
+        updateActiveSceneLayer(state, { image: imagePath });
+        bumpRenderRevision();
+        state.session.message = `Loaded image layer source ${imagePath}.`;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return true;
+        }
+
+        const message = error instanceof Error ? error.message : "Unknown image layer open error.";
+        state.session.message = `Image layer open failed: ${message}`;
+      }
+
+      renderAll();
+      return true;
     },
     onSceneLayerUpdated: (patch) => {
       recordHistory();

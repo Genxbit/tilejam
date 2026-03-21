@@ -24,6 +24,7 @@ type ShellOptions = {
   state: ProjectState;
   onFileSelected: (file: File) => Promise<void>;
   onOpenSource: () => Promise<boolean>;
+  onNewProject: () => void;
   onProjectSelected: (file: File) => Promise<void>;
   onOpenProject: () => Promise<boolean>;
   onSaveProject: () => Promise<void>;
@@ -52,6 +53,7 @@ type ShellOptions = {
   onSceneLayerChanged: (layerId: number) => void;
   onSceneLayerAdded: (type: SceneLayerType) => void;
   onSceneLayerImageSelected: (file: File) => Promise<void>;
+  onOpenSceneLayerImage: () => Promise<boolean>;
   onSceneLayerUpdated: (patch: {
     name?: string;
     type?: SceneLayerType;
@@ -162,6 +164,7 @@ export function createShell({
   state,
   onFileSelected,
   onOpenSource,
+  onNewProject,
   onProjectSelected,
   onOpenProject,
   onSaveProject,
@@ -190,6 +193,7 @@ export function createShell({
   onSceneLayerChanged,
   onSceneLayerAdded,
   onSceneLayerImageSelected,
+  onOpenSceneLayerImage,
   onSceneLayerUpdated,
   onSceneLayerMoved,
   onSceneGridVisibilityChanged,
@@ -388,9 +392,10 @@ export function createShell({
 
   const historyActions = document.createElement("div");
   historyActions.className = "top-bar-actions";
+  const newProjectButton = createActionButton("New project", onNewProject);
   const undoButton = createActionButton("Undo", onUndo);
   const redoButton = createActionButton("Redo", onRedo);
-  historyActions.append(projectInputButton, saveProjectButton, undoButton, redoButton);
+  historyActions.append(newProjectButton, projectInputButton, saveProjectButton, undoButton, redoButton);
   topBar.append(topBarBrand, historyActions);
 
   const fileActions = document.createElement("div");
@@ -1460,8 +1465,12 @@ export function createShell({
 
   const imageLayerActions = document.createElement("div");
   imageLayerActions.className = "panel-actions";
-  const imageLayerInputButton = createActionButton("Open image", () => {
-    imageLayerInput.click();
+  const imageLayerInputButton = createAsyncActionButton("Open image", async () => {
+    const handled = await onOpenSceneLayerImage();
+
+    if (!handled) {
+      imageLayerInput.click();
+    }
   });
   const imageLayerInput = document.createElement("input");
   imageLayerInput.type = "file";

@@ -53,7 +53,7 @@ export function createProjectState(): ProjectState {
       selectedSceneCells: [],
       hoveredPanel: null,
       tilePreviewMode: "none",
-      showSceneGrid: false,
+      showSceneGrid: true,
       scenePreviewPointer: null,
       fillTileColor: "#000000",
       colorReplaceSourceColor: "#0000ff",
