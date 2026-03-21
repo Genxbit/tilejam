@@ -568,6 +568,12 @@ function drawSceneTiles(
     const layerOffsetX = layer.offsetX * viewport.scaleX + previewParallax.x;
     const layerOffsetY = layer.offsetY * viewport.scaleY + previewParallax.y;
 
+    if (layer.type === "imagelayer") {
+      drawSceneImageLayer(context, state, viewport, layer.image, layer.repeatX, layer.repeatY, layerOffsetX, layerOffsetY);
+      context.restore();
+      continue;
+    }
+
     for (let row = 0; row < scene.height; row += 1) {
       for (let col = 0; col < scene.width; col += 1) {
         const gid = getSceneCellGid(state, col, row, layer.id);
@@ -613,6 +619,63 @@ function getScenePreviewParallaxOffset(
     x: pointer.x * maxOffsetX * (1 - parallaxX),
     y: pointer.y * maxOffsetY * (1 - parallaxY),
   };
+}
+
+function drawSceneImageLayer(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+  imageRef: string,
+  repeatX: boolean,
+  repeatY: boolean,
+  offsetX: number,
+  offsetY: number,
+): void {
+  const image = getSourceImageForRef(state, imageRef);
+
+  if (!image) {
+    return;
+  }
+
+  const drawWidth = Math.max(1, Math.round(image.width * viewport.scaleX));
+  const drawHeight = Math.max(1, Math.round(image.height * viewport.scaleY));
+
+  if (drawWidth <= 0 || drawHeight <= 0) {
+    return;
+  }
+
+  const baseX = Math.round(viewport.contentX + offsetX);
+  const baseY = Math.round(viewport.contentY + offsetY);
+  const startX = repeatX
+    ? viewport.frame.x + ((((baseX - viewport.frame.x) % drawWidth) + drawWidth) % drawWidth) - drawWidth
+    : baseX;
+  const startY = repeatY
+    ? viewport.frame.y + ((((baseY - viewport.frame.y) % drawHeight) + drawHeight) % drawHeight) - drawHeight
+    : baseY;
+  const endX = repeatX ? viewport.frame.x + viewport.frame.width + drawWidth : startX + drawWidth;
+  const endY = repeatY ? viewport.frame.y + viewport.frame.height + drawHeight : startY + drawHeight;
+
+  context.save();
+  context.beginPath();
+  context.rect(viewport.contentX, viewport.contentY, viewport.contentWidth, viewport.contentHeight);
+  context.clip();
+  context.imageSmoothingEnabled = false;
+
+  for (let drawY = startY; drawY < endY; drawY += repeatY ? drawHeight : endY - startY + 1) {
+    for (let drawX = startX; drawX < endX; drawX += repeatX ? drawWidth : endX - startX + 1) {
+      context.drawImage(image, Math.round(drawX), Math.round(drawY), drawWidth, drawHeight);
+
+      if (!repeatX) {
+        break;
+      }
+    }
+
+    if (!repeatY) {
+      break;
+    }
+  }
+
+  context.restore();
 }
 
 function drawTileInstance(

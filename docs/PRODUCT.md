@@ -47,6 +47,7 @@ It also grows into a scene editor that uses the cleaned tilesheet as the palette
 * TSJ export
 * scene editing using the current tilesheet
 * TMJ scene load/save
+* scene background image layers via TMJ `imagelayer`
 
 ---
 
@@ -71,6 +72,7 @@ It also grows into a scene editor that uses the cleaned tilesheet as the palette
 * working/output PNG must reopen as editable output-grid content, not only as a flat preview
 * scene editing must use the current tilesheet as the palette/source
 * scene placement must stay grid-aligned and deterministic
+* scene tile content and background image layers must remain distinct concepts
 * output must be production-ready
 * behavior must be explicit
 * no hidden state

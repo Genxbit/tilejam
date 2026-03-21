@@ -33,6 +33,25 @@ function readSceneLayers(value: unknown, width: number, height: number, path: st
       throw new Error(`${layerPath} must be an object.`);
     }
 
+    const type = readOptionalString(entry.type, "tilelayer", `${layerPath}.type`);
+
+    if (type === "imagelayer") {
+      return {
+        id: readPositiveInteger(entry.id, `${layerPath}.id`),
+        name: readString(entry.name, `${layerPath}.name`),
+        type: "imagelayer" as const,
+        visible: readOptionalBoolean(entry.visible, true, `${layerPath}.visible`),
+        opacity: readOptionalNumber(entry.opacity, 1, `${layerPath}.opacity`),
+        offsetX: readOptionalNumber(entry.offsetX, 0, `${layerPath}.offsetX`),
+        offsetY: readOptionalNumber(entry.offsetY, 0, `${layerPath}.offsetY`),
+        parallaxX: readOptionalNumber(entry.parallaxX, 1, `${layerPath}.parallaxX`),
+        parallaxY: readOptionalNumber(entry.parallaxY, 1, `${layerPath}.parallaxY`),
+        repeatX: readOptionalBoolean(entry.repeatX, false, `${layerPath}.repeatX`),
+        repeatY: readOptionalBoolean(entry.repeatY, false, `${layerPath}.repeatY`),
+        image: readString(entry.image, `${layerPath}.image`),
+      };
+    }
+
     const data = readIntegerArray(entry.data, `${layerPath}.data`);
 
     if (data.length !== width * height) {
@@ -42,6 +61,7 @@ function readSceneLayers(value: unknown, width: number, height: number, path: st
     return {
       id: readPositiveInteger(entry.id, `${layerPath}.id`),
       name: readString(entry.name, `${layerPath}.name`),
+      type: "tilelayer" as const,
       width,
       height,
       visible: readOptionalBoolean(entry.visible, true, `${layerPath}.visible`),

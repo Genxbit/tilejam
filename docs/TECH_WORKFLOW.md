@@ -142,6 +142,9 @@ Rule of thumb:
 * scene state should not be mixed into tilesheet-only systems
 * TMJ should be the source of truth for scene content
 * project JSON should store at most a scene-file reference, not the embedded scene map
+* `tilelayer` should remain the default editable scene-layer type
+* `imagelayer` should be modeled as a distinct scene-layer type, not forced into tile-grid data
+* `repeatx` / `repeaty` belong to image-layer scene data and TMJ IO, not to tilesheet or tile-placement systems
 
 **TileGrid**
 
@@ -242,6 +245,7 @@ Scene rules:
 * scene editing should mirror the source/target editing model where helpful
 * `.tilejam.json` should not duplicate TMJ layer data
 * scene interoperability must follow `docs/FORMATS.md`
+* image-layer preview and repeat behavior should be derived from scene layer data
 
 ---
 

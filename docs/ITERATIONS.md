@@ -574,7 +574,52 @@ Add preview-only scene parallax driven by mouse movement over the scene view, wh
 
 ---
 
-## Ticket 17: Refactor grouped tile editing + tile editor UI
+## Ticket 17: Scene image layers + TMJ layer types
+
+**Status**
+Completed
+
+**Goal**
+Extend scene/TMJ support beyond tile layers with explicit image-layer backgrounds.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Add TMJ scene support for `imagelayer` alongside the current default `tilelayer`, including image reference, preview rendering, and `repeatx` / `repeaty` background behavior.
+
+**Deliverables**
+
+* keep `tilelayer` as the default editable scene layer type
+* add scene-layer data and TMJ IO support for `imagelayer`
+* add `imagelayer` support in the scene editor panel
+* add a layer type selector for `tilelayer` and `imagelayer`
+* add an `Open image` action for the selected image layer in the scene editor panel
+* show and edit the selected image-layer image path in the scene editor panel
+* support shared layer opacity controls in the scene editor for all supported layer types
+* support a single image reference for each image layer
+* support `repeatx` and `repeaty` for background-style image layers
+* preserve `offsetx`, `offsety`, `parallaxx`, and `parallaxy` for image layers
+* keep tile-grid editing behavior scoped to `tilelayer`
+
+**Validation**
+
+* TMJ load/save preserves both `tilelayer` and `imagelayer` correctly
+* `tilelayer` editing continues to work as before
+* `imagelayer` can be created and edited from the scene editor panel
+* image can be picked from the scene editor panel for an imagelayer
+* chosen image path is visible in the scene editor and preserved in TMJ
+* opacity works correctly for all supported layer types in the scene editor
+* image layers can render a referenced background image in the scene editor
+* `repeatx` and `repeaty` behave predictably in preview
+* matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 18: Refactor grouped tile editing + tile editor UI
 
 **Status**
 Planned

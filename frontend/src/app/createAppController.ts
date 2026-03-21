@@ -26,7 +26,7 @@ import {
   updateSelectedOutputTile,
 } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, copySourceSelectionToOutputClipboard, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
-import { addSceneLayer, clearSceneLayers, copySelectedSceneCells, copySourceSelectionToSceneClipboard, deleteSelectedSceneCells, ensureScene, getSelectedSceneCells, moveActiveSceneLayerBy, moveSelectedSceneCellBy, moveSelectedSceneCellsTo, pasteSceneClipboard, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneCellRectangle, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
+import { addSceneLayer, clearSceneLayers, copySelectedSceneCells, copySourceSelectionToSceneClipboard, deleteSelectedSceneCells, ensureScene, getActiveSceneLayer, getSelectedSceneCells, moveActiveSceneLayerBy, moveSelectedSceneCellBy, moveSelectedSceneCellsTo, pasteSceneClipboard, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneCellRectangle, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import {
   clearSourceImageAsset,
@@ -337,6 +337,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.selectedSceneCell = null;
         state.session.selectedSceneCells = [];
         state.session.activeWorkspaceMode = "scene";
+        await resolveSceneImageLayersFromSceneFile(state, scene);
         const tilesheetResolution = await resolveSceneTilesheetIfPossible(state);
         bumpRenderRevision();
         state.session.message = `Loaded scene: ${file.name}.${tilesheetResolution ? ` ${tilesheetResolution}` : ""}`;
@@ -381,6 +382,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.selectedSceneCell = null;
         state.session.selectedSceneCells = [];
         state.session.activeWorkspaceMode = "scene";
+        await resolveSceneImageLayersFromSceneFile(state, scene);
         const tilesheetResolution = await resolveSceneTilesheetIfPossible(state);
         bumpRenderRevision();
         state.session.message = `Loaded scene: ${file.name}.${tilesheetResolution ? ` ${tilesheetResolution}` : ""}`;
@@ -635,13 +637,30 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = layer ? `Selected scene layer ${layer.name}.` : "Scene layer not found.";
       return;
     },
-    onSceneLayerAdded: () => {
+    onSceneLayerAdded: (type) => {
       recordHistory();
-      const layer = addSceneLayer(state);
+      const layer = addSceneLayer(state, type);
       bumpRenderRevision();
       state.session.selectedSceneCell = null;
       state.session.selectedSceneCells = [];
       state.session.message = `Added scene layer ${layer.name}.`;
+      renderAll();
+    },
+    onSceneLayerImageSelected: async (file) => {
+      recordHistory();
+      const layer = getActiveSceneLayer(state);
+
+      if (!layer || layer.type !== "imagelayer") {
+        undoStack.pop();
+        state.session.message = "Select an image layer before choosing an image.";
+        renderAll();
+        return;
+      }
+
+      const imageRef = await loadImageAssetFromFile(state, file, file.name);
+      updateActiveSceneLayer(state, { image: imageRef });
+      bumpRenderRevision();
+      state.session.message = `Loaded image layer source ${file.name}.`;
       renderAll();
     },
     onSceneLayerUpdated: (patch) => {
@@ -653,6 +672,17 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.message = "Select a scene layer before editing it.";
         renderAll();
         return;
+      }
+
+      if (layer.type === "imagelayer" && typeof patch.image === "string" && patch.image.trim().length > 0) {
+        void loadImageAssetFromUrl(state, patch.image.trim(), patch.image.trim())
+          .then(() => {
+            bumpRenderRevision();
+            renderAll();
+          })
+          .catch(() => {
+            // Keep the path in scene data even if the browser cannot resolve it yet.
+          });
       }
 
       bumpRenderRevision();
@@ -3184,6 +3214,7 @@ async function loadProjectIntoState(
       state.session.sceneFileName = getDisplayFileName(project.sceneFile);
       state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
       state.session.selectedSceneCells = [];
+      await resolveSceneImageLayersFromResolvedUrl(state, scene, resolvedSceneFile);
       resolutionMessages.push(`Scene resolved from ${project.sceneFile}.`);
     } catch {
       state.project.scene = null;
@@ -3273,6 +3304,7 @@ async function tryResolveProjectAssetsFromDirectory(
           state.session.sceneFileHandle = null;
           state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
           state.session.selectedSceneCells = [];
+          await resolveSceneImageLayersFromDirectory(state, scene, directoryHandle, unresolved.sceneFileRef);
           resolutionMessages.push(`Scene linked from project folder (${unresolved.sceneFileRef}).`);
         } else {
           resolutionMessages.push(`Scene "${unresolved.sceneFileRef}" was not found in the selected project folder.`);
@@ -3344,6 +3376,93 @@ async function resolveSceneTilesheetIfPossible(state: ProjectState): Promise<str
   } catch {
     return `Scene references ${scene.tilesetSource}. Open ${expectedWorkingImage} manually to render it here.`;
   }
+}
+
+async function resolveSceneImageLayersFromSceneFile(
+  state: ProjectState,
+  scene: NonNullable<ProjectState["project"]["scene"]>,
+): Promise<void> {
+  await Promise.all(
+    scene.layers.map(async (layer) => {
+      if (layer.type !== "imagelayer" || !layer.image) {
+        return;
+      }
+
+      try {
+        await loadImageAssetFromUrl(state, layer.image, layer.image);
+      } catch {
+        // Local scene files do not provide a usable base path in the browser.
+        // Image layers can still be relinked from the scene editor panel.
+      }
+    }),
+  );
+}
+
+async function resolveSceneImageLayersFromResolvedUrl(
+  state: ProjectState,
+  scene: NonNullable<ProjectState["project"]["scene"]>,
+  resolvedSceneUrl: string,
+): Promise<void> {
+  await Promise.all(
+    scene.layers.map(async (layer) => {
+      if (layer.type !== "imagelayer" || !layer.image) {
+        return;
+      }
+
+      try {
+        const resolvedImageUrl = new URL(layer.image, resolvedSceneUrl).toString();
+        await loadImageAssetFromUrl(state, resolvedImageUrl, layer.image);
+      } catch {
+        // Leave unresolved image layers visible in the editor fields.
+      }
+    }),
+  );
+}
+
+async function resolveSceneImageLayersFromDirectory(
+  state: ProjectState,
+  scene: NonNullable<ProjectState["project"]["scene"]>,
+  directoryHandle: FileSystemDirectoryHandle,
+  sceneFileRef: string,
+): Promise<void> {
+  const sceneDirectory = getParentRelativePath(sceneFileRef);
+
+  await Promise.all(
+    scene.layers.map(async (layer) => {
+      if (layer.type !== "imagelayer" || !layer.image) {
+        return;
+      }
+
+      const relativeImagePath = joinRelativePath(sceneDirectory, layer.image);
+      const imageFile = await getRelativeFileFromDirectory(directoryHandle, relativeImagePath);
+
+      if (!imageFile) {
+        return;
+      }
+
+      await loadImageAssetFromFile(state, imageFile, layer.image);
+    }),
+  );
+}
+
+function getParentRelativePath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  return index >= 0 ? normalized.slice(0, index) : "";
+}
+
+function joinRelativePath(basePath: string, childPath: string): string {
+  const normalizedChild = childPath.replace(/\\/g, "/");
+
+  if (normalizedChild.startsWith("/") || normalizedChild.includes("..")) {
+    return normalizedChild.replace(/^\//, "");
+  }
+
+  if (!basePath) {
+    return normalizedChild;
+  }
+
+  return `${basePath.replace(/\/+$/g, "")}/${normalizedChild.replace(/^\.?\//, "")}`;
 }
 
 async function getRelativeFileFromDirectory(

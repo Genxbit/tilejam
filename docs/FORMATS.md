@@ -132,6 +132,20 @@ Standard Tiled JSON map.
       "parallaxx": 1,
       "parallaxy": 1,
       "data": [1, 0, 0, 2]
+    },
+    {
+      "id": 2,
+      "name": "sky",
+      "type": "imagelayer",
+      "visible": true,
+      "opacity": 1,
+      "offsetx": 0,
+      "offsety": 0,
+      "parallaxx": 0.5,
+      "parallaxy": 0.5,
+      "repeatx": true,
+      "repeaty": false,
+      "image": "sky.png"
     }
   ],
   "tilesets": [
@@ -148,13 +162,17 @@ Standard Tiled JSON map.
 * scene editing uses TMJ as the interoperable scene format
 * scene width / height are stored in tile units
 * scene tile size must match the selected tilesheet tile size
-* scene layer data uses Tiled global tile IDs
-* Tilejam v1 should start with orthogonal tile layers
-* scene tile layers may include `offsetx`, `offsety`, `parallaxx`, and `parallaxy`
-* Tilejam scene state maps those TMJ fields to `offsetX`, `offsetY`, `parallaxX`, and `parallaxY`
+* scene layer data uses Tiled global tile IDs for `tilelayer`
+* Tilejam currently treats `tilelayer` as the default supported editable scene layer type
+* `tilelayer` may include `offsetx`, `offsety`, `parallaxx`, and `parallaxy`
+* `imagelayer` is a separate TMJ layer kind for a single referenced image, typically used for background or atmosphere layers
+* `imagelayer` may include `offsetx`, `offsety`, `parallaxx`, `parallaxy`, `repeatx`, `repeaty`, and `image`
+* `repeatx` and `repeaty` control whether an image layer repeats horizontally or vertically
+* Tilejam scene state should map TMJ layer properties into explicit scene-layer data instead of hiding them in UI-only state
 * the active tilesheet is used as the palette/source for scene editing
-* loading TMJ must restore editable scene grid content
-* saving TMJ must preserve deterministic tile placement
+* loading TMJ must restore editable `tilelayer` scene grid content
+* saving TMJ must preserve deterministic tile placement for `tilelayer`
+* `imagelayer` support should preserve the referenced image path and repeat/parallax settings without forcing it into tile-grid data
 
 ---
 

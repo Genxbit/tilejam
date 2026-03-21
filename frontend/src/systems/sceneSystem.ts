@@ -1,4 +1,14 @@
-import type { GridCoordinate, ProjectState, SceneClipboard, SceneLayerState, SceneMapState, SourceSelection } from "../types/project";
+import type {
+  GridCoordinate,
+  ProjectState,
+  SceneClipboard,
+  SceneImageLayerState,
+  SceneLayerState,
+  SceneLayerType,
+  SceneMapState,
+  SceneTileLayerState,
+  SourceSelection,
+} from "../types/project";
 import { getOutputGridMetrics, getTileIndex } from "./tileGridSystem";
 
 const FIRST_GID = 1;
@@ -51,6 +61,10 @@ export function clearSceneLayers(state: ProjectState): number {
   let clearedCount = 0;
 
   for (const layer of scene.layers) {
+    if (layer.type !== "tilelayer") {
+      continue;
+    }
+
     for (let index = 0; index < layer.data.length; index += 1) {
       if (layer.data[index] !== 0) {
         layer.data[index] = 0;
@@ -72,6 +86,10 @@ export function resizeScene(state: ProjectState, width: number, height: number):
   scene.tileHeight = state.project.tileHeight;
 
   for (const layer of scene.layers) {
+    if (layer.type !== "tilelayer") {
+      continue;
+    }
+
     layer.data = resizeLayerData(layer.data, layer.width, layer.height, scene.width, scene.height);
     layer.width = scene.width;
     layer.height = scene.height;
@@ -86,10 +104,12 @@ export function setSceneTilesetSource(state: ProjectState, tilesetSource: string
   return scene;
 }
 
-export function addSceneLayer(state: ProjectState): SceneLayerState {
+export function addSceneLayer(state: ProjectState, type: SceneLayerType = "tilelayer"): SceneLayerState {
   const scene = ensureScene(state);
   const nextId = Math.max(0, ...scene.layers.map((layer) => layer.id)) + 1;
-  const layer = createSceneLayer(nextId, `layer_${nextId}`, scene.width, scene.height);
+  const layer = type === "imagelayer"
+    ? createSceneImageLayer(nextId, `layer_${nextId}`)
+    : createSceneLayer(nextId, `layer_${nextId}`, scene.width, scene.height);
   scene.layers.push(layer);
   state.session.activeSceneLayerId = layer.id;
   return layer;
@@ -109,7 +129,19 @@ export function selectSceneLayer(state: ProjectState, layerId: number): SceneLay
 
 export function updateActiveSceneLayer(
   state: ProjectState,
-  patch: Partial<Pick<SceneLayerState, "name" | "visible" | "opacity" | "offsetX" | "offsetY" | "parallaxX" | "parallaxY">>,
+  patch: Partial<{
+    name: string;
+    type: SceneLayerType;
+    visible: boolean;
+    opacity: number;
+    offsetX: number;
+    offsetY: number;
+    parallaxX: number;
+    parallaxY: number;
+    image: string;
+    repeatX: boolean;
+    repeatY: boolean;
+  }>,
 ): SceneLayerState | null {
   const layer = getActiveSceneLayer(state);
 
@@ -117,11 +149,35 @@ export function updateActiveSceneLayer(
     return null;
   }
 
+  if (patch.type && patch.type !== layer.type) {
+    const scene = ensureScene(state);
+    const layerIndex = scene.layers.findIndex((entry) => entry.id === layer.id);
+
+    if (layerIndex >= 0) {
+      const replacement = patch.type === "imagelayer"
+        ? createSceneImageLayer(layer.id, layer.name)
+        : createSceneTileLayer(layer.id, layer.name, scene.width, scene.height);
+      replacement.visible = layer.visible;
+      replacement.opacity = layer.opacity;
+      replacement.offsetX = layer.offsetX;
+      replacement.offsetY = layer.offsetY;
+      replacement.parallaxX = layer.parallaxX;
+      replacement.parallaxY = layer.parallaxY;
+      scene.layers[layerIndex] = replacement;
+      state.session.activeSceneLayerId = replacement.id;
+      const { type: _type, ...restPatch } = patch;
+      return updateActiveSceneLayer(state, restPatch);
+    }
+  }
+
   Object.assign(layer, patch);
   layer.name = layer.name.trim() || `layer_${layer.id}`;
   layer.opacity = clampOpacity(layer.opacity);
   layer.parallaxX = clampParallax(layer.parallaxX);
   layer.parallaxY = clampParallax(layer.parallaxY);
+  if (layer.type === "imagelayer") {
+    layer.image = layer.image.trim();
+  }
   return layer;
 }
 
@@ -169,7 +225,7 @@ export function placeSelectionIntoScene(
   const scene = ensureScene(state);
   const layer = getActiveSceneLayer(state);
 
-  if (!layer) {
+  if (!layer || layer.type !== "tilelayer") {
     return 0;
   }
 
@@ -228,7 +284,7 @@ export function copySelectedSceneCells(state: ProjectState): SceneClipboard | nu
   const layer = getActiveSceneLayer(state);
   const selectedCells = getSelectedSceneCells(state);
 
-  if (!layer || selectedCells.length < 1) {
+  if (!layer || layer.type !== "tilelayer" || selectedCells.length < 1) {
     return null;
   }
 
@@ -258,7 +314,7 @@ export function pasteSceneClipboard(
   const scene = ensureScene(state);
   const layer = getActiveSceneLayer(state);
 
-  if (!layer) {
+  if (!layer || layer.type !== "tilelayer") {
     return 0;
   }
 
@@ -339,7 +395,7 @@ export function moveSelectedSceneCellsTo(state: ProjectState, destCol: number, d
   const selectedCell = state.session.selectedSceneCell;
   const selectedCells = getSelectedSceneCells(state);
 
-  if (!layer || !selectedCell || selectedCells.length < 1) {
+  if (!layer || layer.type !== "tilelayer" || !selectedCell || selectedCells.length < 1) {
     return null;
   }
 
@@ -399,7 +455,7 @@ export function deleteSelectedSceneCells(state: ProjectState): { count: number; 
   const selectedCell = state.session.selectedSceneCell;
   const selectedCells = getSelectedSceneCells(state);
 
-  if (!layer || !selectedCell || selectedCells.length < 1) {
+  if (!layer || layer.type !== "tilelayer" || !selectedCell || selectedCells.length < 1) {
     return { count: 0, primaryCell: null };
   }
 
@@ -436,7 +492,7 @@ export function getSceneCellGid(state: ProjectState, col: number, row: number, l
     ? getActiveSceneLayer(state)
     : scene.layers.find((entry) => entry.id === layerId) ?? null;
 
-  if (!layer) {
+  if (!layer || layer.type !== "tilelayer") {
     return 0;
   }
 
@@ -444,9 +500,14 @@ export function getSceneCellGid(state: ProjectState, col: number, row: number, l
 }
 
 export function createSceneLayer(id: number, name: string, width: number, height: number): SceneLayerState {
+  return createSceneTileLayer(id, name, width, height);
+}
+
+export function createSceneTileLayer(id: number, name: string, width: number, height: number): SceneTileLayerState {
   return {
     id,
     name,
+    type: "tilelayer",
     width,
     height,
     visible: true,
@@ -456,6 +517,23 @@ export function createSceneLayer(id: number, name: string, width: number, height
     parallaxX: 1,
     parallaxY: 1,
     data: new Array(width * height).fill(0),
+  };
+}
+
+export function createSceneImageLayer(id: number, name: string): SceneImageLayerState {
+  return {
+    id,
+    name,
+    type: "imagelayer",
+    visible: true,
+    opacity: 1,
+    offsetX: 0,
+    offsetY: 0,
+    parallaxX: 1,
+    parallaxY: 1,
+    image: "",
+    repeatX: false,
+    repeatY: false,
   };
 }
 

@@ -1,6 +1,7 @@
 import type {
   ColorReplaceTargetMode,
   ProjectState,
+  SceneLayerType,
   SeamDirection,
   SeamRepairMode,
   SeamRepairReference,
@@ -48,15 +49,20 @@ type ShellOptions = {
   onSceneHeightChanged: (height: number) => void;
   onSceneTilesetSourceChanged: (tilesetSource: string) => void;
   onSceneLayerChanged: (layerId: number) => void;
-  onSceneLayerAdded: () => void;
+  onSceneLayerAdded: (type: SceneLayerType) => void;
+  onSceneLayerImageSelected: (file: File) => Promise<void>;
   onSceneLayerUpdated: (patch: {
     name?: string;
+    type?: SceneLayerType;
     visible?: boolean;
     opacity?: number;
     offsetX?: number;
     offsetY?: number;
     parallaxX?: number;
     parallaxY?: number;
+    image?: string;
+    repeatX?: boolean;
+    repeatY?: boolean;
   }) => void;
   onSceneLayerMoved: (delta: -1 | 1) => void;
   onSceneGridVisibilityChanged: (visible: boolean) => void;
@@ -181,6 +187,7 @@ export function createShell({
   onSceneTilesetSourceChanged,
   onSceneLayerChanged,
   onSceneLayerAdded,
+  onSceneLayerImageSelected,
   onSceneLayerUpdated,
   onSceneLayerMoved,
   onSceneGridVisibilityChanged,
@@ -1352,7 +1359,9 @@ export function createShell({
   sceneLayerSelect.addEventListener("change", () => {
     onSceneLayerChanged(Number.parseInt(sceneLayerSelect.value, 10));
   });
-  const addLayerButton = createActionButton("Add Layer", onSceneLayerAdded);
+  const addLayerButton = createActionButton("Add Layer", () => {
+    onSceneLayerAdded("tilelayer");
+  });
   const moveLayerUpButton = createActionButton("Move Up", () => {
     onSceneLayerMoved(-1);
   });
@@ -1365,6 +1374,30 @@ export function createShell({
   sceneLayerNameField.input.addEventListener("change", () => {
     onSceneLayerUpdated({ name: sceneLayerNameField.input.value });
   });
+
+  const sceneLayerTypeField = document.createElement("label");
+  sceneLayerTypeField.className = "field-group";
+  const sceneLayerTypeLabel = document.createElement("span");
+  sceneLayerTypeLabel.className = "field-label";
+  sceneLayerTypeLabel.textContent = "Layer type";
+  const sceneLayerTypeSelect = document.createElement("select");
+  sceneLayerTypeSelect.className = "tile-size-select";
+  [
+    ["tilelayer", "Tile layer"],
+    ["imagelayer", "Image layer"],
+  ].forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    sceneLayerTypeSelect.append(option);
+  });
+  sceneLayerTypeSelect.value = selectedSceneLayer?.type ?? "tilelayer";
+  sceneLayerTypeSelect.addEventListener("change", () => {
+    if (sceneLayerTypeSelect.value === "tilelayer" || sceneLayerTypeSelect.value === "imagelayer") {
+      onSceneLayerUpdated({ type: sceneLayerTypeSelect.value });
+    }
+  });
+  sceneLayerTypeField.append(sceneLayerTypeLabel, sceneLayerTypeSelect);
 
   const sceneLayerSettings = document.createElement("div");
   sceneLayerSettings.className = "grid-inputs";
@@ -1410,6 +1443,49 @@ export function createShell({
   });
   sceneLayerParallaxSettings.append(sceneLayerParallaxXField.field, sceneLayerParallaxYField.field);
 
+  const imageLayerSection = document.createElement("div");
+  imageLayerSection.className = "editor-stack";
+
+  const imageLayerActions = document.createElement("div");
+  imageLayerActions.className = "panel-actions";
+  const imageLayerInputButton = createActionButton("Open image", () => {
+    imageLayerInput.click();
+  });
+  const imageLayerInput = document.createElement("input");
+  imageLayerInput.type = "file";
+  imageLayerInput.accept = "image/*";
+  imageLayerInput.hidden = true;
+  imageLayerInput.addEventListener("change", async () => {
+    const file = imageLayerInput.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    await onSceneLayerImageSelected(file);
+    imageLayerInput.value = "";
+  });
+  imageLayerActions.append(imageLayerInputButton, imageLayerInput);
+
+  const imageLayerPathField = createLabeledTextField("Image path", selectedSceneLayer?.type === "imagelayer" ? selectedSceneLayer.image : "", "Scene image layer path");
+  imageLayerPathField.input.addEventListener("change", () => {
+    onSceneLayerUpdated({ image: imageLayerPathField.input.value.trim() });
+  });
+
+  const imageLayerRepeats = document.createElement("div");
+  imageLayerRepeats.className = "toggle-row";
+  const imageLayerRepeatXToggle = createCheckboxField("Repeat X", selectedSceneLayer?.type === "imagelayer" ? selectedSceneLayer.repeatX : false, (checked) => {
+    onSceneLayerUpdated({ repeatX: checked });
+  });
+  const imageLayerRepeatYToggle = createCheckboxField("Repeat Y", selectedSceneLayer?.type === "imagelayer" ? selectedSceneLayer.repeatY : false, (checked) => {
+    onSceneLayerUpdated({ repeatY: checked });
+  });
+  imageLayerRepeats.append(imageLayerRepeatXToggle, imageLayerRepeatYToggle);
+  imageLayerSection.append(imageLayerActions, imageLayerPathField.field, imageLayerRepeats);
+  imageLayerSection.hidden = selectedSceneLayer?.type !== "imagelayer";
+  sceneEditActions.hidden = selectedSceneLayer?.type === "imagelayer";
+  sceneMoveActions.hidden = selectedSceneLayer?.type === "imagelayer";
+
   const sceneInfo = document.createElement("p");
   sceneInfo.className = "field-note";
   sceneInfo.textContent = state.project.scene
@@ -1435,9 +1511,11 @@ export function createShell({
     sceneTilesetField,
     sceneLayerRow,
     sceneLayerNameField.field,
+    sceneLayerTypeField,
     sceneLayerSettings,
     sceneLayerTransformSettings,
     sceneLayerParallaxSettings,
+    imageLayerSection,
     sceneInfo,
   );
   scenePanel.append(sceneSection);
@@ -1529,15 +1607,22 @@ export function createShell({
       sceneTilesetInput.value = nextState.project.scene?.tilesetSource ?? "tileset.tsj";
       const nextSceneLayer = getActiveSceneLayer(nextState);
       sceneLayerNameField.input.value = nextSceneLayer?.name ?? "ground";
+      sceneLayerTypeSelect.value = nextSceneLayer?.type ?? "tilelayer";
       sceneLayerOpacityField.input.value = `${nextSceneLayer?.opacity ?? 1}`;
       (sceneLayerVisibleToggle.querySelector("input") as HTMLInputElement).checked = nextSceneLayer?.visible ?? true;
       sceneLayerOffsetXField.input.value = `${nextSceneLayer?.offsetX ?? 0}`;
       sceneLayerOffsetYField.input.value = `${nextSceneLayer?.offsetY ?? 0}`;
       sceneLayerParallaxXField.input.value = `${nextSceneLayer?.parallaxX ?? 1}`;
       sceneLayerParallaxYField.input.value = `${nextSceneLayer?.parallaxY ?? 1}`;
+      imageLayerPathField.input.value = nextSceneLayer?.type === "imagelayer" ? nextSceneLayer.image : "";
+      (imageLayerRepeatXToggle.querySelector("input") as HTMLInputElement).checked = nextSceneLayer?.type === "imagelayer" ? nextSceneLayer.repeatX : false;
+      (imageLayerRepeatYToggle.querySelector("input") as HTMLInputElement).checked = nextSceneLayer?.type === "imagelayer" ? nextSceneLayer.repeatY : false;
+      imageLayerSection.hidden = nextSceneLayer?.type !== "imagelayer";
+      sceneEditActions.hidden = nextSceneLayer?.type === "imagelayer";
+      sceneMoveActions.hidden = nextSceneLayer?.type === "imagelayer";
       sceneCopyButton.disabled = !nextState.session.sourceSelection && nextState.session.selectedSceneCells.length < 1;
       scenePasteButton.disabled = !nextState.session.sceneClipboard;
-      sceneDeleteButton.disabled = nextState.session.selectedSceneCells.length < 1;
+      sceneDeleteButton.disabled = nextState.session.selectedSceneCells.length < 1 || nextSceneLayer?.type !== "tilelayer";
       (sceneGridToggle.querySelector("input") as HTMLInputElement).checked = !nextState.session.showSceneGrid;
       sceneLayerSelect.replaceChildren();
       for (const layer of nextState.project.scene?.layers ?? []) {

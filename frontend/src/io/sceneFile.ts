@@ -33,20 +33,37 @@ export function serializeScene(scene: SceneMapState): string {
     tilewidth: scene.tileWidth,
     tileheight: scene.tileHeight,
     infinite: false,
-    layers: scene.layers.map((layer) => ({
-      id: layer.id,
-      name: layer.name,
-      type: "tilelayer",
-      width: scene.width,
-      height: scene.height,
-      visible: layer.visible,
-      opacity: layer.opacity,
-      offsetx: layer.offsetX,
-      offsety: layer.offsetY,
-      parallaxx: layer.parallaxX,
-      parallaxy: layer.parallaxY,
-      data: layer.data,
-    })),
+    layers: scene.layers.map((layer) => (
+      layer.type === "imagelayer"
+        ? {
+          id: layer.id,
+          name: layer.name,
+          type: "imagelayer",
+          visible: layer.visible,
+          opacity: layer.opacity,
+          offsetx: layer.offsetX,
+          offsety: layer.offsetY,
+          parallaxx: layer.parallaxX,
+          parallaxy: layer.parallaxY,
+          repeatx: layer.repeatX,
+          repeaty: layer.repeatY,
+          image: layer.image,
+        }
+        : {
+          id: layer.id,
+          name: layer.name,
+          type: "tilelayer",
+          width: scene.width,
+          height: scene.height,
+          visible: layer.visible,
+          opacity: layer.opacity,
+          offsetx: layer.offsetX,
+          offsety: layer.offsetY,
+          parallaxx: layer.parallaxX,
+          parallaxy: layer.parallaxY,
+          data: layer.data,
+        }
+    )),
     tilesets: [
       {
         firstgid: 1,
@@ -163,8 +180,26 @@ function readLayers(value: unknown, width: number, height: number): SceneLayerSt
   }
 
   return value
-    .filter((entry): entry is Record<string, unknown> => isRecord(entry) && entry.type === "tilelayer")
+    .filter((entry): entry is Record<string, unknown> =>
+      isRecord(entry) && (entry.type === "tilelayer" || entry.type === "imagelayer"))
     .map((entry, index) => {
+      if (entry.type === "imagelayer") {
+        return {
+          id: readPositiveInteger(entry.id, `layers[${index}].id`),
+          name: readString(entry.name, `layers[${index}].name`),
+          type: "imagelayer",
+          visible: readOptionalBoolean(entry.visible, true, `layers[${index}].visible`),
+          opacity: readOptionalNumber(entry.opacity, 1, `layers[${index}].opacity`),
+          offsetX: readOptionalNumber(entry.offsetx, 0, `layers[${index}].offsetx`),
+          offsetY: readOptionalNumber(entry.offsety, 0, `layers[${index}].offsety`),
+          parallaxX: readOptionalNumber(entry.parallaxx, 1, `layers[${index}].parallaxx`),
+          parallaxY: readOptionalNumber(entry.parallaxy, 1, `layers[${index}].parallaxy`),
+          repeatX: readOptionalBoolean(entry.repeatx, false, `layers[${index}].repeatx`),
+          repeatY: readOptionalBoolean(entry.repeaty, false, `layers[${index}].repeaty`),
+          image: readString(entry.image, `layers[${index}].image`),
+        };
+      }
+
       const layerWidth = readPositiveInteger(entry.width, `layers[${index}].width`);
       const layerHeight = readPositiveInteger(entry.height, `layers[${index}].height`);
       const data = readIntegerArray(entry.data, `layers[${index}].data`);
@@ -180,6 +215,7 @@ function readLayers(value: unknown, width: number, height: number): SceneLayerSt
       return {
         id: readPositiveInteger(entry.id, `layers[${index}].id`),
         name: readString(entry.name, `layers[${index}].name`),
+        type: "tilelayer",
         width,
         height,
         visible: readOptionalBoolean(entry.visible, true, `layers[${index}].visible`),

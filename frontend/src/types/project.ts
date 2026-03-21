@@ -204,16 +204,32 @@ export type SceneMapState = {
   layers: SceneLayerState[];
 };
 
-export type SceneLayerState = {
+export type SceneLayerType = "tilelayer" | "imagelayer";
+
+export type SceneLayerBaseState = {
   id: number;
   name: string;
-  width: number;
-  height: number;
+  type: SceneLayerType;
   visible: boolean;
   opacity: number;
   offsetX: number;
   offsetY: number;
   parallaxX: number;
   parallaxY: number;
+};
+
+export type SceneTileLayerState = SceneLayerBaseState & {
+  type: "tilelayer";
+  width: number;
+  height: number;
   data: number[];
 };
+
+export type SceneImageLayerState = SceneLayerBaseState & {
+  type: "imagelayer";
+  image: string;
+  repeatX: boolean;
+  repeatY: boolean;
+};
+
+export type SceneLayerState = SceneTileLayerState | SceneImageLayerState;
