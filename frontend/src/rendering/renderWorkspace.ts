@@ -612,8 +612,14 @@ function getScenePreviewParallaxOffset(
     return { x: 0, y: 0 };
   }
 
-  const maxOffsetX = viewport.cellWidth * 0.75;
-  const maxOffsetY = viewport.cellHeight * 0.75;
+  const scene = state.project.scene;
+
+  if (!scene) {
+    return { x: 0, y: 0 };
+  }
+
+  const maxOffsetX = scene.width * viewport.cellWidth * 0.18;
+  const maxOffsetY = scene.height * viewport.cellHeight * 0.18;
 
   return {
     x: pointer.x * maxOffsetX * (1 - parallaxX),
