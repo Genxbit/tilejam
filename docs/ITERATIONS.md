@@ -622,7 +622,7 @@ Add TMJ scene support for `imagelayer` alongside the current default `tilelayer`
 ## Ticket 18: Refactor grouped tile editing + tile editor UI
 
 **Status**
-Planned
+Completed
 
 **Goal**
 Reduce complexity in grouped tile editing and the tile editor UI without changing behavior.
