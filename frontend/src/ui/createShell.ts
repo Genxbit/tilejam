@@ -23,6 +23,7 @@ type ShellOptions = {
   root: HTMLElement;
   state: ProjectState;
   onFileSelected: (file: File) => Promise<void>;
+  onOpenSource: () => Promise<boolean>;
   onProjectSelected: (file: File) => Promise<void>;
   onOpenProject: () => Promise<boolean>;
   onSaveProject: () => Promise<void>;
@@ -160,6 +161,7 @@ export function createShell({
   root,
   state,
   onFileSelected,
+  onOpenSource,
   onProjectSelected,
   onOpenProject,
   onSaveProject,
@@ -299,6 +301,16 @@ export function createShell({
   });
 
   inputLabel.append(input);
+
+  inputLabel.addEventListener("click", async (event) => {
+    event.preventDefault();
+
+    const handled = await onOpenSource();
+
+    if (!handled) {
+      input.click();
+    }
+  });
 
   const projectInputButton = document.createElement("button");
   projectInputButton.type = "button";
@@ -1242,8 +1254,8 @@ export function createShell({
   const outputGrid = getOutputGridMetrics(state.project);
 
   const items = [
-    ["Source", state.sourceImageAsset.name ?? state.project.sourceImage ?? "Not loaded"],
-    ["Working PNG", getDisplayFileLabel(state.session.workingImageFileName ?? state.project.workingImage ?? "Not loaded")],
+    ["Source", state.project.sourceImage ?? state.sourceImageAsset.name ?? "Not loaded"],
+    ["Working PNG", state.project.workingImage ?? state.session.workingImageFileName ?? "Not loaded"],
     ["Resolution", `${state.sourceImageAsset.width} x ${state.sourceImageAsset.height}`],
     ["Source grid", `${state.project.sourceTileWidth} x ${state.project.sourceTileHeight}`],
     [
@@ -1551,8 +1563,8 @@ export function createShell({
     update(nextState) {
       const scrollTop = panel.scrollTop;
       topBarProject.textContent = `Project: ${getDisplayFileLabel(nextState.session.projectFileName ?? "unsaved")}`;
-      items[0].description.textContent = nextState.sourceImageAsset.name ?? nextState.project.sourceImage ?? "Not loaded";
-      items[1].description.textContent = getDisplayFileLabel(nextState.session.workingImageFileName ?? nextState.project.workingImage ?? "Not loaded");
+      items[0].description.textContent = nextState.project.sourceImage ?? nextState.sourceImageAsset.name ?? "Not loaded";
+      items[1].description.textContent = nextState.project.workingImage ?? nextState.session.workingImageFileName ?? "Not loaded";
       items[2].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
       items[3].description.textContent = `${nextState.project.sourceTileWidth} x ${nextState.project.sourceTileHeight}`;
       const selection = getVisibleSelection(nextState);

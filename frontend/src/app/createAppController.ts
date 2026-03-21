@@ -97,6 +97,48 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = `Loaded source image: ${file.name}. Existing output tiles keep their previous source references when available.`;
       renderAll();
     },
+    onOpenSource: async () => {
+      if (!window.showOpenFilePicker) {
+        return false;
+      }
+
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          excludeAcceptAllOption: false,
+          multiple: false,
+          types: [
+            {
+              description: "Image",
+              accept: {
+                "image/*": [".png", ".jpg", ".jpeg", ".gif", ".webp"],
+              },
+            },
+          ],
+        });
+
+        if (!handle) {
+          return true;
+        }
+
+        const file = await handle.getFile();
+        const sourceImageRef = await deriveProjectRelativePathFromHandle(state, handle) ?? file.name;
+        await loadSourceImageFromFileWithRef(state, file, sourceImageRef);
+        bumpRenderRevision();
+        clearSelectionState(state);
+        clearSelectedOutputTile(state);
+        state.session.message = `Loaded source image: ${sourceImageRef}. Existing output tiles keep their previous source references when available.`;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return true;
+        }
+
+        const message = error instanceof Error ? error.message : "Unknown source image open error.";
+        state.session.message = `Source image open failed: ${message}`;
+      }
+
+      renderAll();
+      return true;
+    },
     onProjectSelected: async (file) => {
       try {
         const project = await loadProjectFile(file);
@@ -251,7 +293,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         if (state.session.workingImageFileHandle) {
           const result = await saveTilesetPngToHandle(state.session.workingImageFileHandle, state);
           const fileName = state.session.workingImageFileName ?? suggestedName;
-          state.project.workingImage = fileName;
+          state.project.workingImage = await deriveProjectRelativePathFromHandle(state, state.session.workingImageFileHandle) ?? fileName;
           state.session.message = result.missingTileCount > 0
             ? `Saved working PNG to ${fileName}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
             : `Saved working PNG to ${fileName}.`;
@@ -264,7 +306,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         if (result.handle) {
           state.session.workingImageFileHandle = result.handle;
           state.session.workingImageFileName = result.handle.name;
-          state.project.workingImage = result.handle.name;
+          state.project.workingImage = await deriveProjectRelativePathFromHandle(state, result.handle) ?? result.handle.name;
           syncSceneTilesetSourceToDefault(state);
           state.session.message = result.missingTileCount > 0
             ? `Saved working PNG to ${result.handle.name}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
@@ -657,10 +699,11 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         return;
       }
 
-      const imageRef = await loadImageAssetFromFile(state, file, file.name);
-      updateActiveSceneLayer(state, { image: imageRef });
+      const imagePath = await deriveSceneRelativeImagePath(state, file) ?? file.name;
+      await loadImageAssetFromFile(state, file, imagePath);
+      updateActiveSceneLayer(state, { image: imagePath });
       bumpRenderRevision();
-      state.session.message = `Loaded image layer source ${file.name}.`;
+      state.session.message = `Loaded image layer source ${imagePath}.`;
       renderAll();
     },
     onSceneLayerUpdated: (patch) => {
@@ -675,13 +718,13 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       }
 
       if (layer.type === "imagelayer" && typeof patch.image === "string" && patch.image.trim().length > 0) {
-        void loadImageAssetFromUrl(state, patch.image.trim(), patch.image.trim())
-          .then(() => {
+        void resolveSceneImageLayerPath(state, patch.image.trim())
+          .then((resolved) => {
+            if (!resolved) {
+              state.session.message = `Updated scene layer ${layer.name}. Image path was saved but could not be resolved in the current session.`;
+            }
             bumpRenderRevision();
             renderAll();
-          })
-          .catch(() => {
-            // Keep the path in scene data even if the browser cannot resolve it yet.
           });
       }
 
@@ -3165,7 +3208,7 @@ async function loadProjectIntoState(
     const resolvedSourceImage = resolveProjectAssetReference(state, project.sourceImage);
 
     try {
-      await loadSourceImageFromUrl(state, resolvedSourceImage, getDisplayFileName(project.sourceImage) ?? project.sourceImage);
+      await loadSourceImageFromUrl(state, resolvedSourceImage, project.sourceImage);
       ensureActiveSourceImageFromProject(state);
       resolutionMessages.push(`Source image resolved from ${project.sourceImage}.`);
     } catch {
@@ -3338,7 +3381,9 @@ async function loadWorkingImageIntoState(
 
   clearSelectionState(state);
   clearSelectedOutputTile(state);
-  state.project.workingImage = workingImageRef;
+  state.project.workingImage = handle
+    ? await deriveProjectRelativePathFromHandle(state, handle) ?? workingImageRef
+    : workingImageRef;
   state.session.workingImageFileName = file.name;
   state.session.workingImageFileHandle = handle;
   const tileCount = rebuildTilesFromWorkingSheet(state, workingImageRef, asset.width, asset.height);
@@ -3398,6 +3443,69 @@ async function resolveSceneImageLayersFromSceneFile(
   );
 }
 
+async function resolveSceneImageLayerPath(
+  state: ProjectState,
+  imagePath: string,
+): Promise<boolean> {
+  const trimmedPath = imagePath.trim();
+
+  if (!trimmedPath) {
+    return false;
+  }
+
+  const sceneFileRef = state.project.sceneFile;
+
+  if (state.session.projectDirectoryHandle && sceneFileRef) {
+    const sceneDirectory = getParentRelativePath(sceneFileRef);
+    const relativeImagePath = joinRelativePath(sceneDirectory, trimmedPath);
+    const imageFile = await getRelativeFileFromDirectory(state.session.projectDirectoryHandle, relativeImagePath);
+
+    if (imageFile) {
+      await loadImageAssetFromFile(state, imageFile, trimmedPath);
+      return true;
+    }
+  }
+
+  if (sceneFileRef && state.session.projectBaseUrl) {
+    try {
+      const resolvedSceneUrl = resolveProjectAssetReference(state, sceneFileRef);
+      const resolvedImageUrl = new URL(trimmedPath, resolvedSceneUrl).toString();
+      await loadImageAssetFromUrl(state, resolvedImageUrl, trimmedPath);
+      return true;
+    } catch {
+      // Fall through to the raw URL attempt below.
+    }
+  }
+
+  try {
+    await loadImageAssetFromUrl(state, trimmedPath, trimmedPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function deriveSceneRelativeImagePath(
+  state: ProjectState,
+  file: File,
+): Promise<string | null> {
+  const directoryHandle = state.session.projectDirectoryHandle;
+  const sceneFileRef = state.project.sceneFile;
+
+  if (!directoryHandle || !sceneFileRef) {
+    return null;
+  }
+
+  const matches = await findRelativePathsByFileName(directoryHandle, file.name);
+
+  if (matches.length === 1) {
+    return makePathRelativeToSceneFile(sceneFileRef, matches[0] ?? file.name);
+  }
+
+  const matchedPath = await findRelativePathByFileMetadata(directoryHandle, file, matches);
+  return matchedPath ? makePathRelativeToSceneFile(sceneFileRef, matchedPath) : null;
+}
+
 async function resolveSceneImageLayersFromResolvedUrl(
   state: ProjectState,
   scene: NonNullable<ProjectState["project"]["scene"]>,
@@ -3451,6 +3559,26 @@ function getParentRelativePath(path: string): string {
   return index >= 0 ? normalized.slice(0, index) : "";
 }
 
+function makePathRelativeToSceneFile(sceneFileRef: string, assetPath: string): string {
+  const sceneDirectory = getParentRelativePath(sceneFileRef);
+  const fromSegments = sceneDirectory.split("/").filter((segment) => segment.length > 0);
+  const toSegments = assetPath.replace(/\\/g, "/").split("/").filter((segment) => segment.length > 0);
+
+  let sharedIndex = 0;
+  while (
+    sharedIndex < fromSegments.length
+    && sharedIndex < toSegments.length
+    && fromSegments[sharedIndex] === toSegments[sharedIndex]
+  ) {
+    sharedIndex += 1;
+  }
+
+  const upSegments = new Array(fromSegments.length - sharedIndex).fill("..");
+  const downSegments = toSegments.slice(sharedIndex);
+  const relativeSegments = [...upSegments, ...downSegments];
+  return relativeSegments.join("/") || assetPath;
+}
+
 function joinRelativePath(basePath: string, childPath: string): string {
   const normalizedChild = childPath.replace(/\\/g, "/");
 
@@ -3463,6 +3591,73 @@ function joinRelativePath(basePath: string, childPath: string): string {
   }
 
   return `${basePath.replace(/\/+$/g, "")}/${normalizedChild.replace(/^\.?\//, "")}`;
+}
+
+async function deriveProjectRelativePathFromHandle(
+  state: ProjectState,
+  handle: FileSystemFileHandle,
+): Promise<string | null> {
+  const directoryHandle = state.session.projectDirectoryHandle;
+
+  if (!directoryHandle || typeof directoryHandle.resolve !== "function") {
+    return null;
+  }
+
+  try {
+    const segments = await directoryHandle.resolve(handle);
+    return segments?.join("/") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function findRelativePathsByFileName(
+  directoryHandle: FileSystemDirectoryHandle,
+  fileName: string,
+  basePath = "",
+): Promise<string[]> {
+  const matches: string[] = [];
+
+  for await (const entryHandle of (directoryHandle as unknown as AsyncIterable<FileSystemHandle>)) {
+    const entryName = entryHandle.name;
+    const nextPath = basePath ? `${basePath}/${entryName}` : entryName;
+
+    if (entryHandle.kind === "file") {
+      if (entryName === fileName) {
+        matches.push(nextPath);
+      }
+      continue;
+    }
+
+    matches.push(...await findRelativePathsByFileName(entryHandle as FileSystemDirectoryHandle, fileName, nextPath));
+  }
+
+  return matches;
+}
+
+async function findRelativePathByFileMetadata(
+  directoryHandle: FileSystemDirectoryHandle,
+  targetFile: File,
+  candidatePaths: string[],
+): Promise<string | null> {
+  for (const candidatePath of candidatePaths) {
+    const candidateFile = await getRelativeFileFromDirectory(directoryHandle, candidatePath);
+
+    if (!candidateFile) {
+      continue;
+    }
+
+    if (
+      candidateFile.name === targetFile.name
+      && candidateFile.size === targetFile.size
+      && candidateFile.lastModified === targetFile.lastModified
+      && candidateFile.type === targetFile.type
+    ) {
+      return candidatePath;
+    }
+  }
+
+  return null;
 }
 
 async function getRelativeFileFromDirectory(
