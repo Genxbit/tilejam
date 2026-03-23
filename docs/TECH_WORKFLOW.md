@@ -101,6 +101,8 @@ Rules:
 * callbacks only for top-level UI or app events
 * shared rules belong in systems
 * rendering stays separate from logic
+* as code grows, split by responsibility before adding more branching
+* keep orchestration, domain logic, rendering, input, and persistence in separate units so each module has one main reason to change
 
 Rule of thumb:
 
