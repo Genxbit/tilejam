@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "sourceImage": "source-textures/candy-sheet.png",
+  "workingImage": "textures/candy-sheet.png",
+  "sceneFile": "level2.tmj",
+  "sourceTileWidth": 32,
+  "sourceTileHeight": 32,
+  "tileWidth": 32,
+  "tileHeight": 32,
+  "outputWidth": 1024,
+  "outputHeight": 1024
+}

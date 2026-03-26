@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "sourceImage": "source-textures/mountain-sheet.png",
+  "workingImage": "textures/mountain-sheet.png",
+  "sceneFile": "level1.tmj",
+  "sourceTileWidth": 32,
+  "sourceTileHeight": 32,
+  "tileWidth": 32,
+  "tileHeight": 32,
+  "outputWidth": 1024,
+  "outputHeight": 1024
+}

@@ -1,0 +1,13 @@
+{
+  "name": "level1",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "tilecount": 1024,
+  "columns": 32,
+  "image": "mountain-sheet.png",
+  "imagewidth": 1024,
+  "imageheight": 1024,
+  "margin": 0,
+  "spacing": 0,
+  "tiles": []
+}
