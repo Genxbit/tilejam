@@ -47,6 +47,12 @@ export type SessionState = {
   selectedOutputCells: GridCoordinate[];
   outputTileClipboard: OutputTileClipboard | null;
   sceneClipboard: SceneClipboard | null;
+  tileMultiEditMode: "individual" | "group";
+  tileLayoutPreview: TileLayoutPreview | null;
+  dragMovePreview: GroupTransformPreview | null;
+  groupTransformPreview: GroupTransformPreview | null;
+  groupOffsetX: number;
+  groupOffsetY: number;
   groupScaleX: number;
   groupScaleY: number;
   groupStretchLeft: number;
@@ -85,6 +91,33 @@ export type TileSize = 8 | 16 | 32 | 64;
 export type GridCoordinate = {
   col: number;
   row: number;
+};
+
+export type SelectionBounds = {
+  minCol: number;
+  maxCol: number;
+  minRow: number;
+  maxRow: number;
+};
+
+export type GroupTransformPreview = {
+  selectionSignature: string;
+  renderRevision: number;
+  bounds: SelectionBounds;
+  canvas: HTMLCanvasElement;
+  offsetX: number;
+  offsetY: number;
+  scaleX: number;
+  scaleY: number;
+  flipX: boolean;
+  flipY: boolean;
+};
+
+export type TileLayoutPreview = {
+  selectionSignature: string;
+  renderRevision: number;
+  primaryTileId: number | null;
+  patch: Partial<Pick<TilePlacement, "destCol" | "destRow" | "offsetX" | "offsetY" | "scaleX" | "scaleY" | "flipX" | "flipY">>;
 };
 
 export type WorkspacePanel = "source" | "output";

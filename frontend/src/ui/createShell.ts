@@ -68,11 +68,16 @@ type ShellOptions = {
   }) => void;
   onSceneLayerMoved: (delta: -1 | 1) => void;
   onSceneGridVisibilityChanged: (visible: boolean) => void;
+  onTileMultiEditModeChanged: (mode: "individual" | "group") => void;
   onSelectedTileUpdated: (patch: SelectedTilePatch) => Promise<void>;
+  onPreviewTileLayoutUpdated: (patch: SelectedTilePatch) => void;
+  onApplyTileLayoutPreview: () => Promise<void>;
+  onCancelTileLayoutPreview: () => void;
   onNudgeSelectedTile: (deltaX: number, deltaY: number) => Promise<void>;
   onGroupScaleXChanged: (value: number) => void;
   onGroupScaleYChanged: (value: number) => void;
   onApplyGroupScale: () => Promise<void>;
+  onCancelGroupTransform: () => void;
   onGroupStretchUpdated: (patch: {
     left?: number;
     right?: number;
@@ -160,11 +165,16 @@ export function createShell({
   onSceneLayerUpdated,
   onSceneLayerMoved,
   onSceneGridVisibilityChanged,
+  onTileMultiEditModeChanged,
   onSelectedTileUpdated,
+  onPreviewTileLayoutUpdated,
+  onApplyTileLayoutPreview,
+  onCancelTileLayoutPreview,
   onNudgeSelectedTile,
   onGroupScaleXChanged,
   onGroupScaleYChanged,
   onApplyGroupScale,
+  onCancelGroupTransform,
   onGroupStretchUpdated,
   onApplyGroupStretch,
   onSetSelectedTileFitMode,
@@ -532,10 +542,16 @@ export function createShell({
   let activeSidebarTab: SidebarTab = state.session.activeWorkspaceMode === "scene" ? "scene" : "tilesheet";
   const tileEditor = createTileEditorSection(state, {
     onSelectedTileUpdated,
+    onPreviewTileLayoutUpdated,
+    onApplyTileLayoutPreview,
+    onCancelTileLayoutPreview,
+    onTileMultiEditModeChanged,
+    onMoveSelectedTiles,
     onNudgeSelectedTile,
     onGroupScaleXChanged,
     onGroupScaleYChanged,
     onApplyGroupScale,
+    onCancelGroupTransform,
     onGroupStretchUpdated,
     onApplyGroupStretch,
     onSetSelectedTileFitMode,

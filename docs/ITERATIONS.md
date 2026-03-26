@@ -652,3 +652,46 @@ Refactor grouped tile bake/edit operations out of the app controller, and split 
 * `frontend/src/ui/createShell.ts` is easier to navigate and the tile editor UI is split into clearer helper units
 * no project format or workflow regressions are introduced
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 19: Layout preview workflow + drag interaction alignment
+
+**Status**
+Completed
+
+**Goal**
+Make tile layout editing preview-first, align drag interactions with selection and layout apply behavior, and keep the implementation consistent with the architecture rules.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Add non-destructive layout preview for tile and group edits, make drag-based movement use the same merged layout apply behavior, improve output-panel drag selection vs move interactions, and extract preview logic into dedicated systems.
+
+**Deliverables**
+
+* preview-first layout workflow for `Tile col`, `Tile row`, `Offset X/Y`, `Scale X/Y`, and `Flip X/Y`
+* explicit `Apply Layout` / `Cancel` flow for layout edits
+* whole-group layout preview rendered as a temporary overlay before apply
+* group apply merges with overlapping tiles behind instead of erasing to black
+* drag-release move uses the same merged layout apply behavior as the editor panel
+* plain output drag creates or expands selection
+* output tile move by mouse requires modifier drag
+* live drag preview for moved tile groups before release
+* output selection highlight follows previewed group movement correctly
+* preview/drag lifecycle and selection/signature helpers extracted into dedicated systems
+
+**Validation**
+
+* single-tile and grouped layout edits preview before apply
+* `Apply Layout` commits the visible preview result
+* grouped layout apply preserves overlapping content behind the transformed result
+* output drag selection and modifier-drag move no longer conflict
+* dragged tile groups are visible while moving before release
+* selection bounds stay correct after repeated layout applies and moves
+* preview and drag logic live primarily in `systems/`, while `app/` stays focused on orchestration
+* matches architecture rules in `docs/TECH_WORKFLOW.md`

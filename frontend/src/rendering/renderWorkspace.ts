@@ -270,6 +270,9 @@ function drawOutputGrid(
   context.beginPath();
   context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
   context.clip();
+  drawDragMovePreview(context, state, viewport);
+  drawTileLayoutPreview(context, state, viewport);
+  drawGroupTransformPreview(context, state, viewport);
   const isScenePreview = state.session.activeWorkspaceMode === "scene" && !state.session.showSceneGrid;
 
   if (!isScenePreview) {
@@ -351,6 +354,10 @@ function drawOutputBase(
   viewport: OutputViewport,
   cache: RenderCache,
 ): void {
+  const dragMovePreview = getActiveDragMovePreview(state);
+  const groupPreview = getActiveGroupTransformPreview(state);
+  const tileLayoutPreview = getActiveTileLayoutPreview(state);
+  const skippedTileIds = dragMovePreview || groupPreview || tileLayoutPreview ? new Set(state.session.selectedOutputTileIds) : null;
   const outputKey = [
     state.session.renderRevision,
     state.session.activeWorkspaceMode,
@@ -370,6 +377,9 @@ function drawOutputBase(
     viewport.contentHeight,
     viewport.cellWidth,
     viewport.cellHeight,
+    dragMovePreview ? `drag-move-preview:${dragMovePreview.selectionSignature}:${dragMovePreview.offsetX}:${dragMovePreview.offsetY}` : "drag-move-preview:none",
+    groupPreview ? `group-preview:${groupPreview.selectionSignature}` : "group-preview:none",
+    tileLayoutPreview ? `tile-layout-preview:${tileLayoutPreview.selectionSignature}` : "tile-layout-preview:none",
   ].join("|");
 
   if (cache.outputBaseKey !== outputKey || !cache.outputBaseCanvas) {
@@ -388,7 +398,7 @@ function drawOutputBase(
       if (state.session.activeWorkspaceMode === "scene") {
         drawSceneTiles(baseContext, state, viewport);
       } else {
-        drawPlacedTiles(baseContext, state, viewport);
+        drawPlacedTiles(baseContext, state, viewport, skippedTileIds);
       }
       baseContext.restore();
     }
@@ -429,8 +439,13 @@ function drawPlacedTiles(
   context: CanvasRenderingContext2D,
   state: ProjectState,
   viewport: OutputViewport,
+  skippedTileIds: Set<number> | null = null,
 ): void {
   for (const tile of state.project.tiles) {
+    if (skippedTileIds?.has(tile.id)) {
+      continue;
+    }
+
     const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
 
     if (!image) {
@@ -451,6 +466,137 @@ function drawPlacedTiles(
       cellRect.height / state.project.tileHeight,
     );
   }
+}
+
+function getActiveGroupTransformPreview(state: ProjectState): ProjectState["session"]["groupTransformPreview"] {
+  if (state.session.activeWorkspaceMode === "scene") {
+    return null;
+  }
+
+  return state.session.groupTransformPreview;
+}
+
+function getActiveDragMovePreview(state: ProjectState): ProjectState["session"]["dragMovePreview"] {
+  if (state.session.activeWorkspaceMode === "scene") {
+    return null;
+  }
+
+  return state.session.dragMovePreview;
+}
+
+function getActiveTileLayoutPreview(state: ProjectState): ProjectState["session"]["tileLayoutPreview"] {
+  if (state.session.activeWorkspaceMode === "scene") {
+    return null;
+  }
+
+  return state.session.tileLayoutPreview;
+}
+
+function drawTileLayoutPreview(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  const preview = getActiveTileLayoutPreview(state);
+
+  if (!preview) {
+    return;
+  }
+
+  const selectedTile = getSelectedOutputTile(state);
+  const selectedTiles = getSelectedOutputTiles(state);
+
+  if (!selectedTile || selectedTiles.length < 1) {
+    return;
+  }
+
+  for (const tile of selectedTiles) {
+    const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+    if (!image) {
+      continue;
+    }
+
+    const previewTile = {
+      ...tile,
+      offsetX: preview.patch.offsetX ?? tile.offsetX,
+      offsetY: preview.patch.offsetY ?? tile.offsetY,
+      scaleX: preview.patch.scaleX ?? tile.scaleX,
+      scaleY: preview.patch.scaleY ?? tile.scaleY,
+      flipX: preview.patch.flipX ?? tile.flipX,
+      flipY: preview.patch.flipY ?? tile.flipY,
+      destCol: tile.id === selectedTile.id ? preview.patch.destCol ?? tile.destCol : tile.destCol,
+      destRow: tile.id === selectedTile.id ? preview.patch.destRow ?? tile.destRow : tile.destRow,
+    };
+    const cellRect = getAlignedCellRect(viewport, previewTile.destCol, previewTile.destRow);
+
+    drawTileIntoRect(
+      context,
+      image,
+      previewTile,
+      cellRect.x,
+      cellRect.y,
+      state.project.tileWidth,
+      state.project.tileHeight,
+      cellRect.width / state.project.tileWidth,
+      cellRect.height / state.project.tileHeight,
+    );
+  }
+}
+
+function drawGroupTransformPreview(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  const preview = getActiveGroupTransformPreview(state);
+
+  if (!preview) {
+    return;
+  }
+
+  drawCanvasGroupPreview(context, state, viewport, preview);
+}
+
+function drawDragMovePreview(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  const preview = getActiveDragMovePreview(state);
+
+  if (!preview) {
+    return;
+  }
+
+  drawCanvasGroupPreview(context, state, viewport, preview);
+}
+
+function drawCanvasGroupPreview(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+  preview: NonNullable<ProjectState["session"]["groupTransformPreview"]>,
+): void {
+  if (!preview) {
+    return;
+  }
+
+  const originCell = getAlignedCellRect(viewport, preview.bounds.minCol, preview.bounds.minRow);
+  const previewWidth = preview.canvas.width * preview.scaleX;
+  const previewHeight = preview.canvas.height * preview.scaleY;
+  const drawX = originCell.x + (preview.offsetX + (preview.canvas.width - previewWidth) / 2) * viewport.cellWidth / state.project.tileWidth;
+  const drawY = originCell.y + (preview.offsetY + (preview.canvas.height - previewHeight) / 2) * viewport.cellHeight / state.project.tileHeight;
+  const drawWidth = previewWidth * viewport.cellWidth / state.project.tileWidth;
+  const drawHeight = previewHeight * viewport.cellHeight / state.project.tileHeight;
+
+  context.save();
+  context.imageSmoothingEnabled = false;
+  context.globalAlpha = 0.96;
+  context.translate(drawX + drawWidth / 2, drawY + drawHeight / 2);
+  context.scale(preview.flipX ? -1 : 1, preview.flipY ? -1 : 1);
+  context.drawImage(preview.canvas, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  context.restore();
 }
 
 function drawSeamRepairPreview(
@@ -720,7 +866,7 @@ function drawSelectedOutputTile(
   state: ProjectState,
   viewport: OutputViewport,
 ): void {
-  const selectedCells = getSelectedOutputCells(state);
+  const selectedCells = getPreviewSelectedOutputCells(state);
   const selectedTiles = getSelectedOutputTiles(state);
   const selectedTile = getSelectedOutputTile(state);
 
@@ -744,6 +890,23 @@ function drawSelectedOutputTile(
     context.lineWidth = tile?.id === selectedTile?.id ? 2 : 1.5;
     context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
   }
+}
+
+function getPreviewSelectedOutputCells(state: ProjectState): ProjectState["session"]["selectedOutputCells"] {
+  const selectedCells = getSelectedOutputCells(state);
+  const preview = state.session.dragMovePreview ?? state.session.groupTransformPreview;
+
+  if (!preview) {
+    return selectedCells;
+  }
+
+  const deltaCol = Math.round(preview.offsetX / state.project.tileWidth);
+  const deltaRow = Math.round(preview.offsetY / state.project.tileHeight);
+
+  return selectedCells.map((cell) => ({
+    col: cell.col + deltaCol,
+    row: cell.row + deltaRow,
+  }));
 }
 
 function drawSelectedSceneCell(

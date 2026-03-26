@@ -1,4 +1,4 @@
-import type { ColorReplaceTargetMode, ProjectState, TilePlacement } from "../types/project";
+import type { ColorReplaceTargetMode, ProjectState, SelectionBounds, TilePlacement } from "../types/project";
 import { getSourceImageForRef, loadImageAssetFromUrl } from "./sourceImageSystem";
 import { getOutputGridMetrics, normalizeProjectTilesToGrid } from "./tileGridSystem";
 import { renderTileCanvas } from "./tileRenderSystem";
@@ -22,41 +22,56 @@ export async function bakeSelectedTilesGroupShift(
     return 0;
   }
 
+  const tileWidth = state.project.tileWidth;
+  const tileHeight = state.project.tileHeight;
+  const outputGrid = getOutputGridMetrics(state.project);
   const { bounds, canvas: groupCanvas } = prepared;
-  const shiftedCanvas = document.createElement("canvas");
-  shiftedCanvas.width = groupCanvas.width;
-  shiftedCanvas.height = groupCanvas.height;
-  const shiftedContext = shiftedCanvas.getContext("2d");
+  const groupColumns = bounds.maxCol - bounds.minCol + 1;
+  const groupRows = bounds.maxRow - bounds.minRow + 1;
+  const expanded = drawGroupCanvasToExpandedGrid(
+    groupCanvas,
+    tileWidth,
+    tileHeight,
+    deltaX,
+    deltaY,
+    groupCanvas.width,
+    groupCanvas.height,
+  );
 
-  if (!shiftedContext) {
+  if (!expanded) {
     return 0;
   }
 
-  shiftedContext.clearRect(0, 0, shiftedCanvas.width, shiftedCanvas.height);
-  shiftedContext.drawImage(groupCanvas, deltaX, deltaY);
+  const affectedStartCol = bounds.minCol + expanded.cellStartOffsetCol;
+  const affectedStartRow = bounds.minRow + expanded.cellStartOffsetRow;
+  const affectedEndCol = bounds.maxCol + (expanded.cellEndOffsetCol - (groupColumns - 1));
+  const affectedEndRow = bounds.maxRow + (expanded.cellEndOffsetRow - (groupRows - 1));
+  const nextTiles = await bakeExpandedCanvasToTiles(
+    state,
+    expanded.canvas,
+    tileWidth,
+    tileHeight,
+    affectedStartCol,
+    affectedStartRow,
+    outputGrid.columns,
+    outputGrid.rows,
+    "group-shift",
+  );
 
-  let shiftedCount = 0;
-
-  for (const tile of selectedTiles) {
-    const tileCanvas = sliceTileCanvas(
-      shiftedCanvas,
-      (tile.destCol - bounds.minCol) * state.project.tileWidth,
-      (tile.destRow - bounds.minRow) * state.project.tileHeight,
-      state.project.tileWidth,
-      state.project.tileHeight,
-    );
-
-    if (!tileCanvas) {
-      continue;
-    }
-
-    const ref = createRuntimeTileRef("group-shift", tile.id);
-    await loadImageAssetFromUrl(state, tileCanvas.toDataURL("image/png"), ref);
-    resetTileToBakedImage(tile, ref, state.project.tileWidth, state.project.tileHeight);
-    shiftedCount += 1;
-  }
-
-  return shiftedCount;
+  state.project.tiles = [
+    ...state.project.tiles.filter((tile) =>
+      tile.destCol < affectedStartCol
+      || tile.destCol > affectedEndCol
+      || tile.destRow < affectedStartRow
+      || tile.destRow > affectedEndRow,
+    ),
+    ...nextTiles,
+  ];
+  normalizeProjectTilesToGrid(state);
+  state.session.selectedOutputCells = nextTiles.map((tile) => ({ col: tile.destCol, row: tile.destRow }));
+  state.session.selectedOutputTileIds = nextTiles.map((tile) => tile.id);
+  state.session.selectedOutputTileId = state.session.selectedOutputTileIds[0] ?? null;
+  return nextTiles.length;
 }
 
 export async function bakeSelectedTilesGroupFlip(
@@ -179,6 +194,7 @@ export async function bakeSelectedTilesGroupScale(
     ...nextTiles,
   ];
   normalizeProjectTilesToGrid(state);
+  state.session.selectedOutputCells = nextTiles.map((tile) => ({ col: tile.destCol, row: tile.destRow }));
   state.session.selectedOutputTileIds = nextTiles.map((tile) => tile.id);
   state.session.selectedOutputTileId = state.session.selectedOutputTileIds[0] ?? null;
   return nextTiles.length;
@@ -253,6 +269,7 @@ export async function bakeSelectedTilesGroupStretch(
     ...nextTiles,
   ];
   normalizeProjectTilesToGrid(state);
+  state.session.selectedOutputCells = nextTiles.map((tile) => ({ col: tile.destCol, row: tile.destRow }));
   state.session.selectedOutputTileIds = nextTiles.map((tile) => tile.id);
   state.session.selectedOutputTileId = state.session.selectedOutputTileIds[0] ?? null;
   return nextTiles.length;
@@ -418,7 +435,7 @@ export function normalizeHexColor(value: string, fallback: string): string {
   return `#${toHex(parsed.r)}${toHex(parsed.g)}${toHex(parsed.b)}`;
 }
 
-function renderSelectedTileGroup(
+export function renderSelectedTileGroup(
   state: ProjectState,
   selectedTiles: TilePlacement[],
 ): { bounds: SelectionBounds; canvas: HTMLCanvasElement } | null {
@@ -498,6 +515,8 @@ function drawGroupCanvasToExpandedGrid(
   drawY: number,
   drawWidth: number,
   drawHeight: number,
+  flipX = false,
+  flipY = false,
 ): {
   canvas: HTMLCanvasElement;
   cellStartOffsetCol: number;
@@ -526,13 +545,20 @@ function drawGroupCanvasToExpandedGrid(
 
   expandedContext.clearRect(0, 0, expandedCanvas.width, expandedCanvas.height);
   expandedContext.imageSmoothingEnabled = false;
+  expandedContext.save();
+  expandedContext.translate(
+    -cellStartOffsetCol * tileWidth + drawX + drawWidth / 2,
+    -cellStartOffsetRow * tileHeight + drawY + drawHeight / 2,
+  );
+  expandedContext.scale(flipX ? -1 : 1, flipY ? -1 : 1);
   expandedContext.drawImage(
     groupCanvas,
-    -cellStartOffsetCol * tileWidth + drawX,
-    -cellStartOffsetRow * tileHeight + drawY,
+    -drawWidth / 2,
+    -drawHeight / 2,
     drawWidth,
     drawHeight,
   );
+  expandedContext.restore();
 
   return {
     canvas: expandedCanvas,
@@ -602,6 +628,134 @@ async function bakeExpandedCanvasToTiles(
     }
   }
 
+  return nextTiles;
+}
+
+export async function bakeGroupCanvasTransform(
+  state: ProjectState,
+  bounds: SelectionBounds,
+  groupCanvas: HTMLCanvasElement,
+  offsetX: number,
+  offsetY: number,
+  scaleX: number,
+  scaleY: number,
+  flipX: boolean,
+  flipY: boolean,
+  refPrefix: string,
+): Promise<TilePlacement[]> {
+  const tileWidth = state.project.tileWidth;
+  const tileHeight = state.project.tileHeight;
+  const outputGrid = getOutputGridMetrics(state.project);
+  const groupColumns = bounds.maxCol - bounds.minCol + 1;
+  const groupRows = bounds.maxRow - bounds.minRow + 1;
+  const safeScaleX = Math.max(0.1, scaleX);
+  const safeScaleY = Math.max(0.1, scaleY);
+  const scaledWidth = groupCanvas.width * safeScaleX;
+  const scaledHeight = groupCanvas.height * safeScaleY;
+  const drawX = offsetX + (groupCanvas.width - scaledWidth) / 2;
+  const drawY = offsetY + (groupCanvas.height - scaledHeight) / 2;
+  const selectionStartCol = bounds.minCol + Math.floor(drawX / tileWidth);
+  const selectionStartRow = bounds.minRow + Math.floor(drawY / tileHeight);
+  const selectionEndCol = bounds.minCol + Math.ceil((drawX + scaledWidth) / tileWidth) - 1;
+  const selectionEndRow = bounds.minRow + Math.ceil((drawY + scaledHeight) / tileHeight) - 1;
+  const expanded = drawGroupCanvasToExpandedGrid(
+    groupCanvas,
+    tileWidth,
+    tileHeight,
+    drawX,
+    drawY,
+    scaledWidth,
+    scaledHeight,
+    flipX,
+    flipY,
+  );
+
+  if (!expanded) {
+    return [];
+  }
+
+  const affectedStartCol = bounds.minCol + expanded.cellStartOffsetCol;
+  const affectedStartRow = bounds.minRow + expanded.cellStartOffsetRow;
+  const affectedEndCol = bounds.maxCol + (expanded.cellEndOffsetCol - (groupColumns - 1));
+  const affectedEndRow = bounds.maxRow + (expanded.cellEndOffsetRow - (groupRows - 1));
+  const compositedCanvas = document.createElement("canvas");
+  compositedCanvas.width = expanded.canvas.width;
+  compositedCanvas.height = expanded.canvas.height;
+  const compositedContext = compositedCanvas.getContext("2d");
+
+  if (!compositedContext) {
+    return [];
+  }
+
+  compositedContext.clearRect(0, 0, compositedCanvas.width, compositedCanvas.height);
+  compositedContext.imageSmoothingEnabled = false;
+
+  const selectedIds = new Set(state.session.selectedOutputTileIds);
+
+  for (const tile of state.project.tiles) {
+    if (selectedIds.has(tile.id)) {
+      continue;
+    }
+
+    if (
+      tile.destCol < affectedStartCol
+      || tile.destCol > affectedEndCol
+      || tile.destRow < affectedStartRow
+      || tile.destRow > affectedEndRow
+    ) {
+      continue;
+    }
+
+    const image = getSourceImageForRef(state, tile.sourceImageRef) ?? state.sourceImageAsset.image;
+
+    if (!image) {
+      continue;
+    }
+
+    const renderedTile = renderTileCanvas(image, tile, tileWidth, tileHeight);
+
+    if (!renderedTile) {
+      continue;
+    }
+
+    compositedContext.drawImage(
+      renderedTile,
+      (tile.destCol - affectedStartCol) * tileWidth,
+      (tile.destRow - affectedStartRow) * tileHeight,
+    );
+  }
+
+  compositedContext.drawImage(expanded.canvas, 0, 0);
+  const nextTiles = await bakeExpandedCanvasToTiles(
+    state,
+    compositedCanvas,
+    tileWidth,
+    tileHeight,
+    affectedStartCol,
+    affectedStartRow,
+    outputGrid.columns,
+    outputGrid.rows,
+    refPrefix,
+  );
+
+  state.project.tiles = [
+    ...state.project.tiles.filter((tile) =>
+      tile.destCol < affectedStartCol
+      || tile.destCol > affectedEndCol
+      || tile.destRow < affectedStartRow
+      || tile.destRow > affectedEndRow,
+    ),
+    ...nextTiles,
+  ];
+  normalizeProjectTilesToGrid(state);
+  state.session.selectedOutputCells = createRectangularSelectionFromBounds(
+    clampSelectionBounds(selectionStartCol, selectionEndCol, selectionStartRow, selectionEndRow, outputGrid.columns, outputGrid.rows),
+  );
+  const selectedCellKeys = new Set(state.session.selectedOutputCells.map((cell) => `${cell.col}:${cell.row}`));
+  state.session.selectedOutputTileIds = state.project.tiles
+    .filter((tile) => selectedCellKeys.has(`${tile.destCol}:${tile.destRow}`))
+    .map((tile) => tile.id);
+  state.session.selectedOutputTileId = state.session.selectedOutputTileIds[0] ?? null;
   return nextTiles;
 }
 
@@ -687,14 +841,7 @@ function createBakedOutputTile(destCol: number, destRow: number, tileWidth: numb
   };
 }
 
-type SelectionBounds = {
-  minCol: number;
-  maxCol: number;
-  minRow: number;
-  maxRow: number;
-};
-
-function getSelectedOutputCellBounds(state: ProjectState): SelectionBounds | null {
+export function getSelectedOutputCellBounds(state: ProjectState): SelectionBounds | null {
   const cells = state.session.selectedOutputCells;
 
   if (cells.length < 1) {
@@ -706,6 +853,46 @@ function getSelectedOutputCellBounds(state: ProjectState): SelectionBounds | nul
     maxCol: Math.max(...cells.map((cell) => cell.col)),
     minRow: Math.min(...cells.map((cell) => cell.row)),
     maxRow: Math.max(...cells.map((cell) => cell.row)),
+  };
+}
+
+function createRectangularSelectionFromBounds(bounds: SelectionBounds | null): ProjectState["session"]["selectedOutputCells"] {
+  if (!bounds) {
+    return [];
+  }
+  const cells = [];
+
+  for (let row = bounds.minRow; row <= bounds.maxRow; row += 1) {
+    for (let col = bounds.minCol; col <= bounds.maxCol; col += 1) {
+      cells.push({ col, row });
+    }
+  }
+
+  return cells;
+}
+
+function clampSelectionBounds(
+  minCol: number,
+  maxCol: number,
+  minRow: number,
+  maxRow: number,
+  gridColumns: number,
+  gridRows: number,
+): SelectionBounds | null {
+  const clampedMinCol = Math.max(0, minCol);
+  const clampedMaxCol = Math.min(gridColumns - 1, maxCol);
+  const clampedMinRow = Math.max(0, minRow);
+  const clampedMaxRow = Math.min(gridRows - 1, maxRow);
+
+  if (clampedMinCol > clampedMaxCol || clampedMinRow > clampedMaxRow) {
+    return null;
+  }
+
+  return {
+    minCol: clampedMinCol,
+    maxCol: clampedMaxCol,
+    minRow: clampedMinRow,
+    maxRow: clampedMaxRow,
   };
 }
 

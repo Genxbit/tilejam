@@ -39,20 +39,31 @@ import {
   loadSourceImageFromUrl,
 } from "../systems/sourceImageSystem";
 import {
+  bakeGroupCanvasTransform,
   bakeSelectedTilesColorReplace,
   bakeSelectedTilesEdgeExtend,
   bakeSelectedTilesGroupFlip,
-  bakeSelectedTilesGroupScale,
   bakeSelectedTilesGroupShift,
   bakeSelectedTilesGroupStretch,
   fillSelectedOutputCells,
   normalizeHexColor,
   parseHexColor,
+  renderSelectedTileGroup,
   resetTileToBakedImage,
 } from "../systems/groupedTileBakeSystem";
 import { getSeamRepairPairs, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
 import { renderTileCanvas } from "../systems/tileRenderSystem";
 import { getOutputGridMetrics, getProjectPixelSize, normalizeProjectTilesToGrid, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
+import {
+  clearDragMovePreview,
+  clearGroupTransformPreview,
+  clearTileLayoutPreview,
+  ensureDragMovePreview,
+  ensureGroupTransformPreview,
+  ensureTileLayoutPreview,
+  getSelectedTileGroupSignature,
+  syncTransformPreviewState,
+} from "../systems/transformPreviewSystem";
 import {
   getCanvasPoint,
   getOutputGridCellAtPoint,
@@ -87,7 +98,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
   let resizeObserver: ResizeObserver | null = null;
   let activePointerId: number | null = null;
   let sourceDragAnchor: { col: number; row: number } | null = null;
-  let dragMode: "select" | "pan" | "move-tile" | null = null;
+  let outputDragAnchor: { col: number; row: number } | null = null;
+  let dragMode: "select" | "select-output" | "pan" | "move-tile" | null = null;
   let panPanel: "source" | "output" | null = null;
   let lastPointerPoint: { x: number; y: number } | null = null;
   let movingTileId: number | null = null;
@@ -174,6 +186,12 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.selectedOutputCells = freshState.session.selectedOutputCells;
       state.session.outputTileClipboard = freshState.session.outputTileClipboard;
       state.session.sceneClipboard = freshState.session.sceneClipboard;
+      state.session.tileMultiEditMode = freshState.session.tileMultiEditMode;
+      state.session.tileLayoutPreview = freshState.session.tileLayoutPreview;
+      state.session.dragMovePreview = freshState.session.dragMovePreview;
+      state.session.groupTransformPreview = freshState.session.groupTransformPreview;
+      state.session.groupOffsetX = freshState.session.groupOffsetX;
+      state.session.groupOffsetY = freshState.session.groupOffsetY;
       state.session.groupScaleX = freshState.session.groupScaleX;
       state.session.groupScaleY = freshState.session.groupScaleY;
       state.session.groupStretchLeft = freshState.session.groupStretchLeft;
@@ -876,11 +894,93 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = visible ? "Scene editing grid shown." : "Scene preview enabled.";
       renderCanvas();
     },
+    onTileMultiEditModeChanged: (mode) => {
+      state.session.tileMultiEditMode = mode;
+      if (mode !== "group") {
+        clearGroupTransformPreview(state);
+      }
+      clearTileLayoutPreview(state);
+      renderAll();
+    },
+    onPreviewTileLayoutUpdated: (patch) => {
+      const selectedTiles = getSelectedOutputTiles(state);
+
+      if (state.session.tileMultiEditMode === "group" && selectedTiles.length > 1) {
+        const preview = ensureGroupTransformPreview(state);
+
+        if (!preview) {
+          state.session.message = "Select output tiles with resolved images before previewing layout changes.";
+          renderAll();
+          return;
+        }
+
+        if (typeof patch.flipX === "boolean") {
+          preview.flipX = patch.flipX;
+        }
+        if (typeof patch.flipY === "boolean") {
+          preview.flipY = patch.flipY;
+        }
+        state.session.message = "Previewing group layout.";
+        renderAll();
+        return;
+      }
+
+      const preview = ensureTileLayoutPreview(state);
+
+      if (!preview) {
+        state.session.message = "Select an output tile before previewing layout changes.";
+        renderAll();
+        return;
+      }
+
+      preview.patch = {
+        ...preview.patch,
+        ...patch,
+      };
+      state.session.message = "Previewing tile layout.";
+      renderAll();
+    },
+    onApplyTileLayoutPreview: async () => {
+      const preview = ensureTileLayoutPreview(state);
+
+      if (!preview) {
+        state.session.message = "Select an output tile before applying layout changes.";
+        renderAll();
+        return;
+      }
+
+      recordHistory();
+      const tile = updateSelectedOutputTile(state, preview.patch);
+
+      if (!tile) {
+        undoStack.pop();
+        state.session.message = "Select an output tile before applying layout changes.";
+        renderAll();
+        return;
+      }
+
+      clearTileLayoutPreview(state);
+      state.session.hoveredOutputTile = null;
+      bumpRenderRevision();
+      state.session.message = `Applied layout to tile ${tile.id} at ${tile.destCol}, ${tile.destRow}.`;
+      renderAll();
+    },
+    onCancelTileLayoutPreview: () => {
+      clearTileLayoutPreview(state);
+      clearGroupTransformPreview(state);
+      state.session.hoveredOutputTile = null;
+      state.session.message = "Cancelled the layout preview.";
+      renderAll();
+    },
     onSelectedTileUpdated: async (patch) => {
       recordHistory();
       const selectedTiles = getSelectedOutputTiles(state);
 
-      if (selectedTiles.length > 1 && (typeof patch.flipX === "boolean" || typeof patch.flipY === "boolean")) {
+      if (
+        state.session.tileMultiEditMode === "group"
+        && selectedTiles.length > 1
+        && (typeof patch.flipX === "boolean" || typeof patch.flipY === "boolean")
+      ) {
         const flippedCount = await bakeSelectedTilesGroupFlip(
           state,
           selectedTiles,
@@ -917,25 +1017,27 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       renderAll();
     },
     onNudgeSelectedTile: async (deltaX, deltaY) => {
-      recordHistory();
       const selectedTiles = getSelectedOutputTiles(state);
 
-      if (selectedTiles.length > 1) {
-        const shiftedCount = await bakeSelectedTilesGroupShift(state, selectedTiles, deltaX, deltaY);
+      if (state.session.tileMultiEditMode === "group" && selectedTiles.length > 1) {
+        const preview = ensureGroupTransformPreview(state);
 
-        if (shiftedCount < 1) {
-          undoStack.pop();
-          state.session.message = "Select output tiles with resolved images before shifting the group.";
+        if (!preview) {
+          state.session.message = "Select output tiles with resolved images before previewing a group transform.";
           renderAll();
           return;
         }
 
-        bumpRenderRevision();
-        state.session.message = `Shifted ${shiftedCount} selected tiles as one group by ${deltaX}, ${deltaY}.`;
+      state.session.groupOffsetX += deltaX;
+      state.session.groupOffsetY += deltaY;
+      preview.offsetX = state.session.groupOffsetX;
+      preview.offsetY = state.session.groupOffsetY;
+        state.session.message = `Previewing group offset ${state.session.groupOffsetX}, ${state.session.groupOffsetY}.`;
         renderAll();
         return;
       }
 
+      recordHistory();
       const tile = nudgeSelectedOutputTile(state, deltaX, deltaY);
 
       if (!tile) {
@@ -951,41 +1053,66 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     },
     onGroupScaleXChanged: (value) => {
       state.session.groupScaleX = Math.max(0.1, value);
+      const preview = ensureGroupTransformPreview(state);
+
+      if (preview) {
+        preview.scaleX = state.session.groupScaleX;
+      }
+
       renderAll();
     },
     onGroupScaleYChanged: (value) => {
       state.session.groupScaleY = Math.max(0.1, value);
+      const preview = ensureGroupTransformPreview(state);
+
+      if (preview) {
+        preview.scaleY = state.session.groupScaleY;
+      }
+
       renderAll();
     },
     onApplyGroupScale: async () => {
-      recordHistory();
-      const selectedTiles = getSelectedOutputTiles(state);
+      const preview = ensureGroupTransformPreview(state);
 
-      if (selectedTiles.length < 2) {
-        undoStack.pop();
+      if (!preview) {
         state.session.message = "Select multiple output tiles before applying group scale.";
         renderAll();
         return;
       }
 
-      const scaledCount = await bakeSelectedTilesGroupScale(
+      recordHistory();
+      const nextTiles = await bakeGroupCanvasTransform(
         state,
-        selectedTiles,
+        preview.bounds,
+        preview.canvas,
+        state.session.groupOffsetX,
+        state.session.groupOffsetY,
         state.session.groupScaleX,
         state.session.groupScaleY,
+        preview.flipX,
+        preview.flipY,
+        "group-transform",
       );
 
-      if (scaledCount < 1) {
+      if (nextTiles.length < 1) {
         undoStack.pop();
-        state.session.message = "Unable to scale the selected patch. Check that the selected tiles have resolved images.";
+        state.session.message = "Unable to apply the group transform. Check that the selected tiles have resolved images.";
         renderAll();
         return;
       }
 
+      clearGroupTransformPreview(state);
+      state.session.hoveredOutputTile = null;
       bumpRenderRevision();
-      state.session.message = scaledCount > 1
-        ? `Scaled the selected patch into ${scaledCount} tiles. Use Undo to restore the previous patch.`
-        : "Scaled the selected patch.";
+      state.session.message = nextTiles.length > 1
+        ? `Applied the group transform into ${nextTiles.length} tiles. Use Undo to restore the previous patch.`
+        : "Applied the group transform.";
+      renderAll();
+    },
+    onCancelGroupTransform: () => {
+      clearGroupTransformPreview(state);
+      state.session.hoveredOutputTile = null;
+      state.session.message = "Cancelled the group transform preview.";
       renderAll();
     },
     onGroupStretchUpdated: (patch) => {
@@ -1484,11 +1611,13 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
   });
 
   function renderAll(): void {
+    syncTransformPreviewState(state);
     shell.update(state);
     renderWorkspace(shell.canvas, state);
   }
 
   function renderCanvas(): void {
+    syncTransformPreviewState(state);
     renderWorkspace(shell.canvas, state);
   }
 
@@ -1560,6 +1689,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       panPanel = hoveredPanel;
       lastPointerPoint = point;
       sourceDragAnchor = null;
+      outputDragAnchor = null;
       shell.canvas.setPointerCapture(event.pointerId);
       state.session.message = `Panning ${hoveredPanel} view.`;
       renderAll();
@@ -1572,6 +1702,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       activePointerId = event.pointerId;
       dragMode = "select";
       sourceDragAnchor = sourceHit;
+      outputDragAnchor = null;
       lastPointerPoint = point;
       updateDraftSourceSelection(state, sourceHit, sourceHit);
       setHoveredOutputTile(state, null);
@@ -1652,6 +1783,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     }
 
     if (!state.session.sourceSelection) {
+      const isMoveGesture = event.metaKey || event.ctrlKey;
+
       if (event.shiftKey) {
         const anchorTile = getSelectedOutputTile(state);
         const anchorCell = state.session.selectedOutputCells[0] ?? null;
@@ -1672,6 +1805,22 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         return;
       }
 
+      if (!isMoveGesture) {
+        const selectedTile = selectOutputTileAtCell(state, outputHit.col, outputHit.row);
+        activePointerId = event.pointerId;
+        dragMode = "select-output";
+        outputDragAnchor = { col: outputHit.col, row: outputHit.row };
+        movingTileId = null;
+        movingTileOrigin = null;
+        lastPointerPoint = point;
+        shell.canvas.setPointerCapture(event.pointerId);
+        state.session.message = selectedTile
+          ? `Selected tile ${selectedTile.id} at ${selectedTile.destCol}, ${selectedTile.destRow}. Drag to expand the selection.`
+          : `Selected output cell ${outputHit.col}, ${outputHit.row}. Drag to expand the selection.`;
+        renderAll();
+        return;
+      }
+
       const clickedInExistingSelection = state.session.selectedOutputCells.some(
         (cell) => cell.col === outputHit.col && cell.row === outputHit.row,
       );
@@ -1683,6 +1832,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         dragMode = "move-tile";
         movingTileId = selectedTile.id;
         movingTileOrigin = { col: selectedTile.destCol, row: selectedTile.destRow };
+        ensureDragMovePreview(state);
         shell.canvas.setPointerCapture(event.pointerId);
         state.session.message = `Selected tile ${selectedTile.id} at ${selectedTile.destCol}, ${selectedTile.destRow}. Drag to move it.`;
       } else {
@@ -1760,10 +1910,29 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       return;
     }
 
+    if (activePointerId === event.pointerId && dragMode === "select-output" && outputDragAnchor) {
+      const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
+
+      if (outputHit) {
+        selectOutputTileRectangle(state, outputDragAnchor.col, outputDragAnchor.row, outputHit.col, outputHit.row);
+        requestCanvasRender();
+      }
+
+      return;
+    }
+
     if (activePointerId === event.pointerId && dragMode === "move-tile" && movingTileId !== null) {
       const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
       const currentHovered = state.session.hoveredOutputTile;
       setHoveredOutputTile(state, outputHit);
+      if (outputHit && movingTileOrigin) {
+        const preview = ensureDragMovePreview(state);
+
+        if (preview) {
+          preview.offsetX = (outputHit.col - movingTileOrigin.col) * state.project.tileWidth;
+          preview.offsetY = (outputHit.row - movingTileOrigin.row) * state.project.tileHeight;
+        }
+      }
       if (currentHovered?.col !== outputHit?.col || currentHovered?.row !== outputHit?.row) {
         requestCanvasRender();
       }
@@ -1791,7 +1960,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     }
   }
 
-  function handlePointerUp(event: PointerEvent): void {
+  async function handlePointerUp(event: PointerEvent): Promise<void> {
     if (activePointerId !== event.pointerId) {
       return;
     }
@@ -1810,6 +1979,27 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       return;
     }
 
+    if (dragMode === "select-output" && outputDragAnchor) {
+      activePointerId = null;
+      dragMode = null;
+      outputDragAnchor = null;
+      lastPointerPoint = null;
+
+      if (shell.canvas.hasPointerCapture(event.pointerId)) {
+        shell.canvas.releasePointerCapture(event.pointerId);
+      }
+
+      const selectedCellCount = state.session.selectedOutputCells.length;
+      const selectedTileCount = getSelectedOutputTiles(state).length;
+      state.session.message = selectedCellCount > 0
+        ? selectedTileCount > 0
+          ? `Selected ${selectedCellCount} cells with ${selectedTileCount} placed tile${selectedTileCount === 1 ? "" : "s"}.`
+          : `Selected ${selectedCellCount} empty cell${selectedCellCount === 1 ? "" : "s"}.`
+        : "No output cells selected.";
+      renderAll();
+      return;
+    }
+
     if (dragMode === "move-tile" && movingTileId !== null) {
       const point = getCanvasPoint(shell.canvas, event);
       const layout = getWorkspaceLayout(shell.canvas.width, shell.canvas.height, state);
@@ -1818,24 +2008,44 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       const shouldMove = outputHit && movingTileOrigin
         ? outputHit.col !== movingTileOrigin.col || outputHit.row !== movingTileOrigin.row
         : false;
+      let movedTile: TilePlacement | null = null;
+      let moved = false;
 
-      if (shouldMove) {
-        recordHistory();
+      if (shouldMove && outputHit && movingTileOrigin) {
+        const selectedTiles = getSelectedOutputTiles(state);
+        const prepared = selectedTiles.length > 0 ? renderSelectedTileGroup(state, selectedTiles) : null;
+
+        if (prepared) {
+          recordHistory();
+          const nextTiles = await bakeGroupCanvasTransform(
+            state,
+            prepared.bounds,
+            prepared.canvas,
+            (outputHit.col - movingTileOrigin.col) * state.project.tileWidth,
+            (outputHit.row - movingTileOrigin.row) * state.project.tileHeight,
+            1,
+            1,
+            false,
+            false,
+            "drag-move",
+          );
+
+          if (nextTiles.length > 0) {
+            movedTile = nextTiles[0] ?? null;
+            moved = true;
+          } else {
+            undoStack.pop();
+          }
+        }
+      } else {
+        movedTile = getSelectedOutputTile(state);
       }
-
-      const movedTile = outputHit
-        ? selectedCellCount > 1 && movingTileOrigin
-          ? moveSelectedOutputTileBy(state, outputHit.col - movingTileOrigin.col, outputHit.row - movingTileOrigin.row)
-          : moveTileToCell(state, movingTileId, outputHit.col, outputHit.row)
-        : null;
-      const moved = movedTile && movingTileOrigin
-        ? movedTile.destCol !== movingTileOrigin.col || movedTile.destRow !== movingTileOrigin.row
-        : false;
 
       activePointerId = null;
       dragMode = null;
       movingTileId = null;
       movingTileOrigin = null;
+      clearDragMovePreview(state);
       lastPointerPoint = null;
 
       if (shell.canvas.hasPointerCapture(event.pointerId)) {
@@ -1876,6 +2086,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       activePointerId = null;
       dragMode = null;
       movingTileOrigin = null;
+      clearDragMovePreview(state);
       lastPointerPoint = null;
 
       if (shell.canvas.hasPointerCapture(event.pointerId)) {
@@ -1950,8 +2161,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     dragMode = null;
     panPanel = null;
     sourceDragAnchor = null;
+    outputDragAnchor = null;
     movingTileId = null;
     movingTileOrigin = null;
+    clearDragMovePreview(state);
     lastPointerPoint = null;
 
     if (shell.canvas.hasPointerCapture(event.pointerId)) {

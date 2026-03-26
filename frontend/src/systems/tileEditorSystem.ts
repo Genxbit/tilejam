@@ -224,14 +224,43 @@ export function updateSelectedOutputTile(state: ProjectState, patch: Partial<Edi
     return null;
   }
 
-  if (selectedTiles.length === 1) {
-    const nextDestCol = patch.destCol ?? tile.destCol;
-    const nextDestRow = patch.destRow ?? tile.destRow;
+  const nextDestCol = patch.destCol ?? tile.destCol;
+  const nextDestRow = patch.destRow ?? tile.destRow;
+  const previousDestCol = tile.destCol;
+  const previousDestRow = tile.destRow;
+  const previousSelectedCells = state.session.selectedOutputCells.map((cell) => ({ ...cell }));
+  const previousSelectedTileIds = [...state.session.selectedOutputTileIds];
 
-    if (nextDestCol !== tile.destCol || nextDestRow !== tile.destRow) {
-      moveTileToCell(state, tile.id, nextDestCol, nextDestRow);
+  if (nextDestCol !== tile.destCol || nextDestRow !== tile.destRow) {
+    moveTileToCell(state, tile.id, nextDestCol, nextDestRow);
+
+    if (selectedTiles.length > 1) {
+      const nextTile = state.project.tiles.find((entry) => entry.id === tile.id) ?? null;
+
+      if (!nextTile) {
+        return null;
+      }
+
+      state.session.selectedOutputCells = dedupeGridCoordinates(
+        previousSelectedCells.map((cell) =>
+          cell.col === previousDestCol && cell.row === previousDestRow
+            ? { col: nextTile.destCol, row: nextTile.destRow }
+            : cell,
+        ),
+      );
+      state.session.selectedOutputTileIds = previousSelectedTileIds.filter((id) =>
+        state.project.tiles.some((entry) => entry.id === id),
+      );
+
+      if (!state.session.selectedOutputTileIds.includes(nextTile.id)) {
+        state.session.selectedOutputTileIds.unshift(nextTile.id);
+      }
+
+      state.session.selectedOutputTileId = nextTile.id;
     }
+  }
 
+  if (nextDestCol !== tile.destCol || nextDestRow !== tile.destRow || selectedTiles.length === 1) {
     const nextTile = getSelectedOutputTile(state);
 
     if (!nextTile) {
@@ -244,7 +273,6 @@ export function updateSelectedOutputTile(state: ProjectState, patch: Partial<Edi
   if (selectedTiles.length > 1) {
     delete sanitizedPatch.destCol;
     delete sanitizedPatch.destRow;
-    delete sanitizedPatch.name;
   }
 
   for (const selectedTile of getSelectedOutputTiles(state)) {
@@ -545,4 +573,22 @@ function reindexTiles(state: ProjectState): void {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function dedupeGridCoordinates(cells: ProjectState["session"]["selectedOutputCells"]): ProjectState["session"]["selectedOutputCells"] {
+  const seen = new Set<string>();
+  const uniqueCells = [];
+
+  for (const cell of cells) {
+    const key = `${cell.col}:${cell.row}`;
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    uniqueCells.push(cell);
+  }
+
+  return uniqueCells;
 }
