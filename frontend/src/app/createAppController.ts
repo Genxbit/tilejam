@@ -905,7 +905,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     onPreviewTileLayoutUpdated: (patch) => {
       const selectedTiles = getSelectedOutputTiles(state);
 
-      if (state.session.tileMultiEditMode === "group" && selectedTiles.length > 1) {
+      if (state.session.tileMultiEditMode === "group" && selectedTiles.length > 0) {
         const preview = ensureGroupTransformPreview(state);
 
         if (!preview) {
@@ -978,7 +978,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
       if (
         state.session.tileMultiEditMode === "group"
-        && selectedTiles.length > 1
+        && selectedTiles.length > 0
         && (typeof patch.flipX === "boolean" || typeof patch.flipY === "boolean")
       ) {
         const flippedCount = await bakeSelectedTilesGroupFlip(
@@ -1019,7 +1019,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     onNudgeSelectedTile: async (deltaX, deltaY) => {
       const selectedTiles = getSelectedOutputTiles(state);
 
-      if (state.session.tileMultiEditMode === "group" && selectedTiles.length > 1) {
+      if (state.session.tileMultiEditMode === "group" && selectedTiles.length > 0) {
         const preview = ensureGroupTransformPreview(state);
 
         if (!preview) {
@@ -1075,7 +1075,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       const preview = ensureGroupTransformPreview(state);
 
       if (!preview) {
-        state.session.message = "Select multiple output tiles before applying group scale.";
+        state.session.message = "Select one or more output tiles before applying the transform.";
         renderAll();
         return;
       }
@@ -1134,9 +1134,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       recordHistory();
       const selectedTiles = getSelectedOutputTiles(state);
 
-      if (selectedTiles.length < 2) {
+      if (selectedTiles.length < 1) {
         undoStack.pop();
-        state.session.message = "Select multiple output tiles before applying group stretch.";
+        state.session.message = "Select one or more output tiles before applying stretch.";
         renderAll();
         return;
       }
@@ -2555,6 +2555,10 @@ function restoreHistoryEntry(state: ProjectState, entry: HistoryEntry): void {
   state.session.selectedSceneCell = entry.selectedSceneCell ? { ...entry.selectedSceneCell } : null;
   state.session.selectedSceneCells = entry.selectedSceneCells.map((cell) => ({ ...cell }));
   state.session.activeSceneLayerId = entry.activeSceneLayerId;
+  clearTileLayoutPreview(state);
+  clearGroupTransformPreview(state);
+  clearDragMovePreview(state);
+  state.session.hoveredOutputTile = null;
   normalizeProjectTilesToGrid(state);
 }
 

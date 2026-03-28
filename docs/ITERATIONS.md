@@ -733,3 +733,62 @@ Restructure the editor navigation so top-level tabs represent major workspaces o
 * redundant header copy is removed from the normal editor flow
 * panel navigation reduces scrolling and makes common tasks easier to find
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 21: Compact workspace tab UX + panel simplification
+
+**Status**
+Completed
+
+**Goal**
+Redesign the sidebar tab layouts so each workspace sub-tab has a compact, task-first structure with smarter grouping and fewer low-value panels.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Refine the `Tilesheet -> Sheet`, `Tilesheet -> Tile`, `Scene -> Map`, `Scene -> Layers`, and `Scene -> Selection` tabs so controls are regrouped around user intent, redundant framing is removed, and only panels with a clear purpose remain.
+
+**Deliverables**
+
+* redesign `Tilesheet -> Sheet` around:
+  * `Files & Export`
+  * `Sheet Setup`
+  * `Sheet Actions`
+  * compact `Status`
+* redesign `Tilesheet -> Tile` around:
+  * top-level selection action row
+  * one strong `Layout` panel
+  * `Tile Processing`
+  * `Repair & Color`
+  * compact `Preview & Properties`
+* redesign `Scene -> Map` around:
+  * `Scene Setup`
+  * `Preview`
+  * compact `Scene Status`
+* redesign `Scene -> Layers` around:
+  * `Layer Stack`
+  * `Layer Settings`
+  * conditional `Image Layer`
+* redesign `Scene -> Selection` around:
+  * `Selection Actions`
+  * compact `Selection Status`
+* merge or remove existing panels that do not create clarity, reduce risk, or support a distinct task
+* reduce repeated helper copy and let grouping, ordering, and labels carry more of the UX
+* keep the navigation hierarchy from Ticket 20 while improving compactness, scanability, and visual focus inside each tab
+* keep all existing features available and supported after the layout redesign, even if they move to a different group or panel
+
+**Validation**
+
+* each sub-tab has a clear primary task and shorter scanning path
+* important actions appear before low-frequency metadata or status
+* redundant boxes, copy, or panel chrome are removed where they do not help
+* panels are only used where they meaningfully separate workflows or conditional content
+* the sidebar feels more compact without making controls harder to understand
+* all current features remain supported and reachable after the redesign
+* behavior is preserved while the layout and grouping become easier to learn
+* matches architecture rules in `docs/TECH_WORKFLOW.md`

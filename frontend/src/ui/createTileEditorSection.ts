@@ -49,7 +49,7 @@ export type SelectedTilePatch = {
   collision?: string;
 };
 
-type EditorTab = "layout" | "fit" | "preview" | "visual" | "meta";
+type EditorTab = "layout" | "processing" | "repair" | "properties";
 
 type TileEditorCallbacks = {
   onTileMultiEditModeChanged: (mode: "individual" | "group") => void;
@@ -132,22 +132,19 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   const editorTabs = document.createElement("div");
   editorTabs.className = "editor-tabs";
   const layoutTab = createEditorTabButton("Layout");
-  const fitTab = createEditorTabButton("Fit");
-  const previewTab = createEditorTabButton("Preview");
-  const visualTab = createEditorTabButton("Visual");
-  const metaTab = createEditorTabButton("Meta");
-  editorTabs.append(layoutTab, fitTab, previewTab, visualTab, metaTab);
+  const processingTab = createEditorTabButton("Processing");
+  const repairTab = createEditorTabButton("Repair");
+  const propertiesTab = createEditorTabButton("Properties");
+  editorTabs.append(layoutTab, processingTab, repairTab, propertiesTab);
 
   const layoutPanel = document.createElement("div");
   layoutPanel.className = "editor-tab-panel";
-  const fitPanel = document.createElement("div");
-  fitPanel.className = "editor-tab-panel";
-  const previewPanel = document.createElement("div");
-  previewPanel.className = "editor-tab-panel";
-  const visualPanel = document.createElement("div");
-  visualPanel.className = "editor-tab-panel";
-  const metaPanel = document.createElement("div");
-  metaPanel.className = "editor-tab-panel";
+  const processingPanel = document.createElement("div");
+  processingPanel.className = "editor-tab-panel";
+  const repairPanel = document.createElement("div");
+  repairPanel.className = "editor-tab-panel";
+  const propertiesPanel = document.createElement("div");
+  propertiesPanel.className = "editor-tab-panel";
 
   const tileCellInputs = document.createElement("div");
   tileCellInputs.className = "grid-inputs";
@@ -156,9 +153,10 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   const commitTileColChanged = () => {
     const nextValue = Math.max(0, Number.parseInt(tileColField.input.value, 10) || 0);
 
-    if (currentSelectionCount > 1 && currentEditMode === "group" && currentSelectionBounds) {
-      const currentPreviewCol = currentSelectionBounds.minCol + Math.round(currentGroupOffsetX / state.project.tileWidth);
-      void callbacks.onNudgeSelectedTile((nextValue - currentPreviewCol) * state.project.tileWidth, 0);
+    if (currentSelectionCount > 0 && currentEditMode === "group" && currentSelectionBounds) {
+      const currentReference = getGroupReferenceAxis(currentGroupOffsetX, state.project.tileWidth);
+      const nextOffsetX = ((nextValue - currentSelectionBounds.minCol) * state.project.tileWidth) + currentReference.remainder;
+      void callbacks.onNudgeSelectedTile(nextOffsetX - currentGroupOffsetX, 0);
       return;
     }
 
@@ -167,9 +165,10 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   const commitTileRowChanged = () => {
     const nextValue = Math.max(0, Number.parseInt(tileRowField.input.value, 10) || 0);
 
-    if (currentSelectionCount > 1 && currentEditMode === "group" && currentSelectionBounds) {
-      const currentPreviewRow = currentSelectionBounds.minRow + Math.round(currentGroupOffsetY / state.project.tileHeight);
-      void callbacks.onNudgeSelectedTile(0, (nextValue - currentPreviewRow) * state.project.tileHeight);
+    if (currentSelectionCount > 0 && currentEditMode === "group" && currentSelectionBounds) {
+      const currentReference = getGroupReferenceAxis(currentGroupOffsetY, state.project.tileHeight);
+      const nextOffsetY = ((nextValue - currentSelectionBounds.minRow) * state.project.tileHeight) + currentReference.remainder;
+      void callbacks.onNudgeSelectedTile(0, nextOffsetY - currentGroupOffsetY);
       return;
     }
 
@@ -204,9 +203,11 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   offsetXField.input.addEventListener("change", async () => {
     const nextValue = Number.parseFloat(offsetXField.input.value) || 0;
 
-    if (currentSelectionCount > 1 && currentEditMode === "group") {
-      const delta = Math.round(nextValue - currentGroupOffsetX);
-      currentGroupOffsetX = nextValue;
+    if (currentSelectionCount > 0 && currentEditMode === "group") {
+      const currentReference = getGroupReferenceAxis(currentGroupOffsetX, state.project.tileWidth);
+      const nextOffsetX = (currentReference.cellDelta * state.project.tileWidth) + nextValue;
+      const delta = Math.round(nextOffsetX - currentGroupOffsetX);
+      currentGroupOffsetX = nextOffsetX;
       if (delta !== 0) {
         await callbacks.onNudgeSelectedTile(delta, 0);
       }
@@ -218,9 +219,11 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   offsetYField.input.addEventListener("change", async () => {
     const nextValue = Number.parseFloat(offsetYField.input.value) || 0;
 
-    if (currentSelectionCount > 1 && currentEditMode === "group") {
-      const delta = Math.round(nextValue - currentGroupOffsetY);
-      currentGroupOffsetY = nextValue;
+    if (currentSelectionCount > 0 && currentEditMode === "group") {
+      const currentReference = getGroupReferenceAxis(currentGroupOffsetY, state.project.tileHeight);
+      const nextOffsetY = (currentReference.cellDelta * state.project.tileHeight) + nextValue;
+      const delta = Math.round(nextOffsetY - currentGroupOffsetY);
+      currentGroupOffsetY = nextOffsetY;
       if (delta !== 0) {
         await callbacks.onNudgeSelectedTile(0, delta);
       }
@@ -238,7 +241,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   const groupTransformActions = document.createElement("div");
   groupTransformActions.className = "panel-actions";
   const applyGroupTransformButton = createAsyncActionButton("Apply Layout", async () => {
-    if (currentSelectionCount > 1 && currentEditMode === "group") {
+    if (currentSelectionCount > 0 && currentEditMode === "group") {
       await callbacks.onApplyGroupScale();
       return;
     }
@@ -247,7 +250,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   });
   const cancelGroupTransformButton = createActionButton("Cancel", callbacks.onCancelTileLayoutPreview);
   groupTransformActions.append(applyGroupTransformButton, cancelGroupTransformButton);
-  const scaleModeToggle = createCheckboxField("Whole group", currentEditMode === "group", (checked) => {
+  const scaleModeToggle = createCheckboxField("Across tile bounds", currentEditMode === "group", (checked) => {
     currentEditMode = checked ? "group" : "individual";
     callbacks.onTileMultiEditModeChanged(currentEditMode);
     syncScaleControls(currentSelectedTile, currentSelectionCount, scaleModeToggle, scaleXField.input, scaleYField.input, currentEditMode, state);
@@ -255,7 +258,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   scaleXField.input.addEventListener("change", async () => {
     const nextValue = Math.max(0.1, Number.parseFloat(scaleXField.input.value) || 1);
 
-    if (currentSelectionCount > 1 && currentEditMode === "group") {
+    if (currentSelectionCount > 0 && currentEditMode === "group") {
       callbacks.onGroupScaleXChanged(nextValue);
       return;
     }
@@ -265,7 +268,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   scaleYField.input.addEventListener("change", async () => {
     const nextValue = Math.max(0.1, Number.parseFloat(scaleYField.input.value) || 1);
 
-    if (currentSelectionCount > 1 && currentEditMode === "group") {
+    if (currentSelectionCount > 0 && currentEditMode === "group") {
       callbacks.onGroupScaleYChanged(nextValue);
       return;
     }
@@ -294,7 +297,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   const edgeStretchBottomField = createLabeledNumberField("Stretch B", selectedTile?.edgeStretchBottom ?? 0, "Stretch bottom", undefined, 1);
   edgeStretchLeftField.input.addEventListener("change", async () => {
     const value = Number.parseFloat(edgeStretchLeftField.input.value) || 0;
-    if (currentSelectionCount > 1 && currentEditMode === "group") {
+    if (currentSelectionCount > 0 && currentEditMode === "group") {
       callbacks.onGroupStretchUpdated({ left: value });
       await callbacks.onApplyGroupStretch();
       return;
@@ -303,7 +306,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   });
   edgeStretchRightField.input.addEventListener("change", async () => {
     const value = Number.parseFloat(edgeStretchRightField.input.value) || 0;
-    if (currentSelectionCount > 1 && currentEditMode === "group") {
+    if (currentSelectionCount > 0 && currentEditMode === "group") {
       callbacks.onGroupStretchUpdated({ right: value });
       await callbacks.onApplyGroupStretch();
       return;
@@ -312,7 +315,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   });
   edgeStretchTopField.input.addEventListener("change", async () => {
     const value = Number.parseFloat(edgeStretchTopField.input.value) || 0;
-    if (currentSelectionCount > 1 && currentEditMode === "group") {
+    if (currentSelectionCount > 0 && currentEditMode === "group") {
       callbacks.onGroupStretchUpdated({ top: value });
       await callbacks.onApplyGroupStretch();
       return;
@@ -321,7 +324,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   });
   edgeStretchBottomField.input.addEventListener("change", async () => {
     const value = Number.parseFloat(edgeStretchBottomField.input.value) || 0;
-    if (currentSelectionCount > 1 && currentEditMode === "group") {
+    if (currentSelectionCount > 0 && currentEditMode === "group") {
       callbacks.onGroupStretchUpdated({ bottom: value });
       await callbacks.onApplyGroupStretch();
       return;
@@ -761,11 +764,25 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   });
   metadataInputs.append(nameField.field, tagsField.field, collisionField.field);
 
-  layoutPanel.append(transformToggleRow, tileCellInputs, offsetInputs, scaleInputs, groupTransformActions, propertyToggleRow);
-  fitPanel.append(fitActions, fitModeNote, anchorField, anchorActions, cropInputs, stretchInputs, repairOptions);
-  previewPanel.append(previewField, previewNote);
-  visualPanel.append(colorInputs, filterField, tintField, fillTileSection, colorReplaceSection, seamRepairSection);
-  metaPanel.append(metadataInputs);
+  layoutPanel.append(
+    createEditorGroup("Layout", transformToggleRow, tileCellInputs, offsetInputs, scaleInputs, groupTransformActions),
+    createEditorGroup("Rendering", propertyToggleRow),
+  );
+  processingPanel.append(
+    createEditorGroup("Fit & Align", fitActions, fitModeNote, anchorField, anchorActions),
+    createEditorGroup("Crop & Stretch", cropInputs, stretchInputs),
+    createEditorGroup("Gap Repair", repairOptions),
+  );
+  repairPanel.append(
+    createEditorGroup("Color Adjust", colorInputs, filterField, tintField),
+    createEditorGroup("Fill Tile", fillTileSection),
+    createEditorGroup("Color Replace", colorReplaceSection),
+    createEditorGroup("Seam Repair", seamRepairSection),
+  );
+  propertiesPanel.append(
+    createEditorGroup("Preview", previewField, previewNote),
+    createEditorGroup("Metadata", metadataInputs),
+  );
 
   syncScaleControls(selectedTile, selectedTiles.length, scaleModeToggle, scaleXField.input, scaleYField.input, currentEditMode, state);
   syncGroupTransformUi(
@@ -776,29 +793,25 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
     currentEditMode,
     state,
   );
-  editorSection.append(editorActions, editorEmpty, editorTabs, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
+  editorSection.append(editorActions, editorEmpty, editorTabs, layoutPanel, processingPanel, repairPanel, propertiesPanel);
 
   layoutTab.addEventListener("click", () => {
     activeEditorTab = "layout";
-    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
+    syncEditorTabState(activeEditorTab, layoutTab, processingTab, repairTab, propertiesTab, layoutPanel, processingPanel, repairPanel, propertiesPanel);
   });
-  fitTab.addEventListener("click", () => {
-    activeEditorTab = "fit";
-    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
+  processingTab.addEventListener("click", () => {
+    activeEditorTab = "processing";
+    syncEditorTabState(activeEditorTab, layoutTab, processingTab, repairTab, propertiesTab, layoutPanel, processingPanel, repairPanel, propertiesPanel);
   });
-  previewTab.addEventListener("click", () => {
-    activeEditorTab = "preview";
-    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
+  repairTab.addEventListener("click", () => {
+    activeEditorTab = "repair";
+    syncEditorTabState(activeEditorTab, layoutTab, processingTab, repairTab, propertiesTab, layoutPanel, processingPanel, repairPanel, propertiesPanel);
   });
-  visualTab.addEventListener("click", () => {
-    activeEditorTab = "visual";
-    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
+  propertiesTab.addEventListener("click", () => {
+    activeEditorTab = "properties";
+    syncEditorTabState(activeEditorTab, layoutTab, processingTab, repairTab, propertiesTab, layoutPanel, processingPanel, repairPanel, propertiesPanel);
   });
-  metaTab.addEventListener("click", () => {
-    activeEditorTab = "meta";
-    syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
-  });
-  syncEditorTabState(activeEditorTab, layoutTab, fitTab, previewTab, visualTab, metaTab, layoutPanel, fitPanel, previewPanel, visualPanel, metaPanel);
+  syncEditorTabState(activeEditorTab, layoutTab, processingTab, repairTab, propertiesTab, layoutPanel, processingPanel, repairPanel, propertiesPanel);
 
   return {
     section: editorSection,
@@ -932,13 +945,15 @@ function syncGroupReferenceControls(
   groupOffsetY: number,
   state: ProjectState,
 ): void {
-  if (selectionCount > 1 && editMode === "group" && bounds) {
-    const previewCol = bounds.minCol + Math.round(groupOffsetX / state.project.tileWidth);
-    const previewRow = bounds.minRow + Math.round(groupOffsetY / state.project.tileHeight);
+  if (selectionCount > 0 && editMode === "group" && bounds) {
+    const colReference = getGroupReferenceAxis(groupOffsetX, state.project.tileWidth);
+    const rowReference = getGroupReferenceAxis(groupOffsetY, state.project.tileHeight);
+    const previewCol = bounds.minCol + colReference.cellDelta;
+    const previewRow = bounds.minRow + rowReference.cellDelta;
     setInputValueUnlessFocused(tileColInput, `${previewCol}`);
     setInputValueUnlessFocused(tileRowInput, `${previewRow}`);
-    setInputValueUnlessFocused(offsetXInput, `${groupOffsetX}`);
-    setInputValueUnlessFocused(offsetYInput, `${groupOffsetY}`);
+    setInputValueUnlessFocused(offsetXInput, `${colReference.remainder}`);
+    setInputValueUnlessFocused(offsetYInput, `${rowReference.remainder}`);
     return;
   }
 
@@ -947,6 +962,18 @@ function syncGroupReferenceControls(
   setInputValueUnlessFocused(tileRowInput, `${previewPatch?.destRow ?? tile?.destRow ?? 0}`);
   setInputValueUnlessFocused(offsetXInput, `${previewPatch?.offsetX ?? tile?.offsetX ?? 0}`);
   setInputValueUnlessFocused(offsetYInput, `${previewPatch?.offsetY ?? tile?.offsetY ?? 0}`);
+}
+
+function getGroupReferenceAxis(offset: number, tileSize: number): { cellDelta: number; remainder: number } {
+  if (tileSize === 0) {
+    return { cellDelta: 0, remainder: offset };
+  }
+
+  const cellDelta = Math.trunc(offset / tileSize);
+  return {
+    cellDelta,
+    remainder: offset - (cellDelta * tileSize),
+  };
 }
 
 function setInputValueUnlessFocused(input: HTMLInputElement, value: string): void {
@@ -967,15 +994,14 @@ function syncScaleControls(
   state: ProjectState,
 ): void {
   const canUseGroupMode = selectionCount > 1;
-  scaleModeToggle.hidden = !canUseGroupMode;
   const scaleModeInput = scaleModeToggle.querySelector("input") as HTMLInputElement | null;
 
   if (!canUseGroupMode) {
     if (scaleModeInput) {
-      scaleModeInput.checked = false;
+      scaleModeInput.checked = scaleApplyMode === "group";
     }
-    scaleXInput.value = `${state.session.tileLayoutPreview?.patch.scaleX ?? tile?.scaleX ?? 1}`;
-    scaleYInput.value = `${state.session.tileLayoutPreview?.patch.scaleY ?? tile?.scaleY ?? 1}`;
+    setInputValueUnlessFocused(scaleXInput, `${state.session.tileLayoutPreview?.patch.scaleX ?? tile?.scaleX ?? 1}`);
+    setInputValueUnlessFocused(scaleYInput, `${state.session.tileLayoutPreview?.patch.scaleY ?? tile?.scaleY ?? 1}`);
     return;
   }
 
@@ -984,13 +1010,13 @@ function syncScaleControls(
   }
 
   if (scaleApplyMode === "group") {
-    scaleXInput.value = `${state.session.groupScaleX}`;
-    scaleYInput.value = `${state.session.groupScaleY}`;
+    setInputValueUnlessFocused(scaleXInput, `${state.session.groupScaleX}`);
+    setInputValueUnlessFocused(scaleYInput, `${state.session.groupScaleY}`);
     return;
   }
 
-  scaleXInput.value = `${state.session.tileLayoutPreview?.patch.scaleX ?? tile?.scaleX ?? 1}`;
-  scaleYInput.value = `${state.session.tileLayoutPreview?.patch.scaleY ?? tile?.scaleY ?? 1}`;
+  setInputValueUnlessFocused(scaleXInput, `${state.session.tileLayoutPreview?.patch.scaleX ?? tile?.scaleX ?? 1}`);
+  setInputValueUnlessFocused(scaleYInput, `${state.session.tileLayoutPreview?.patch.scaleY ?? tile?.scaleY ?? 1}`);
 }
 
 function syncGroupTransformUi(
@@ -1001,11 +1027,11 @@ function syncGroupTransformUi(
   editMode: "individual" | "group",
   state: ProjectState,
 ): void {
-  const isGroupMode = selectionCount > 1 && editMode === "group";
-  const hasIndividualSelection = selectionCount > 0 && editMode === "individual";
-  actions.hidden = !(isGroupMode || hasIndividualSelection);
+  const isGroupMode = selectionCount > 0 && editMode === "group";
+  const hasLayoutSelection = selectionCount > 0;
+  actions.hidden = !hasLayoutSelection;
 
-  if (!isGroupMode && !hasIndividualSelection) {
+  if (!hasLayoutSelection) {
     return;
   }
 
@@ -1097,29 +1123,37 @@ function createEditorTabButton(label: string): HTMLButtonElement {
   return button;
 }
 
+function createEditorGroup(title: string, ...children: HTMLElement[]): HTMLDivElement {
+  const group = document.createElement("div");
+  group.className = "editor-group";
+
+  const heading = document.createElement("p");
+  heading.className = "editor-group-title";
+  heading.textContent = title;
+
+  group.append(heading, ...children);
+  return group;
+}
+
 function syncEditorTabState(
   activeTab: EditorTab,
   layoutTab: HTMLButtonElement,
-  fitTab: HTMLButtonElement,
-  previewTab: HTMLButtonElement,
-  visualTab: HTMLButtonElement,
-  metaTab: HTMLButtonElement,
+  processingTab: HTMLButtonElement,
+  repairTab: HTMLButtonElement,
+  propertiesTab: HTMLButtonElement,
   layoutPanel: HTMLDivElement,
-  fitPanel: HTMLDivElement,
-  previewPanel: HTMLDivElement,
-  visualPanel: HTMLDivElement,
-  metaPanel: HTMLDivElement,
+  processingPanel: HTMLDivElement,
+  repairPanel: HTMLDivElement,
+  propertiesPanel: HTMLDivElement,
 ): void {
   layoutTab.dataset.active = `${activeTab === "layout"}`;
-  fitTab.dataset.active = `${activeTab === "fit"}`;
-  previewTab.dataset.active = `${activeTab === "preview"}`;
-  visualTab.dataset.active = `${activeTab === "visual"}`;
-  metaTab.dataset.active = `${activeTab === "meta"}`;
+  processingTab.dataset.active = `${activeTab === "processing"}`;
+  repairTab.dataset.active = `${activeTab === "repair"}`;
+  propertiesTab.dataset.active = `${activeTab === "properties"}`;
   layoutPanel.hidden = activeTab !== "layout";
-  fitPanel.hidden = activeTab !== "fit";
-  previewPanel.hidden = activeTab !== "preview";
-  visualPanel.hidden = activeTab !== "visual";
-  metaPanel.hidden = activeTab !== "meta";
+  processingPanel.hidden = activeTab !== "processing";
+  repairPanel.hidden = activeTab !== "repair";
+  propertiesPanel.hidden = activeTab !== "properties";
 }
 
 function syncSelectedTileEditor(
@@ -1214,8 +1248,8 @@ function syncSelectedTileEditor(
   setInputValueUnlessFocused(controls.tileRowInput, `${tile.destRow}`);
   setInputValueUnlessFocused(controls.offsetXInput, `${tile.offsetX}`);
   setInputValueUnlessFocused(controls.offsetYInput, `${tile.offsetY}`);
-  controls.scaleXInput.value = `${tile.scaleX}`;
-  controls.scaleYInput.value = `${tile.scaleY}`;
+  setInputValueUnlessFocused(controls.scaleXInput, `${tile.scaleX}`);
+  setInputValueUnlessFocused(controls.scaleYInput, `${tile.scaleY}`);
   controls.cropLeftInput.value = `${tile.cropLeft}`;
   controls.cropRightInput.value = `${tile.cropRight}`;
   controls.cropTopInput.value = `${tile.cropTop}`;
@@ -1233,10 +1267,10 @@ function syncSelectedTileEditor(
   controls.filterSelect.value = tile.filterMode;
   controls.tintInput.value = tile.tintColor ?? "";
   controls.clampToTileInput.checked = tile.clampToTile;
-  controls.flipXInput.checked = controls.selectionCount > 1 && state.session.tileMultiEditMode === "group"
+  controls.flipXInput.checked = controls.selectionCount > 0 && state.session.tileMultiEditMode === "group"
     ? state.session.groupTransformPreview?.flipX ?? false
     : state.session.tileLayoutPreview?.patch.flipX ?? tile.flipX;
-  controls.flipYInput.checked = controls.selectionCount > 1 && state.session.tileMultiEditMode === "group"
+  controls.flipYInput.checked = controls.selectionCount > 0 && state.session.tileMultiEditMode === "group"
     ? state.session.groupTransformPreview?.flipY ?? false
     : state.session.tileLayoutPreview?.patch.flipY ?? tile.flipY;
   controls.pixelSnapInput.checked = tile.pixelSnap;

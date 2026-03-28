@@ -165,7 +165,7 @@ textarea {
 
 .sidebar-section-stack {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 
 .sidebar-tab-panel[hidden] {
@@ -207,6 +207,11 @@ textarea {
   background: rgba(18, 32, 47, 0.72);
 }
 
+.compact-section {
+  gap: 8px;
+  padding: 12px;
+}
+
 .control-title {
   margin: 0;
   font-size: 1rem;
@@ -241,6 +246,23 @@ textarea {
 .editor-stack {
   display: grid;
   gap: 10px;
+}
+
+.editor-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(131, 169, 190, 0.12);
+  border-radius: 14px;
+  background: rgba(9, 17, 25, 0.32);
+}
+
+.editor-group-title {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7fa3b8;
 }
 
 .editor-tabs {
@@ -379,6 +401,15 @@ textarea {
 
 .meta-grid dd:last-child {
   margin-bottom: 0;
+}
+
+.compact-meta-grid {
+  padding: 12px;
+  gap: 8px;
+}
+
+.compact-meta-grid dd {
+  margin-bottom: 6px;
 }
 
 @media (max-width: 960px) {

@@ -368,9 +368,10 @@ export function createShell({
   const fileActions = document.createElement("div");
   fileActions.className = "panel-actions";
   const newTilesheetButton = createActionButton("New", onNewTilesheet);
-  fileActions.append(inputLabel, workingImageInputLabel, saveWorkingImageButton, newTilesheetButton);
+  const exportTsjButton = createAsyncActionButton("Export TSJ", onExportTsj);
+  fileActions.append(inputLabel, workingImageInputLabel, saveWorkingImageButton, newTilesheetButton, exportTsjButton);
 
-  const actionsSection = createControlSection("Files", "Open sources and the current working tilesheet.");
+  const actionsSection = createControlSection("Files & Export", "Open the source and working sheet, then save or export from the same place.");
   actionsSection.append(fileActions);
 
   const editingActions = document.createElement("div");
@@ -379,16 +380,8 @@ export function createShell({
   const clearAllTilesButton = createActionButton("Clear All", onClearAllTiles);
   editingActions.append(copyAllButton, clearAllTilesButton);
 
-  const historySection = createControlSection("Editing", "Quick actions for the current working tilesheet.");
+  const historySection = createControlSection("Sheet Actions", "Bulk actions for the current working tilesheet.");
   historySection.append(editingActions);
-
-  const exportActions = document.createElement("div");
-  exportActions.className = "panel-actions";
-  const exportTsjButton = createAsyncActionButton("Export TSJ", onExportTsj);
-  exportActions.append(exportTsjButton);
-
-  const exportSection = createControlSection("Export", "Save interoperability data for the current tilesheet.");
-  exportSection.append(exportActions);
 
   const sceneInputLabel = document.createElement("label");
   sceneInputLabel.className = "file-input file-input-secondary";
@@ -503,14 +496,9 @@ export function createShell({
   outputGridInputs.append(widthField.field, heightField.field);
   outputGridField.append(outputGridLabel, outputGridInputs);
 
+  const setupSection = createControlSection("Sheet Setup", "Set the source grid, output size, and exported tile size together.");
   const controls = document.createElement("div");
   controls.className = "grid-controls";
-
-  const sourceSection = createControlSection("Source Grid", "Choose how the incoming tilesheet is divided.");
-  sourceSection.append(sourceGridField);
-
-  const outputSection = createControlSection("Output Sheet", "Set the exported image size first, then choose tile size.");
-  outputSection.append(outputGridField, outputTileField);
 
   const derivedGridField = document.createElement("div");
   derivedGridField.className = "field-group";
@@ -608,10 +596,14 @@ export function createShell({
 
   items.forEach((item) => metadata.append(item.term, item.description));
 
-  controls.append(sourceSection, outputSection, derivedGridField);
+  controls.append(sourceGridField, outputGridField, outputTileField, derivedGridField);
+  setupSection.append(controls);
   const tilesheetPanelContent = document.createElement("div");
   tilesheetPanelContent.className = "sidebar-section-stack";
-  tilesheetPanelContent.append(actionsSection, historySection, exportSection, controls, metadata);
+  const sheetStatusSection = createControlSection("Status", "Quick sheet summary.");
+  sheetStatusSection.classList.add("compact-section");
+  sheetStatusSection.append(metadata);
+  tilesheetPanelContent.append(actionsSection, setupSection, historySection, sheetStatusSection);
 
   const workspaceTabs = document.createElement("div");
   workspaceTabs.className = "sidebar-tabs";
@@ -649,8 +641,8 @@ export function createShell({
   const sceneMapPanel = document.createElement("div");
   sceneMapPanel.className = "sidebar-tab-panel";
   const sceneMapSection = createControlSection(
-    "Scene Map",
-    "Open, size, and preview the scene while keeping the current tilesheet as the active palette.",
+    "Scene Setup",
+    "Open, size, preview, and relink the scene from one compact setup area.",
   );
   const sceneActions = document.createElement("div");
   sceneActions.className = "panel-actions";
@@ -668,8 +660,8 @@ export function createShell({
   const sceneSelectionPanel = document.createElement("div");
   sceneSelectionPanel.className = "sidebar-tab-panel";
   const sceneSelectionSection = createControlSection(
-    "Scene Selection",
-    "Copy, paste, delete, and move the current scene selection.",
+    "Selection Actions",
+    "Work with the current scene selection.",
   );
   const sceneEditActions = document.createElement("div");
   sceneEditActions.className = "panel-actions";
@@ -716,9 +708,9 @@ export function createShell({
 
   const sceneLayersPanel = document.createElement("div");
   sceneLayersPanel.className = "sidebar-tab-panel";
-  const sceneLayersSection = createControlSection(
-    "Scene Layers",
-    "Choose the active layer and adjust how it draws inside the scene.",
+  const sceneLayerStackSection = createControlSection(
+    "Layer Stack",
+    "Choose the active layer, add new ones, and reorder the stack.",
   );
   const sceneLayerRow = document.createElement("div");
   sceneLayerRow.className = "panel-actions";
@@ -818,8 +810,18 @@ export function createShell({
   });
   sceneLayerParallaxSettings.append(sceneLayerParallaxXField.field, sceneLayerParallaxYField.field);
 
-  const imageLayerSection = document.createElement("div");
-  imageLayerSection.className = "editor-stack";
+  const sceneLayerSettingsSection = createControlSection(
+    "Layer Settings",
+    "Adjust the selected layer name, type, visibility, opacity, offset, and parallax.",
+  );
+
+  const imageLayerSection = createControlSection(
+    "Image Layer",
+    "Only shown when the selected layer draws from an image asset.",
+  );
+  imageLayerSection.classList.add("compact-section");
+  const imageLayerControls = document.createElement("div");
+  imageLayerControls.className = "editor-stack";
 
   const imageLayerActions = document.createElement("div");
   imageLayerActions.className = "panel-actions";
@@ -860,16 +862,30 @@ export function createShell({
     onSceneLayerUpdated({ repeatY: checked });
   });
   imageLayerRepeats.append(imageLayerRepeatXToggle, imageLayerRepeatYToggle);
-  imageLayerSection.append(imageLayerActions, imageLayerPathField.field, imageLayerRepeats);
+  imageLayerControls.append(imageLayerActions, imageLayerPathField.field, imageLayerRepeats);
+  imageLayerSection.append(imageLayerControls);
   imageLayerSection.hidden = selectedSceneLayer?.type !== "imagelayer";
   sceneEditActions.hidden = selectedSceneLayer?.type === "imagelayer";
   sceneMoveActions.hidden = selectedSceneLayer?.type === "imagelayer";
 
-  const sceneInfo = document.createElement("p");
-  sceneInfo.className = "field-note";
-  sceneInfo.textContent = state.project.scene
-    ? `Scene grid is ${state.project.scene.width} x ${state.project.scene.height}. Visible layers are drawn on top of each other in order, and the selected layer is the one you edit.`
-    : "Create or open a scene to begin placing tiles.";
+  const sceneMapStatus = document.createElement("dl");
+  sceneMapStatus.className = "meta-grid compact-meta-grid";
+  const sceneMapStatusItems = [
+    createMetaItem("Scene", state.project.scene ? `${state.project.scene.width} x ${state.project.scene.height}` : "Not loaded"),
+    createMetaItem("Layers", `${state.project.scene?.layers.length ?? 0}`),
+    createMetaItem("Active layer", selectedSceneLayer?.name ?? "None"),
+    createMetaItem("Selection", `${state.session.selectedSceneCells.length}`),
+  ];
+  sceneMapStatusItems.forEach((item) => sceneMapStatus.append(item.term, item.description));
+
+  const sceneSelectionStatus = document.createElement("dl");
+  sceneSelectionStatus.className = "meta-grid compact-meta-grid";
+  const sceneSelectionStatusItems = [
+    createMetaItem("Selected cells", `${state.session.selectedSceneCells.length}`),
+    createMetaItem("Clipboard", state.session.sceneClipboard ? "Ready" : "Empty"),
+    createMetaItem("Active layer", selectedSceneLayer?.name ?? "None"),
+  ];
+  sceneSelectionStatusItems.forEach((item) => sceneSelectionStatus.append(item.term, item.description));
 
   const sceneGridToggle = createCheckboxField("Preview", !state.session.showSceneGrid, (checked) => {
     onSceneGridVisibilityChanged(!checked);
@@ -886,24 +902,26 @@ export function createShell({
     sceneGridField,
     sceneSizeInputs,
     sceneTilesetField,
-    sceneInfo,
+    sceneMapStatus,
   );
   sceneMapPanel.append(sceneMapSection);
 
-  sceneLayersSection.append(
-    sceneLayerRow,
+  sceneLayerStackSection.append(sceneLayerRow);
+  sceneLayersPanel.append(sceneLayerStackSection);
+
+  sceneLayerSettingsSection.append(
     sceneLayerNameField.field,
     sceneLayerTypeField,
     sceneLayerSettings,
     sceneLayerTransformSettings,
     sceneLayerParallaxSettings,
-    imageLayerSection,
   );
-  sceneLayersPanel.append(sceneLayersSection);
+  sceneLayersPanel.append(sceneLayerSettingsSection, imageLayerSection);
 
   sceneSelectionSection.append(
     sceneEditActions,
     sceneMoveActions,
+    sceneSelectionStatus,
   );
   sceneSelectionPanel.append(sceneSelectionSection);
 
@@ -1010,9 +1028,15 @@ export function createShell({
         sceneLayerSelect.append(option);
       }
       derivedGridValue.textContent = `${nextOutputGrid.columns} columns x ${nextOutputGrid.rows} rows`;
-      sceneInfo.textContent = nextState.project.scene
-        ? `Scene grid is ${nextState.project.scene.width} x ${nextState.project.scene.height}. Visible layers are drawn on top of each other in order, and the selected layer is the one you edit.`
-        : "Create or open a scene to begin placing tiles.";
+      sceneMapStatusItems[0].description.textContent = nextState.project.scene
+        ? `${nextState.project.scene.width} x ${nextState.project.scene.height}`
+        : "Not loaded";
+      sceneMapStatusItems[1].description.textContent = `${nextState.project.scene?.layers.length ?? 0}`;
+      sceneMapStatusItems[2].description.textContent = nextSceneLayer?.name ?? "None";
+      sceneMapStatusItems[3].description.textContent = `${nextState.session.selectedSceneCells.length}`;
+      sceneSelectionStatusItems[0].description.textContent = `${nextState.session.selectedSceneCells.length}`;
+      sceneSelectionStatusItems[1].description.textContent = nextState.session.sceneClipboard ? "Ready" : "Empty";
+      sceneSelectionStatusItems[2].description.textContent = nextSceneLayer?.name ?? "None";
       if (activeWorkspaceTab === "tilesheet" && activeTilesheetSubTab === "sheet" && getSelectedOutputTiles(nextState).length > 0) {
         activeTilesheetSubTab = "tile";
       }

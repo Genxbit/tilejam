@@ -12,7 +12,7 @@ export function syncTransformPreviewState(state: ProjectState): void {
 
   const selectedTiles = getSelectedOutputTiles(state);
   const selectionSignature = getSelectedTileGroupSignature(state);
-  const canPreview = state.session.tileMultiEditMode === "group" && selectedTiles.length > 1;
+  const canPreview = state.session.tileMultiEditMode === "group" && selectedTiles.length > 0;
 
   if (!canPreview || selectionSignature !== preview.selectionSignature || preview.renderRevision !== state.session.renderRevision) {
     clearGroupTransformPreview(state);
@@ -28,7 +28,7 @@ export function ensureGroupTransformPreview(state: ProjectState): ProjectState["
 
   const selectedTiles = getSelectedOutputTiles(state);
 
-  if (state.session.tileMultiEditMode !== "group" || selectedTiles.length < 2) {
+  if (state.session.tileMultiEditMode !== "group" || selectedTiles.length < 1) {
     return null;
   }
 
@@ -72,7 +72,7 @@ export function ensureTileLayoutPreview(state: ProjectState): ProjectState["sess
   const selectedTile = getSelectedOutputTile(state);
   const selectedTiles = getSelectedOutputTiles(state);
 
-  if (!selectedTile || selectedTiles.length < 1 || (selectedTiles.length > 1 && state.session.tileMultiEditMode === "group")) {
+  if (!selectedTile || selectedTiles.length < 1 || (selectedTiles.length > 0 && state.session.tileMultiEditMode === "group")) {
     return null;
   }
 
