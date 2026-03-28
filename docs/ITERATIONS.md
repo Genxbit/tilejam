@@ -695,3 +695,41 @@ Add non-destructive layout preview for tile and group edits, make drag-based mov
 * selection bounds stay correct after repeated layout applies and moves
 * preview and drag logic live primarily in `systems/`, while `app/` stays focused on orchestration
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 20: Workspace navigation + panel hierarchy cleanup
+
+**Status**
+Completed
+
+**Goal**
+Make navigation clearer and reduce panel clutter by separating major workspaces from workspace-specific editing subtabs.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+* `docs/FORMATS.md`
+
+**Prompt**
+Restructure the editor navigation so top-level tabs represent major workspaces only, move tilesheet and scene editing into their own sub-tab hierarchies, and remove redundant panel copy that duplicates the top toolbar.
+
+**Deliverables**
+
+* top-level editor tabs focus on major contexts such as `Tilesheet` and `Scene`
+* remove redundant tilesheet intro/header copy that repeats app identity or obvious workflow guidance already covered by the top toolbar
+* add sub-tabs inside `Tilesheet` to separate sheet-level and tile-level workflows
+* add sub-tabs inside `Scene` to separate scene/map-level, layer-level, and selection-level workflows where appropriate
+* keep the navigation hierarchy consistent across both workspaces
+* reduce vertical scrolling pressure by distributing controls into clearer workspace-specific sections
+* preserve current editing behavior while improving discoverability and information hierarchy
+
+**Validation**
+
+* top-level tabs clearly represent workspace context rather than mixed tool scopes
+* tilesheet editing feels easier to understand because sheet-level and tile-level controls are separated
+* scene editing uses the same parent/sub-tab navigation pattern as tilesheet editing
+* redundant header copy is removed from the normal editor flow
+* panel navigation reduces scrolling and makes common tasks easier to find
+* matches architecture rules in `docs/TECH_WORKFLOW.md`

@@ -125,7 +125,9 @@ type Shell = {
   update: (state: ProjectState) => void;
 };
 
-type SidebarTab = "tilesheet" | "tile" | "scene";
+type WorkspaceTab = "tilesheet" | "scene";
+type TilesheetSubTab = "sheet" | "tile";
+type SceneSubTab = "map" | "layers" | "selection";
 
 export function createShell({
   root,
@@ -250,14 +252,6 @@ export function createShell({
   const panel = document.createElement("aside");
   panel.className = "sidebar";
   panel.tabIndex = -1;
-
-  const heading = document.createElement("h1");
-  heading.className = "panel-title";
-  heading.textContent = "Tilejam";
-
-  const intro = document.createElement("p");
-  intro.className = "panel-copy";
-  intro.textContent = "Load a source, shape the working tilesheet, then repair individual tiles before moving into scene editing.";
 
   const inputLabel = document.createElement("label");
   inputLabel.className = "file-input";
@@ -539,7 +533,9 @@ export function createShell({
   const selectedTile = getSelectedOutputTile(state);
   const selectedTiles = getSelectedOutputTiles(state);
   const selectedSceneLayer = getActiveSceneLayer(state);
-  let activeSidebarTab: SidebarTab = state.session.activeWorkspaceMode === "scene" ? "scene" : "tilesheet";
+  let activeWorkspaceTab: WorkspaceTab = state.session.activeWorkspaceMode === "scene" ? "scene" : "tilesheet";
+  let activeTilesheetSubTab: TilesheetSubTab = selectedTiles.length > 0 ? "tile" : "sheet";
+  let activeSceneSubTab: SceneSubTab = "map";
   const tileEditor = createTileEditorSection(state, {
     onSelectedTileUpdated,
     onPreviewTileLayoutUpdated,
@@ -617,26 +613,44 @@ export function createShell({
   tilesheetPanelContent.className = "sidebar-section-stack";
   tilesheetPanelContent.append(actionsSection, historySection, exportSection, controls, metadata);
 
-  const sidebarTabs = document.createElement("div");
-  sidebarTabs.className = "sidebar-tabs";
+  const workspaceTabs = document.createElement("div");
+  workspaceTabs.className = "sidebar-tabs";
   const tilesheetTab = createSidebarTabButton("Tilesheet");
-  const tileTab = createSidebarTabButton("Tile");
   const sceneTab = createSidebarTabButton("Scene");
-  sidebarTabs.append(tilesheetTab, tileTab, sceneTab);
+  workspaceTabs.append(tilesheetTab, sceneTab);
 
-  const tilesheetPanel = document.createElement("div");
-  tilesheetPanel.className = "sidebar-tab-panel";
-  tilesheetPanel.append(tilesheetPanelContent);
+  const tilesheetWorkspacePanel = document.createElement("div");
+  tilesheetWorkspacePanel.className = "sidebar-tab-panel";
+  const tilesheetSubTabs = document.createElement("div");
+  tilesheetSubTabs.className = "sidebar-subtabs";
+  const tilesheetSheetTab = createSidebarTabButton("Sheet");
+  const tilesheetTileTab = createSidebarTabButton("Tile");
+  tilesheetSubTabs.append(tilesheetSheetTab, tilesheetTileTab);
 
-  const tilePanel = document.createElement("div");
-  tilePanel.className = "sidebar-tab-panel";
-  tilePanel.append(editorSection);
+  const tilesheetSheetPanel = document.createElement("div");
+  tilesheetSheetPanel.className = "sidebar-tab-panel";
+  tilesheetSheetPanel.append(tilesheetPanelContent);
 
-  const scenePanel = document.createElement("div");
-  scenePanel.className = "sidebar-tab-panel";
-  const sceneSection = createControlSection(
-    "Scene Editor",
-    "Use the current tilesheet as the palette on the left, and place those tiles into the scene grid on the right.",
+  const tilesheetTilePanel = document.createElement("div");
+  tilesheetTilePanel.className = "sidebar-tab-panel";
+  tilesheetTilePanel.append(editorSection);
+
+  tilesheetWorkspacePanel.append(tilesheetSubTabs, tilesheetSheetPanel, tilesheetTilePanel);
+
+  const sceneWorkspacePanel = document.createElement("div");
+  sceneWorkspacePanel.className = "sidebar-tab-panel";
+  const sceneSubTabs = document.createElement("div");
+  sceneSubTabs.className = "sidebar-subtabs";
+  const sceneMapTab = createSidebarTabButton("Map");
+  const sceneLayersTab = createSidebarTabButton("Layers");
+  const sceneSelectionTab = createSidebarTabButton("Selection");
+  sceneSubTabs.append(sceneMapTab, sceneLayersTab, sceneSelectionTab);
+
+  const sceneMapPanel = document.createElement("div");
+  sceneMapPanel.className = "sidebar-tab-panel";
+  const sceneMapSection = createControlSection(
+    "Scene Map",
+    "Open, size, and preview the scene while keeping the current tilesheet as the active palette.",
   );
   const sceneActions = document.createElement("div");
   sceneActions.className = "panel-actions";
@@ -651,6 +665,12 @@ export function createShell({
   const clearSceneButton = createActionButton("Clear All", onClearScene);
   sceneActions.append(sceneTilesheetButton, sceneInputLabel, saveSceneButton, newSceneButton, clearSceneButton);
 
+  const sceneSelectionPanel = document.createElement("div");
+  sceneSelectionPanel.className = "sidebar-tab-panel";
+  const sceneSelectionSection = createControlSection(
+    "Scene Selection",
+    "Copy, paste, delete, and move the current scene selection.",
+  );
   const sceneEditActions = document.createElement("div");
   sceneEditActions.className = "panel-actions";
   const sceneCopyButton = createActionButton("Copy", onCopySceneSelection);
@@ -694,6 +714,12 @@ export function createShell({
   });
   sceneTilesetField.append(sceneTilesetLabel, sceneTilesetInput);
 
+  const sceneLayersPanel = document.createElement("div");
+  sceneLayersPanel.className = "sidebar-tab-panel";
+  const sceneLayersSection = createControlSection(
+    "Scene Layers",
+    "Choose the active layer and adjust how it draws inside the scene.",
+  );
   const sceneLayerRow = document.createElement("div");
   sceneLayerRow.className = "panel-actions";
   const sceneLayerSelect = document.createElement("select");
@@ -855,13 +881,16 @@ export function createShell({
   sceneGridLabel.textContent = "Scene preview";
   sceneGridField.append(sceneGridLabel, sceneGridToggle);
 
-  sceneSection.append(
+  sceneMapSection.append(
     sceneActions,
-    sceneEditActions,
-    sceneMoveActions,
     sceneGridField,
     sceneSizeInputs,
     sceneTilesetField,
+    sceneInfo,
+  );
+  sceneMapPanel.append(sceneMapSection);
+
+  sceneLayersSection.append(
     sceneLayerRow,
     sceneLayerNameField.field,
     sceneLayerTypeField,
@@ -869,32 +898,56 @@ export function createShell({
     sceneLayerTransformSettings,
     sceneLayerParallaxSettings,
     imageLayerSection,
-    sceneInfo,
   );
-  scenePanel.append(sceneSection);
+  sceneLayersPanel.append(sceneLayersSection);
+
+  sceneSelectionSection.append(
+    sceneEditActions,
+    sceneMoveActions,
+  );
+  sceneSelectionPanel.append(sceneSelectionSection);
+
+  sceneWorkspacePanel.append(sceneSubTabs, sceneMapPanel, sceneLayersPanel, sceneSelectionPanel);
 
   tilesheetTab.addEventListener("click", () => {
-    activeSidebarTab = "tilesheet";
+    activeWorkspaceTab = "tilesheet";
     onWorkspaceModeChanged("tilesheet");
-    syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
-  });
-  tileTab.addEventListener("click", () => {
-    activeSidebarTab = "tile";
-    onWorkspaceModeChanged("tilesheet");
-    syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
+    syncWorkspaceTabState(activeWorkspaceTab, tilesheetTab, sceneTab, tilesheetWorkspacePanel, sceneWorkspacePanel);
   });
   sceneTab.addEventListener("click", () => {
-    activeSidebarTab = "scene";
+    activeWorkspaceTab = "scene";
     onWorkspaceModeChanged("scene");
-    syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
+    syncWorkspaceTabState(activeWorkspaceTab, tilesheetTab, sceneTab, tilesheetWorkspacePanel, sceneWorkspacePanel);
   });
-  syncSidebarTabState(activeSidebarTab, tilesheetTab, tileTab, sceneTab, tilesheetPanel, tilePanel, scenePanel);
+  tilesheetSheetTab.addEventListener("click", () => {
+    activeTilesheetSubTab = "sheet";
+    syncTilesheetSubTabState(activeTilesheetSubTab, tilesheetSheetTab, tilesheetTileTab, tilesheetSheetPanel, tilesheetTilePanel);
+  });
+  tilesheetTileTab.addEventListener("click", () => {
+    activeTilesheetSubTab = "tile";
+    syncTilesheetSubTabState(activeTilesheetSubTab, tilesheetSheetTab, tilesheetTileTab, tilesheetSheetPanel, tilesheetTilePanel);
+  });
+  sceneMapTab.addEventListener("click", () => {
+    activeSceneSubTab = "map";
+    syncSceneSubTabState(activeSceneSubTab, sceneMapTab, sceneLayersTab, sceneSelectionTab, sceneMapPanel, sceneLayersPanel, sceneSelectionPanel);
+  });
+  sceneLayersTab.addEventListener("click", () => {
+    activeSceneSubTab = "layers";
+    syncSceneSubTabState(activeSceneSubTab, sceneMapTab, sceneLayersTab, sceneSelectionTab, sceneMapPanel, sceneLayersPanel, sceneSelectionPanel);
+  });
+  sceneSelectionTab.addEventListener("click", () => {
+    activeSceneSubTab = "selection";
+    syncSceneSubTabState(activeSceneSubTab, sceneMapTab, sceneLayersTab, sceneSelectionTab, sceneMapPanel, sceneLayersPanel, sceneSelectionPanel);
+  });
+  syncWorkspaceTabState(activeWorkspaceTab, tilesheetTab, sceneTab, tilesheetWorkspacePanel, sceneWorkspacePanel);
+  syncTilesheetSubTabState(activeTilesheetSubTab, tilesheetSheetTab, tilesheetTileTab, tilesheetSheetPanel, tilesheetTilePanel);
+  syncSceneSubTabState(activeSceneSubTab, sceneMapTab, sceneLayersTab, sceneSelectionTab, sceneMapPanel, sceneLayersPanel, sceneSelectionPanel);
 
   const notes = document.createElement("p");
   notes.className = "panel-note";
   notes.textContent = state.session.message ?? "";
 
-  panel.append(heading, intro, sidebarTabs, tilesheetPanel, tilePanel, scenePanel, notes);
+  panel.append(workspaceTabs, tilesheetWorkspacePanel, sceneWorkspacePanel, notes);
   appShell.append(workspace, panel);
   appFrame.append(topBar, appShell);
   root.append(appFrame);
@@ -903,6 +956,7 @@ export function createShell({
     canvas,
     update(nextState) {
       const scrollTop = panel.scrollTop;
+      activeWorkspaceTab = nextState.session.activeWorkspaceMode === "scene" ? "scene" : "tilesheet";
       topBarProject.textContent = `Project: ${getDisplayFileLabel(nextState.session.projectFileName ?? "unsaved")}`;
       items[0].description.textContent = nextState.project.sourceImage ?? nextState.sourceImageAsset.name ?? "Not loaded";
       items[1].description.textContent = nextState.project.workingImage ?? nextState.session.workingImageFileName ?? "Not loaded";
@@ -959,6 +1013,12 @@ export function createShell({
       sceneInfo.textContent = nextState.project.scene
         ? `Scene grid is ${nextState.project.scene.width} x ${nextState.project.scene.height}. Visible layers are drawn on top of each other in order, and the selected layer is the one you edit.`
         : "Create or open a scene to begin placing tiles.";
+      if (activeWorkspaceTab === "tilesheet" && activeTilesheetSubTab === "sheet" && getSelectedOutputTiles(nextState).length > 0) {
+        activeTilesheetSubTab = "tile";
+      }
+      syncWorkspaceTabState(activeWorkspaceTab, tilesheetTab, sceneTab, tilesheetWorkspacePanel, sceneWorkspacePanel);
+      syncTilesheetSubTabState(activeTilesheetSubTab, tilesheetSheetTab, tilesheetTileTab, tilesheetSheetPanel, tilesheetTilePanel);
+      syncSceneSubTabState(activeSceneSubTab, sceneMapTab, sceneLayersTab, sceneSelectionTab, sceneMapPanel, sceneLayersPanel, sceneSelectionPanel);
       notes.textContent = nextState.session.message ?? "";
       panel.scrollTop = scrollTop;
     },
@@ -1081,21 +1141,47 @@ function createSidebarTabButton(label: string): HTMLButtonElement {
   return button;
 }
 
-function syncSidebarTabState(
-  activeTab: SidebarTab,
+function syncWorkspaceTabState(
+  activeTab: WorkspaceTab,
   tilesheetTab: HTMLButtonElement,
-  tileTab: HTMLButtonElement,
   sceneTab: HTMLButtonElement,
   tilesheetPanel: HTMLDivElement,
-  tilePanel: HTMLDivElement,
   scenePanel: HTMLDivElement,
 ): void {
   tilesheetTab.dataset.active = activeTab === "tilesheet" ? "true" : "false";
-  tileTab.dataset.active = activeTab === "tile" ? "true" : "false";
   sceneTab.dataset.active = activeTab === "scene" ? "true" : "false";
   tilesheetPanel.hidden = activeTab !== "tilesheet";
-  tilePanel.hidden = activeTab !== "tile";
   scenePanel.hidden = activeTab !== "scene";
+}
+
+function syncTilesheetSubTabState(
+  activeTab: TilesheetSubTab,
+  sheetTab: HTMLButtonElement,
+  tileTab: HTMLButtonElement,
+  sheetPanel: HTMLDivElement,
+  tilePanel: HTMLDivElement,
+): void {
+  sheetTab.dataset.active = activeTab === "sheet" ? "true" : "false";
+  tileTab.dataset.active = activeTab === "tile" ? "true" : "false";
+  sheetPanel.hidden = activeTab !== "sheet";
+  tilePanel.hidden = activeTab !== "tile";
+}
+
+function syncSceneSubTabState(
+  activeTab: SceneSubTab,
+  mapTab: HTMLButtonElement,
+  layersTab: HTMLButtonElement,
+  selectionTab: HTMLButtonElement,
+  mapPanel: HTMLDivElement,
+  layersPanel: HTMLDivElement,
+  selectionPanel: HTMLDivElement,
+): void {
+  mapTab.dataset.active = activeTab === "map" ? "true" : "false";
+  layersTab.dataset.active = activeTab === "layers" ? "true" : "false";
+  selectionTab.dataset.active = activeTab === "selection" ? "true" : "false";
+  mapPanel.hidden = activeTab !== "map";
+  layersPanel.hidden = activeTab !== "layers";
+  selectionPanel.hidden = activeTab !== "selection";
 }
 
 function createControlSection(title: string, description: string): HTMLElement {

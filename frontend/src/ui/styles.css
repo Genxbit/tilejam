@@ -130,8 +130,18 @@ textarea {
 
 .sidebar-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.sidebar-subtabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(131, 169, 190, 0.12);
+  border-radius: 16px;
+  background: rgba(9, 17, 25, 0.34);
 }
 
 .sidebar-tab {
@@ -316,14 +326,6 @@ textarea {
   background: rgba(18, 32, 47, 0.82);
 }
 
-.panel-title {
-  margin: 0;
-  font-size: 2rem;
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-
-.panel-copy,
 .panel-note {
   margin: 0;
   color: #b2c4d2;
