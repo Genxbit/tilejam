@@ -792,3 +792,38 @@ Refine the `Tilesheet -> Sheet`, `Tilesheet -> Tile`, `Scene -> Map`, `Scene -> 
 * all current features remain supported and reachable after the redesign
 * behavior is preserved while the layout and grouping become easier to learn
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 22: Amiga-inspired UI styling + tab row polish
+
+**Status**
+Completed
+
+**Goal**
+Upgrade the editor UI from a generic form layout into a more intentional tool surface with Amiga-inspired styling, clearer tab rows, and stronger visual hierarchy.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+
+**Prompt**
+Restyle the shell, panels, tabs, buttons, and inputs so the editor feels more tactile and coherent. Use an Amiga-inspired visual language to improve hierarchy and make tab sets read as real tab rows rather than isolated controls.
+
+**Deliverables**
+
+* redesign top workspace tabs, workspace sub-tabs, and tile editor tabs as clearer connected tab rows
+* replace overly generic button/input/panel styling with a more tactile Amiga-inspired control system
+* improve active, hover, and pressed states so primary controls are easier to read
+* strengthen section framing and spacing so important groups stand out without over-framing everything
+* reduce the feeling that all controls are the same generic rounded element
+* preserve all current features and layouts while improving the visual system
+
+**Validation**
+
+* top-level tabs and sub-tabs read as real tab rows rather than isolated buttons
+* panels and controls have clearer hierarchy and more intentional styling
+* the UI feels more compact, distinctive, and tool-like
+* existing features remain supported and behavior stays unchanged
+* matches architecture rules in `docs/TECH_WORKFLOW.md`

@@ -113,11 +113,10 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   let tileColCommitTimeout: number | null = null;
   let tileRowCommitTimeout: number | null = null;
   const editorSection = document.createElement("section");
-  editorSection.className = "control-section";
+  editorSection.className = "tile-editor-section";
   let activeEditorTab: EditorTab = "layout";
-  const editorEmpty = document.createElement("p");
-  editorEmpty.className = "field-note";
-  editorEmpty.textContent = selectedTile ? "" : "No output tile selected yet. Hold Shift and click to build a multi-selection.";
+  const editorActionsSection = document.createElement("div");
+  editorActionsSection.className = "editor-group editor-actions-section";
 
   const editorActions = document.createElement("div");
   editorActions.className = "panel-actions";
@@ -128,6 +127,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   const clearTileButton = createActionButton("Clear", callbacks.onClearSelectedTile);
   clearTileButton.disabled = !selectedTile;
   editorActions.append(copyTileButton, pasteTileButton, clearTileButton);
+  editorActionsSection.append(createEditorGroupTitle("Selection Actions"), editorActions);
 
   const editorTabs = document.createElement("div");
   editorTabs.className = "editor-tabs";
@@ -509,9 +509,6 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
 
   const fillTileSection = document.createElement("div");
   fillTileSection.className = "editor-stack";
-  const fillTileHeading = document.createElement("p");
-  fillTileHeading.className = "field-label";
-  fillTileHeading.textContent = "Fill tile";
   const fillTileField = document.createElement("label");
   fillTileField.className = "field-group";
   const fillTileLabel = document.createElement("span");
@@ -529,13 +526,10 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   fillTileNote.className = "field-note";
   fillTileNote.textContent = "Create or replace the selected output cells with a solid tile color.";
   const fillTileButton = createAsyncActionButton("Fill Selected Tiles", callbacks.onApplyTileFill);
-  fillTileSection.append(fillTileHeading, fillTileField, fillTileNote, fillTileButton);
+  fillTileSection.append(fillTileField, fillTileNote, fillTileButton);
 
   const colorReplaceSection = document.createElement("div");
   colorReplaceSection.className = "editor-stack";
-  const colorReplaceHeading = document.createElement("p");
-  colorReplaceHeading.className = "field-label";
-  colorReplaceHeading.textContent = "Color replace";
   const colorReplaceInputs = document.createElement("div");
   colorReplaceInputs.className = "grid-inputs";
   const colorReplaceSourceField = document.createElement("label");
@@ -602,7 +596,6 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   );
   const colorReplaceButton = createAsyncActionButton("Apply Color Replace", callbacks.onApplyColorReplace);
   colorReplaceSection.append(
-    colorReplaceHeading,
     colorReplaceInputs,
     colorReplaceModeField,
     colorReplaceTargetField,
@@ -612,9 +605,6 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
 
   const seamRepairSection = document.createElement("div");
   seamRepairSection.className = "editor-stack";
-  const seamRepairHeading = document.createElement("p");
-  seamRepairHeading.className = "field-label";
-  seamRepairHeading.textContent = "Seam repair";
   const seamPair = getSeamRepairPair(state);
   const seamRepairDirectionField = document.createElement("label");
   seamRepairDirectionField.className = "field-group";
@@ -717,7 +707,6 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   seamRepairNote.textContent = describeSeamRepair(seamPair, state);
   const seamRepairButton = createAsyncActionButton("Apply Seam Repair", callbacks.onApplySeamRepair);
   seamRepairSection.append(
-    seamRepairHeading,
     seamRepairDirectionField,
     seamRepairModeField,
     seamRepairReferenceField,
@@ -793,7 +782,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
     currentEditMode,
     state,
   );
-  editorSection.append(editorActions, editorEmpty, editorTabs, layoutPanel, processingPanel, repairPanel, propertiesPanel);
+  editorSection.append(editorActionsSection, editorTabs, layoutPanel, processingPanel, repairPanel, propertiesPanel);
 
   layoutTab.addEventListener("click", () => {
     activeEditorTab = "layout";
@@ -866,7 +855,6 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
           copyButton: copyTileButton,
           pasteButton: pasteTileButton,
           clearButton: clearTileButton,
-          empty: editorEmpty,
           tileColInput: tileColField.input,
           tileRowInput: tileRowField.input,
           offsetXInput: offsetXField.input,
@@ -1127,12 +1115,16 @@ function createEditorGroup(title: string, ...children: HTMLElement[]): HTMLDivEl
   const group = document.createElement("div");
   group.className = "editor-group";
 
+  const heading = createEditorGroupTitle(title);
+  group.append(heading, ...children);
+  return group;
+}
+
+function createEditorGroupTitle(title: string): HTMLParagraphElement {
   const heading = document.createElement("p");
   heading.className = "editor-group-title";
   heading.textContent = title;
-
-  group.append(heading, ...children);
-  return group;
+  return heading;
 }
 
 function syncEditorTabState(
@@ -1164,7 +1156,6 @@ function syncSelectedTileEditor(
     copyButton: HTMLButtonElement;
     pasteButton: HTMLButtonElement;
     clearButton: HTMLButtonElement;
-    empty: HTMLParagraphElement;
     tileColInput: HTMLInputElement;
     tileRowInput: HTMLInputElement;
     offsetXInput: HTMLInputElement;
@@ -1231,9 +1222,6 @@ function syncSelectedTileEditor(
   if (!tile) {
     controls.copyButton.disabled = true;
     controls.clearButton.disabled = true;
-    controls.empty.textContent = controls.selectionCount > 0
-      ? "The selected grid area includes no placed tile in the primary cell. Placed tiles inside the selection are still part of the selected patch."
-      : "No output tile selected yet. Hold Shift and click to build a multi-selection.";
     for (const input of inputs) {
       input.disabled = true;
     }
@@ -1243,7 +1231,6 @@ function syncSelectedTileEditor(
   controls.copyButton.disabled = false;
   controls.pasteButton.disabled = false;
   controls.clearButton.disabled = false;
-  controls.empty.textContent = "";
   setInputValueUnlessFocused(controls.tileColInput, `${tile.destCol}`);
   setInputValueUnlessFocused(controls.tileRowInput, `${tile.destRow}`);
   setInputValueUnlessFocused(controls.offsetXInput, `${tile.offsetX}`);
