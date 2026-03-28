@@ -2494,17 +2494,20 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       });
 
       try {
+        const defaultProjectsUrl = new URL("projects/", window.location.href).toString();
+        const defaultProjectUrl = new URL("projects/latest.tilejam.json", window.location.href).toString();
         state.session.projectFileName = "latest.tilejam.json";
         state.session.projectFileHandle = null;
         state.session.projectDirectoryHandle = null;
-        state.session.projectBaseUrl = "/projects/";
-        const project = await loadProjectFromUrl("/projects/latest.tilejam.json");
+        state.session.projectBaseUrl = defaultProjectsUrl;
+        const project = await loadProjectFromUrl(defaultProjectUrl);
         await loadProjectIntoState(state, project, "Loaded default project.");
         bumpRenderRevision();
         undoStack.length = 0;
         redoStack.length = 0;
       } catch {
-        await loadSourceImageFromUrl(state, "/sample-source.svg", "sample-source.svg");
+        const defaultSourceUrl = new URL("sample-source.svg", window.location.href).toString();
+        await loadSourceImageFromUrl(state, defaultSourceUrl, "sample-source.svg");
         state.project.sourceTileWidth = 32;
         state.project.sourceTileHeight = 32;
         state.project.tileWidth = 32;
