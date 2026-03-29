@@ -274,12 +274,10 @@ export function createShell({
   inputLabel.append(input);
 
   inputLabel.addEventListener("click", async (event) => {
-    event.preventDefault();
-
     const handled = await onOpenSource();
 
-    if (!handled) {
-      input.click();
+    if (handled) {
+      event.preventDefault();
     }
   });
 
@@ -340,12 +338,10 @@ export function createShell({
   workingImageInputLabel.append(workingImageInput);
 
   workingImageInputLabel.addEventListener("click", async (event) => {
-    event.preventDefault();
-
     const handled = await onOpenWorkingImage();
 
-    if (!handled) {
-      workingImageInput.click();
+    if (handled) {
+      event.preventDefault();
     }
   });
 
@@ -402,12 +398,10 @@ export function createShell({
   });
   sceneInputLabel.append(sceneInput);
   sceneInputLabel.addEventListener("click", async (event) => {
-    event.preventDefault();
-
     const handled = await onOpenScene();
 
-    if (!handled) {
-      sceneInput.click();
+    if (handled) {
+      event.preventDefault();
     }
   });
 
