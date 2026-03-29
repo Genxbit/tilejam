@@ -52,6 +52,14 @@ import {
   resetTileToBakedImage,
 } from "../systems/groupedTileBakeSystem";
 import { getSeamRepairPairs, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
+import {
+  clearUnresolvedResources,
+  collectProjectUnresolvedResources,
+  collectSceneUnresolvedResources,
+  findUnresolvedResource,
+  refreshUnresolvedResourcesForCurrentScope,
+  updateUnresolvedResources,
+} from "../systems/resourceResolutionSystem";
 import { renderTileCanvas } from "../systems/tileRenderSystem";
 import { getOutputGridMetrics, getProjectPixelSize, normalizeProjectTilesToGrid, setOutputImageSize, setOutputTileSize, setSourceGridTileSize } from "../systems/tileGridSystem";
 import {
@@ -244,7 +252,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.projectBaseUrl = null;
         const unresolved = await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
         await tryResolveProjectAssetsFromDirectory(state, unresolved);
-        updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state, unresolved));
+        updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
         bumpRenderRevision();
         undoStack.length = 0;
         redoStack.length = 0;
@@ -284,7 +292,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.projectBaseUrl = null;
         const unresolved = await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
         await tryResolveProjectAssetsFromDirectory(state, unresolved);
-        updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state, unresolved));
+        updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
         bumpRenderRevision();
         undoStack.length = 0;
         redoStack.length = 0;
@@ -2765,118 +2773,12 @@ async function loadProjectIntoState(
   return unresolved;
 }
 
-function updateUnresolvedResources(
-  state: ProjectState,
-  scope: "project" | "scene",
-  resources: ProjectState["session"]["unresolvedResources"],
-): void {
-  state.session.unresolvedResources = resources;
-  state.session.unresolvedResourceScope = resources.length > 0 ? scope : null;
-}
-
-function clearUnresolvedResources(state: ProjectState): void {
-  state.session.unresolvedResources = [];
-  state.session.unresolvedResourceScope = null;
-}
-
-function refreshUnresolvedResourcesForCurrentScope(state: ProjectState): void {
-  if (state.session.unresolvedResourceScope === "project") {
-    updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
-    return;
-  }
-
-  if (state.session.unresolvedResourceScope === "scene" && state.project.scene) {
-    updateUnresolvedResources(state, "scene", collectSceneUnresolvedResources(state, state.project.scene));
-    return;
-  }
-
-  clearUnresolvedResources(state);
-}
-
-function collectProjectUnresolvedResources(
-  state: ProjectState,
-  _unresolved?: UnresolvedProjectAssets,
-): ProjectState["session"]["unresolvedResources"] {
-  const resources: ProjectState["session"]["unresolvedResources"] = [];
-
-  if (state.project.sourceImage && !state.sourceImageAsset.image) {
-    resources.push({
-      id: `source-image:${state.project.sourceImage}`,
-      role: "source-image",
-      label: "Source image",
-      path: state.project.sourceImage,
-    });
-  }
-
-  if (state.project.workingImage && state.project.tiles.length === 0) {
-    resources.push({
-      id: `working-image:${state.project.workingImage}`,
-      role: "working-image",
-      label: "Working tilesheet",
-      path: state.project.workingImage,
-    });
-  }
-
-  if (state.project.sceneFile && !state.project.scene) {
-    resources.push({
-      id: `scene-file:${state.project.sceneFile}`,
-      role: "scene-file",
-      label: "Scene file",
-      path: state.project.sceneFile,
-    });
-  }
-
-  if (state.project.scene) {
-    resources.push(...collectUnresolvedSceneImageLayerResources(state, state.project.scene));
-  }
-
-  return resources;
-}
-
-function collectSceneUnresolvedResources(
-  state: ProjectState,
-  scene: NonNullable<ProjectState["project"]["scene"]>,
-): ProjectState["session"]["unresolvedResources"] {
-  const resources: ProjectState["session"]["unresolvedResources"] = [];
-  const expectedWorkingImage = scene.tilesetSource.replace(/\.tsj$/i, ".png");
-  const currentWorkingImage = state.session.workingImageFileName ?? state.project.workingImage;
-
-  if (!(currentWorkingImage === expectedWorkingImage && state.project.tiles.length > 0)) {
-    resources.push({
-      id: `working-image:${expectedWorkingImage}`,
-      role: "working-image",
-      label: "Scene tilesheet",
-      path: expectedWorkingImage,
-    });
-  }
-
-  resources.push(...collectUnresolvedSceneImageLayerResources(state, scene));
-  return resources;
-}
-
-function collectUnresolvedSceneImageLayerResources(
-  state: ProjectState,
-  scene: NonNullable<ProjectState["project"]["scene"]>,
-): ProjectState["session"]["unresolvedResources"] {
-  return scene.layers
-    .filter((layer): layer is Extract<typeof scene.layers[number], { type: "imagelayer" }> =>
-      layer.type === "imagelayer" && Boolean(layer.image))
-    .filter((layer) => !getSourceImageForRef(state, layer.image))
-    .map((layer) => ({
-      id: `scene-image-layer:${layer.id}:${layer.image}`,
-      role: "scene-image-layer" as const,
-      label: `Image layer: ${layer.name}`,
-      path: layer.image,
-      layerId: layer.id,
-    }));
-}
-
 async function resolveUnresolvedResource(
   state: ProjectState,
   id: string,
   file: File,
 ): Promise<void> {
-  const resource = state.session.unresolvedResources.find((entry) => entry.id === id);
+  const resource = findUnresolvedResource(state, id);
 
   if (!resource) {
     throw new Error("That missing resource is no longer pending.");

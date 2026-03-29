@@ -14,6 +14,7 @@ import type {
 import { getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
 import { getOutputGridMetrics, getProjectIndexRange, getProjectPixelSize, getProjectTileCount, TILE_SIZE_OPTIONS } from "../systems/tileGridSystem";
 import { getAssignedTileCount } from "../systems/tilePlacementSystem";
+import { getResourceAccept, getResourceChooserLabel, isChromiumBrowser } from "../systems/resourceResolutionSystem";
 import { getActiveSceneLayer } from "../systems/sceneSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
 import { createTileEditorSection, type SelectedTilePatch } from "./createTileEditorSection";
@@ -1303,33 +1304,4 @@ function getDisplayFileLabel(value: string): string {
   const normalized = value.replace(/\\/g, "/");
   const segments = normalized.split("/");
   return segments[segments.length - 1] || value;
-}
-
-function isChromiumBrowser(): boolean {
-  const userAgent = navigator.userAgent;
-  return /(Chrome|Chromium|CriOS|Edg|EdgiOS)/.test(userAgent) && !/(Firefox|FxiOS)/.test(userAgent);
-}
-
-function getResourceChooserLabel(resource: ProjectState["session"]["unresolvedResources"][number]): string {
-  switch (resource.role) {
-    case "source-image":
-      return "Choose Source";
-    case "working-image":
-      return "Choose Tilesheet";
-    case "scene-file":
-      return "Choose Scene";
-    case "scene-image-layer":
-      return "Choose Image";
-  }
-}
-
-function getResourceAccept(resource: ProjectState["session"]["unresolvedResources"][number]): string {
-  switch (resource.role) {
-    case "scene-file":
-      return ".tmj,application/json";
-    case "source-image":
-    case "working-image":
-    case "scene-image-layer":
-      return "image/*";
-  }
 }
