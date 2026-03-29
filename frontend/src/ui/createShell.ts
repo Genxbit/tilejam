@@ -23,6 +23,7 @@ type ShellOptions = {
   state: ProjectState;
   onFileSelected: (file: File) => Promise<void>;
   onOpenSource: () => Promise<boolean>;
+  onDismissBrowserWorkflowNotice: () => void;
   onNewProject: () => void;
   onProjectSelected: (file: File) => Promise<void>;
   onOpenProject: () => Promise<boolean>;
@@ -118,6 +119,8 @@ type ShellOptions = {
   onRedo: () => void;
   onCopyAllTiles: () => void;
   onClearAllTiles: () => void;
+  onDismissUnresolvedResources: () => void;
+  onResolveUnresolvedResource: (id: string, file: File) => Promise<void>;
 };
 
 type Shell = {
@@ -134,6 +137,7 @@ export function createShell({
   state,
   onFileSelected,
   onOpenSource,
+  onDismissBrowserWorkflowNotice,
   onNewProject,
   onProjectSelected,
   onOpenProject,
@@ -212,6 +216,8 @@ export function createShell({
   onRedo,
   onCopyAllTiles,
   onClearAllTiles,
+  onDismissUnresolvedResources,
+  onResolveUnresolvedResource,
 }: ShellOptions): Shell {
   root.innerHTML = "";
 
@@ -232,6 +238,16 @@ export function createShell({
   topBarProject.className = "top-bar-project";
   topBarProject.textContent = `Project: ${getDisplayFileLabel(state.session.projectFileName ?? "unsaved")}`;
   topBarBrand.append(topBarTitle, topBarProject);
+
+  const browserNotice = document.createElement("div");
+  browserNotice.className = "browser-notice";
+  const browserNoticeText = document.createElement("p");
+  browserNoticeText.className = "browser-notice-text";
+  browserNoticeText.textContent = "Chrome or Edge gives the smoothest project open/save workflow. This browser may require manual relinking of project and scene files.";
+  const browserNoticeDismiss = createActionButton("Dismiss", onDismissBrowserWorkflowNotice);
+  browserNoticeDismiss.classList.add("browser-notice-dismiss");
+  browserNotice.append(browserNoticeText, browserNoticeDismiss);
+  browserNotice.hidden = state.session.browserWorkflowNoticeDismissed || isChromiumBrowser();
 
   const appShell = document.createElement("div");
   appShell.className = "app-shell";
@@ -281,8 +297,7 @@ export function createShell({
     }
   });
 
-  const projectInputButton = document.createElement("button");
-  projectInputButton.type = "button";
+  const projectInputButton = document.createElement("label");
   projectInputButton.className = "file-input file-input-secondary";
   projectInputButton.textContent = "Open project";
 
@@ -301,11 +316,11 @@ export function createShell({
   });
 
   projectInputButton.append(projectInput);
-  projectInputButton.addEventListener("click", async () => {
+  projectInputButton.addEventListener("click", async (event) => {
     const handled = await onOpenProject();
 
-    if (!handled) {
-      projectInput.click();
+    if (handled) {
+      event.preventDefault();
     }
   });
 
@@ -959,9 +974,30 @@ export function createShell({
   notes.className = "panel-note";
   notes.textContent = state.session.message ?? "";
 
+  const resourceDialogOverlay = document.createElement("div");
+  resourceDialogOverlay.className = "resource-dialog-overlay";
+  resourceDialogOverlay.hidden = state.session.unresolvedResources.length < 1 || !state.session.unresolvedResourceScope;
+
+  const resourceDialog = document.createElement("section");
+  resourceDialog.className = "resource-dialog";
+  const resourceDialogHeader = document.createElement("div");
+  resourceDialogHeader.className = "resource-dialog-header";
+  const resourceDialogTitle = document.createElement("h2");
+  resourceDialogTitle.className = "control-title";
+  resourceDialogTitle.textContent = "Resolve Files";
+  const resourceDialogClose = createActionButton("Close", onDismissUnresolvedResources);
+  resourceDialogHeader.append(resourceDialogTitle, resourceDialogClose);
+  const resourceDialogCopy = document.createElement("p");
+  resourceDialogCopy.className = "field-note";
+  resourceDialogCopy.textContent = "Choose the missing files to finish loading the current project or scene.";
+  const resourceDialogList = document.createElement("div");
+  resourceDialogList.className = "resource-dialog-list";
+  resourceDialog.append(resourceDialogHeader, resourceDialogCopy, resourceDialogList);
+  resourceDialogOverlay.append(resourceDialog);
+
   panel.append(workspaceTabs, tilesheetWorkspacePanel, sceneWorkspacePanel, notes);
   appShell.append(workspace, panel);
-  appFrame.append(topBar, appShell);
+  appFrame.append(topBar, browserNotice, appShell, resourceDialogOverlay);
   root.append(appFrame);
 
   return {
@@ -970,6 +1006,7 @@ export function createShell({
       const scrollTop = panel.scrollTop;
       activeWorkspaceTab = nextState.session.activeWorkspaceMode === "scene" ? "scene" : "tilesheet";
       topBarProject.textContent = `Project: ${getDisplayFileLabel(nextState.session.projectFileName ?? "unsaved")}`;
+      browserNotice.hidden = nextState.session.browserWorkflowNoticeDismissed || isChromiumBrowser();
       items[0].description.textContent = nextState.project.sourceImage ?? nextState.sourceImageAsset.name ?? "Not loaded";
       items[1].description.textContent = nextState.project.workingImage ?? nextState.session.workingImageFileName ?? "Not loaded";
       items[2].description.textContent = `${nextState.sourceImageAsset.width} x ${nextState.sourceImageAsset.height}`;
@@ -1038,6 +1075,50 @@ export function createShell({
       syncTilesheetSubTabState(activeTilesheetSubTab, tilesheetSheetTab, tilesheetTileTab, tilesheetSheetPanel, tilesheetTilePanel);
       syncSceneSubTabState(activeSceneSubTab, sceneMapTab, sceneLayersTab, sceneSelectionTab, sceneMapPanel, sceneLayersPanel, sceneSelectionPanel);
       notes.textContent = nextState.session.message ?? "";
+      resourceDialogOverlay.hidden = nextState.session.unresolvedResources.length < 1 || !nextState.session.unresolvedResourceScope;
+      resourceDialogList.replaceChildren();
+      for (const resource of nextState.session.unresolvedResources) {
+        const row = document.createElement("div");
+        row.className = "resource-row";
+
+        const copy = document.createElement("div");
+        copy.className = "resource-row-copy";
+
+        const title = document.createElement("div");
+        title.className = "resource-row-title";
+        title.textContent = resource.label;
+
+        const path = document.createElement("div");
+        path.className = "resource-row-path";
+        path.textContent = resource.path;
+
+        const status = document.createElement("div");
+        status.className = "resource-row-status";
+        status.textContent = "Needs file";
+
+        copy.append(title, path, status);
+
+        const chooser = document.createElement("label");
+        chooser.className = "file-input file-input-secondary";
+        chooser.textContent = getResourceChooserLabel(resource);
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = getResourceAccept(resource);
+        input.addEventListener("change", async () => {
+          const file = input.files?.[0];
+
+          if (!file) {
+            return;
+          }
+
+          await onResolveUnresolvedResource(resource.id, file);
+          input.value = "";
+        });
+        chooser.append(input);
+
+        row.append(copy, chooser);
+        resourceDialogList.append(row);
+      }
       panel.scrollTop = scrollTop;
     },
   };
@@ -1222,4 +1303,33 @@ function getDisplayFileLabel(value: string): string {
   const normalized = value.replace(/\\/g, "/");
   const segments = normalized.split("/");
   return segments[segments.length - 1] || value;
+}
+
+function isChromiumBrowser(): boolean {
+  const userAgent = navigator.userAgent;
+  return /(Chrome|Chromium|CriOS|Edg|EdgiOS)/.test(userAgent) && !/(Firefox|FxiOS)/.test(userAgent);
+}
+
+function getResourceChooserLabel(resource: ProjectState["session"]["unresolvedResources"][number]): string {
+  switch (resource.role) {
+    case "source-image":
+      return "Choose Source";
+    case "working-image":
+      return "Choose Tilesheet";
+    case "scene-file":
+      return "Choose Scene";
+    case "scene-image-layer":
+      return "Choose Image";
+  }
+}
+
+function getResourceAccept(resource: ProjectState["session"]["unresolvedResources"][number]): string {
+  switch (resource.role) {
+    case "scene-file":
+      return ".tmj,application/json";
+    case "source-image":
+    case "working-image":
+    case "scene-image-layer":
+      return "image/*";
+  }
 }

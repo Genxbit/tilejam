@@ -24,6 +24,7 @@ export function createProjectState(): ProjectState {
       objectUrl: null,
     },
     session: {
+      browserWorkflowNoticeDismissed: false,
       message: "The bundled sample image is loaded on startup so the canvas stays immediately visible.",
       projectFileName: null,
       projectFileHandle: null,
@@ -76,6 +77,8 @@ export function createProjectState(): ProjectState {
       seamRepairPreserveContrast: true,
       seamRepairContinueRamp: false,
       seamRepairPreview: false,
+      unresolvedResources: [],
+      unresolvedResourceScope: null,
       sourceCamera: {
         zoom: 1,
         panX: 0,

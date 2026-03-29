@@ -827,3 +827,50 @@ Restyle the shell, panels, tabs, buttons, and inputs so the editor feels more ta
 * the UI feels more compact, distinctive, and tool-like
 * existing features remain supported and behavior stays unchanged
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 23: Browser-aware file workflow guidance + missing resource resolver
+
+**Status**
+Completed
+
+**Goal**
+Make cross-browser project and scene loading clearer by guiding non-Chromium users and providing a structured way to relink unresolved resources without relying on unsupported browser file APIs.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+
+**Prompt**
+Add a dismissible browser notice for non-Chromium browsers and a resource resolution dialog that appears when project or scene references cannot be resolved automatically. The dialog should list missing resources and let the user resolve each one with the correct file chooser action.
+
+**Deliverables**
+
+* detect non-Chromium browsers and show a small dismissible top notice recommending Chrome or Edge for the smoothest project open/save workflow
+* keep the notice non-blocking and hideable for the current session
+* when `Open project` or `Open scene` leaves unresolved linked files, show a focused resource resolution dialog
+* list each unresolved resource with:
+  * resource role or type
+  * referenced path/name
+  * current resolution state
+  * an action to choose the correct file
+* support unresolved project resources such as:
+  * source image
+  * working tilesheet PNG
+  * scene file
+* support unresolved scene image-layer files
+* allow the user to resolve resources one-by-one with normal file pickers instead of hunting through panels
+* make the dialog recoverable and closable without breaking the current editor state
+* preserve all existing features while improving guidance and recovery UX in Safari and other non-Chromium browsers
+
+**Validation**
+
+* non-Chromium browsers show a dismissible browser guidance notice
+* opening a project or scene with unresolved linked resources surfaces a clear dialog instead of a silent partial load
+* each unresolved resource can be resolved with the correct file chooser flow
+* the editor updates correctly as resources are relinked
+* Chrome/Edge workflows continue to work normally
+* existing features remain supported
+* matches architecture rules in `docs/TECH_WORKFLOW.md`

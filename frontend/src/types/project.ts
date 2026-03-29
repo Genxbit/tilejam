@@ -28,6 +28,7 @@ export type SourceImageAssetState = {
 };
 
 export type SessionState = {
+  browserWorkflowNoticeDismissed: boolean;
   message: string | null;
   projectFileName: string | null;
   projectFileHandle: FileSystemFileHandle | null;
@@ -80,10 +81,20 @@ export type SessionState = {
   seamRepairPreserveContrast: boolean;
   seamRepairContinueRamp: boolean;
   seamRepairPreview: boolean;
+  unresolvedResources: UnresolvedResource[];
+  unresolvedResourceScope: "project" | "scene" | null;
   sourceCamera: CameraState;
   outputCamera: CameraState;
   sourceImageAssetCache: Record<string, CachedSourceImageAsset>;
   renderRevision: number;
+};
+
+export type UnresolvedResource = {
+  id: string;
+  role: "source-image" | "working-image" | "scene-file" | "scene-image-layer";
+  label: string;
+  path: string;
+  layerId?: number;
 };
 
 export type TileSize = 8 | 16 | 32 | 64;

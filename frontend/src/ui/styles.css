@@ -107,6 +107,30 @@ textarea {
   gap: 8px;
 }
 
+.browser-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(24, 31, 45, 0.22);
+  background: linear-gradient(180deg, #e9d8a5 0%, #dbc280 100%);
+  color: #30220a;
+}
+
+.browser-notice[hidden] {
+  display: none;
+}
+
+.browser-notice-text {
+  margin: 0;
+  font-size: 0.74rem;
+}
+
+.browser-notice-dismiss {
+  flex-shrink: 0;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -475,6 +499,78 @@ textarea {
   background: linear-gradient(180deg, rgba(212, 219, 230, 0.6) 0%, rgba(189, 198, 212, 0.6) 100%);
   color: var(--amiga-text-soft);
   font-size: 0.74rem;
+}
+
+.resource-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(9, 14, 24, 0.46);
+}
+
+.resource-dialog-overlay[hidden] {
+  display: none;
+}
+
+.resource-dialog {
+  width: min(620px, 100%);
+  max-height: min(78vh, 720px);
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid rgba(57, 79, 118, 0.5);
+  background: linear-gradient(180deg, var(--surface-panel-top) 0%, var(--surface-panel-bottom) 100%);
+  box-shadow: 0 16px 32px rgba(7, 11, 18, 0.28);
+}
+
+.resource-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.resource-dialog-list {
+  display: grid;
+  gap: 10px;
+}
+
+.resource-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(121, 130, 149, 0.42);
+  background: linear-gradient(180deg, var(--surface-panel-secondary-top) 0%, var(--surface-panel-secondary-bottom) 100%);
+}
+
+.resource-row-copy {
+  min-width: 0;
+}
+
+.resource-row-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--amiga-text);
+}
+
+.resource-row-path {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--amiga-text-soft);
+  word-break: break-word;
+}
+
+.resource-row-status {
+  margin-top: 3px;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7b4f1d;
 }
 
 .file-input {
