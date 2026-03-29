@@ -1,5 +1,5 @@
 import type { ProjectState, TilePlacement } from "../types/project";
-import { saveTilesetPngToHandle, saveTilesetPngWithPicker, saveTilesetTsjWithPicker } from "../io/exportTileset";
+import { renderTilesetPngBlob, saveTilesetPngToHandle, saveTilesetPngWithPicker, saveTilesetTsjWithPicker } from "../io/exportTileset";
 import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
 import { loadSceneFile, loadSceneFromHandle, loadSceneFromUrl, saveSceneToHandle, saveSceneWithPicker } from "../io/sceneFile";
 import { downloadProjectFile, saveProjectToHandle, saveProjectWithPicker } from "../io/saveProjectFile";
@@ -728,16 +728,69 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = `Source grid set to ${tileSize} x ${tileSize}.`;
       renderAll();
     },
-    onOutputTileSizeChanged: (tileSize) => {
+    onOutputTileSizeChanged: async (tileSize) => {
       recordHistory();
-      setOutputTileSize(state, tileSize);
-      const dropped = normalizeProjectTilesToGrid(state);
-      bumpRenderRevision();
-      const grid = getOutputGridMetrics(state.project);
-      const outputPixels = getProjectPixelSize(state.project);
-      state.session.message = dropped > 0
-        ? `Output tile set to ${tileSize} x ${tileSize}. Output grid is now ${grid.columns} x ${grid.rows} inside ${outputPixels.width} x ${outputPixels.height}. ${dropped} out-of-bounds tile${dropped === 1 ? "" : "s"} were removed.`
-        : `Output tile set to ${tileSize} x ${tileSize}. Output grid is now ${grid.columns} x ${grid.rows} inside ${outputPixels.width} x ${outputPixels.height}.`;
+      const previousTileWidth = state.project.tileWidth;
+      const previousTileHeight = state.project.tileHeight;
+
+      try {
+        const workingTilesheetRef = state.session.workingImageFileName ?? getDisplayFileName(state.project.workingImage);
+        const canResliceCurrentWorkingTilesheet = Boolean(workingTilesheetRef && state.project.tiles.length > 0);
+        let currentTilesheetSnapshotFile: File | null = null;
+
+        if (canResliceCurrentWorkingTilesheet && workingTilesheetRef) {
+          const { blob, missingTileCount } = await renderTilesetPngBlob(state);
+
+          if (missingTileCount > 0) {
+            throw new Error("The current working tilesheet has missing tile sources, so it could not be re-sliced safely.");
+          }
+
+          currentTilesheetSnapshotFile = new File([blob], workingTilesheetRef, { type: "image/png" });
+        }
+
+        setOutputTileSize(state, tileSize);
+
+        if (currentTilesheetSnapshotFile && workingTilesheetRef) {
+          const cachedWorkingTilesheetRef = await loadImageAssetFromFile(
+            state,
+            currentTilesheetSnapshotFile,
+            workingTilesheetRef,
+          );
+          const cachedWorkingTilesheet = state.session.sourceImageAssetCache[cachedWorkingTilesheetRef];
+
+          if (!cachedWorkingTilesheet) {
+            throw new Error("The current working tilesheet snapshot could not be cached.");
+          }
+
+          const tileCount = rebuildTilesFromWorkingSheet(
+            state,
+            cachedWorkingTilesheetRef,
+            cachedWorkingTilesheet.width,
+            cachedWorkingTilesheet.height,
+          );
+          bumpRenderRevision();
+          const grid = getOutputGridMetrics(state.project);
+          const outputPixels = getProjectPixelSize(state.project);
+          state.session.message = `Output tile set to ${tileSize} x ${tileSize}. Re-sliced the current tilesheet content into ${tileCount} tile${tileCount === 1 ? "" : "s"} across ${grid.columns} x ${grid.rows} in ${outputPixels.width} x ${outputPixels.height}.`;
+          renderAll();
+          return;
+        }
+
+        const dropped = normalizeProjectTilesToGrid(state);
+        bumpRenderRevision();
+        const grid = getOutputGridMetrics(state.project);
+        const outputPixels = getProjectPixelSize(state.project);
+        state.session.message = dropped > 0
+          ? `Output tile set to ${tileSize} x ${tileSize}. Output grid is now ${grid.columns} x ${grid.rows} inside ${outputPixels.width} x ${outputPixels.height}. ${dropped} out-of-bounds tile${dropped === 1 ? "" : "s"} were removed.`
+          : `Output tile set to ${tileSize} x ${tileSize}. Output grid is now ${grid.columns} x ${grid.rows} inside ${outputPixels.width} x ${outputPixels.height}.`;
+      } catch (error) {
+        undoStack.pop();
+        state.project.tileWidth = previousTileWidth;
+        state.project.tileHeight = previousTileHeight;
+        const message = error instanceof Error ? error.message : "Unknown output tile size error.";
+        state.session.message = `Output tile change failed: ${message}`;
+      }
+
       renderAll();
     },
     onOutputWidthChanged: (width) => {

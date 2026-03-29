@@ -45,7 +45,7 @@ type ShellOptions = {
   onMoveSceneSelection: (deltaCol: number, deltaRow: number) => void;
   onWorkspaceModeChanged: (mode: WorkspaceMode) => void;
   onSourceGridSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
-  onOutputTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
+  onOutputTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => Promise<void>;
   onOutputWidthChanged: (width: number) => void;
   onOutputHeightChanged: (height: number) => void;
   onSceneWidthChanged: (width: number) => void;
@@ -471,11 +471,11 @@ export function createShell({
     optionElement.selected = option === state.project.tileWidth;
     outputTileSelect.append(optionElement);
   });
-  outputTileSelect.addEventListener("change", () => {
+  outputTileSelect.addEventListener("change", async () => {
     const tileSize = Number.parseInt(outputTileSelect.value, 10);
 
     if (tileSize === 8 || tileSize === 16 || tileSize === 32 || tileSize === 64) {
-      onOutputTileSizeChanged(tileSize);
+      await onOutputTileSizeChanged(tileSize);
     }
   });
 
