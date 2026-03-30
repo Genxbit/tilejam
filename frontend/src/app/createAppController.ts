@@ -26,7 +26,7 @@ import {
   updateSelectedOutputTile,
 } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, copySourceSelectionToOutputClipboard, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
-import { addSceneLayer, clearSceneLayers, copySelectedSceneCells, copySourceSelectionToSceneClipboard, deleteSelectedSceneCells, ensureScene, getActiveSceneLayer, getSelectedSceneCells, moveActiveSceneLayerBy, moveSelectedSceneCellBy, moveSelectedSceneCellsTo, pasteSceneClipboard, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneCellRectangle, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
+import { addSceneLayer, clearSceneLayers, copySelectedSceneCells, copySourceSelectionToSceneClipboard, deleteSelectedSceneCells, ensureScene, getActiveSceneLayer, getSelectedSceneCells, getTopSceneLayerId, moveActiveSceneLayerBy, moveSelectedSceneCellBy, moveSelectedSceneCellsTo, pasteSceneClipboard, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneCellRectangle, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import {
   clearSourceImageAsset,
@@ -533,7 +533,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.project.sceneFile = file.name;
         state.session.sceneFileName = file.name;
         state.session.sceneFileHandle = null;
-        state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+        state.session.activeSceneLayerId = getTopSceneLayerId(scene);
         state.session.selectedSceneCell = null;
         state.session.selectedSceneCells = [];
         state.session.activeWorkspaceMode = "scene";
@@ -579,7 +579,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.project.sceneFile = file.name;
         state.session.sceneFileName = file.name;
         state.session.sceneFileHandle = handle;
-        state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+        state.session.activeSceneLayerId = getTopSceneLayerId(scene);
         state.session.selectedSceneCell = null;
         state.session.selectedSceneCells = [];
         state.session.activeWorkspaceMode = "scene";
@@ -2791,7 +2791,7 @@ async function loadProjectIntoState(
   state.session.workingImageFileHandle = null;
   state.session.sceneFileName = getDisplayFileName(project.sceneFile);
   state.session.sceneFileHandle = null;
-  state.session.activeSceneLayerId = project.scene?.layers[0]?.id ?? null;
+  state.session.activeSceneLayerId = getTopSceneLayerId(project.scene);
   state.session.selectedSceneCell = null;
   state.session.selectedSceneCells = [];
   syncSceneTilesetSourceToDefault(state);
@@ -2857,7 +2857,7 @@ async function loadProjectIntoState(
       state.project.scene = scene;
       state.project.sceneFile = project.sceneFile;
       state.session.sceneFileName = getDisplayFileName(project.sceneFile);
-      state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+      state.session.activeSceneLayerId = getTopSceneLayerId(scene);
       state.session.selectedSceneCells = [];
       await resolveSceneImageLayersFromResolvedUrl(state, scene, resolvedSceneFile);
       resolutionMessages.push(`Scene resolved from ${project.sceneFile}.`);
@@ -2910,7 +2910,7 @@ async function resolveUnresolvedResource(
       state.project.sceneFile = resource.path;
       state.session.sceneFileName = getDisplayFileName(resource.path) ?? file.name;
       state.session.sceneFileHandle = null;
-      state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+      state.session.activeSceneLayerId = getTopSceneLayerId(scene);
       state.session.selectedSceneCell = null;
       state.session.selectedSceneCells = [];
       state.session.activeWorkspaceMode = "scene";
@@ -3024,7 +3024,7 @@ async function tryResolveProjectAssetsFromDirectory(
           state.project.sceneFile = unresolved.sceneFileRef;
           state.session.sceneFileName = getDisplayFileName(unresolved.sceneFileRef);
           state.session.sceneFileHandle = null;
-          state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+          state.session.activeSceneLayerId = getTopSceneLayerId(scene);
           state.session.selectedSceneCells = [];
           await resolveSceneImageLayersFromDirectory(state, scene, directoryHandle, unresolved.sceneFileRef);
           resolutionMessages.push(`Scene linked from project folder (${unresolved.sceneFileRef}).`);

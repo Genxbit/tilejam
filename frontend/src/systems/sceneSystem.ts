@@ -19,7 +19,7 @@ export function ensureScene(state: ProjectState): SceneMapState {
   }
 
   if (!state.project.scene.layers.some((layer) => layer.id === state.session.activeSceneLayerId)) {
-    state.session.activeSceneLayerId = state.project.scene.layers[0]?.id ?? null;
+    state.session.activeSceneLayerId = getTopSceneLayerId(state.project.scene);
   }
 
   return state.project.scene;
@@ -50,7 +50,7 @@ export function resetScene(state: ProjectState): SceneMapState {
     existingScene?.height,
   );
   state.project.scene = scene;
-  state.session.activeSceneLayerId = scene.layers[0]?.id ?? null;
+  state.session.activeSceneLayerId = getTopSceneLayerId(scene);
   state.session.selectedSceneCell = null;
   state.session.selectedSceneCells = [];
   return scene;
@@ -213,7 +213,19 @@ export function getActiveSceneLayer(state: ProjectState): SceneLayerState | null
     return null;
   }
 
-  return scene.layers.find((layer) => layer.id === state.session.activeSceneLayerId) ?? scene.layers[0] ?? null;
+  return scene.layers.find((layer) => layer.id === state.session.activeSceneLayerId) ?? getTopSceneLayer(scene);
+}
+
+export function getTopSceneLayer(scene: SceneMapState | null): SceneLayerState | null {
+  if (!scene || scene.layers.length < 1) {
+    return null;
+  }
+
+  return scene.layers[scene.layers.length - 1] ?? null;
+}
+
+export function getTopSceneLayerId(scene: SceneMapState | null): number | null {
+  return getTopSceneLayer(scene)?.id ?? null;
 }
 
 export function placeSelectionIntoScene(

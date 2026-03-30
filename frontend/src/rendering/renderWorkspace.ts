@@ -81,7 +81,7 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
 
   context.fillStyle = LABEL;
   context.font = "12px monospace";
-  context.fillText(getSourcePanelLabel(state), sourcePanel.x + 12, sourcePanel.y + 18);
+  drawWrappedPanelText(context, getSourcePanelLabel(state), sourcePanel.x + 12, sourcePanel.y + 18, sourcePanel.width - 24, 14, 2);
   context.fillStyle = VIEW_HINT;
   context.fillText(`Zoom ${state.session.sourceCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`, sourcePanel.x + 12, sourcePanel.y + sourcePanel.height - 12);
 }
@@ -223,19 +223,19 @@ function drawEmptyState(
   panel: { x: number; y: number; width: number; height: number },
 ): void {
   context.fillStyle = LABEL;
-  context.font = "16px monospace";
+  context.font = "13px monospace";
 
   if (state.session.activeWorkspaceMode === "scene" && state.project.scene) {
     const expectedTilesheet = state.project.scene.tilesetSource.replace(/\.tsj$/i, ".png");
-    context.fillText("Tilesheet missing for scene.", panel.x + 16, panel.y + 28);
+    drawWrappedPanelText(context, "Tilesheet missing for scene.", panel.x + 16, panel.y + 28, panel.width - 32, 16, 2);
     context.font = "14px monospace";
     context.fillStyle = VIEW_HINT;
-    context.fillText(`Expected: ${expectedTilesheet}`, panel.x + 16, panel.y + 56);
-    context.fillText("Use Open tilesheet to continue.", panel.x + 16, panel.y + 80);
+    drawWrappedPanelText(context, `Expected: ${expectedTilesheet}`, panel.x + 16, panel.y + 56, panel.width - 32, 16, 2);
+    drawWrappedPanelText(context, "Use Open tilesheet to continue.", panel.x + 16, panel.y + 88, panel.width - 32, 16, 2);
     return;
   }
 
-  context.fillText("Load a source or working tilesheet to begin.", panel.x + 16, panel.y + 28);
+  drawWrappedPanelText(context, "Load a source or working tilesheet to begin.", panel.x + 16, panel.y + 28, panel.width - 32, 16, 3);
 }
 
 function drawPanel(
@@ -259,10 +259,14 @@ function drawOutputGrid(
 
   context.fillStyle = LABEL;
   context.font = "12px monospace";
-  context.fillText(
+  drawWrappedPanelText(
+    context,
     getOutputPanelLabel(state, outputMetrics.columns, outputMetrics.rows, outputMetrics.pixelWidth, outputMetrics.pixelHeight),
     viewport.frame.x,
     viewport.frame.y - 14,
+    viewport.frame.width,
+    14,
+    2,
   );
 
   drawOutputBase(context, state, viewport, cache);
@@ -1106,6 +1110,122 @@ function getDisplayFileLabel(value: string): string {
   const normalized = value.replace(/\\/g, "/");
   const segments = normalized.split("/");
   return segments[segments.length - 1] || value;
+}
+
+function drawWrappedPanelText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxLines: number,
+): void {
+  const lines = wrapCanvasText(context, text, maxWidth, maxLines);
+
+  lines.forEach((line, index) => {
+    context.fillText(line, x, y + index * lineHeight);
+  });
+}
+
+function wrapCanvasText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+): string[] {
+  const words = text.split(/\s+/).filter((word) => word.length > 0);
+
+  if (words.length < 1) {
+    return [text];
+  }
+
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    const segments = splitCanvasWord(context, word, maxWidth);
+
+    for (const segment of segments) {
+      const nextLine = currentLine ? `${currentLine} ${segment}` : segment;
+
+      if (context.measureText(nextLine).width <= maxWidth) {
+        currentLine = nextLine;
+        continue;
+      }
+
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = "";
+      }
+
+      if (lines.length >= maxLines - 1) {
+        lines.push(truncateCanvasLine(context, segment, maxWidth));
+        return lines;
+      }
+
+      currentLine = segment;
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  if (lines.length > maxLines) {
+    return [...lines.slice(0, maxLines - 1), truncateCanvasLine(context, lines[maxLines - 1] ?? "", maxWidth)];
+  }
+
+  return lines;
+}
+
+function splitCanvasWord(
+  context: CanvasRenderingContext2D,
+  word: string,
+  maxWidth: number,
+): string[] {
+  if (context.measureText(word).width <= maxWidth) {
+    return [word];
+  }
+
+  const parts: string[] = [];
+  let remaining = word;
+
+  while (remaining.length > 0) {
+    let splitIndex = remaining.length;
+
+    while (splitIndex > 1 && context.measureText(`${remaining.slice(0, splitIndex)}-`).width > maxWidth) {
+      splitIndex -= 1;
+    }
+
+    if (splitIndex <= 1) {
+      splitIndex = Math.min(remaining.length, 2);
+    }
+
+    const head = remaining.slice(0, splitIndex);
+    remaining = remaining.slice(splitIndex);
+    parts.push(remaining.length > 0 ? `${head}-` : head);
+  }
+
+  return parts;
+}
+
+function truncateCanvasLine(
+  context: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string {
+  if (context.measureText(text).width <= maxWidth) {
+    return text;
+  }
+
+  let truncated = text;
+
+  while (truncated.length > 1 && context.measureText(`${truncated}…`).width > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+
+  return `${truncated}…`;
 }
 
 function getAlignedCellRect(

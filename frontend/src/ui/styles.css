@@ -295,7 +295,7 @@ textarea {
   border: 1px solid rgba(89, 98, 116, 0.5);
   border-radius: 0;
   color: var(--amiga-text);
-  background: linear-gradient(180deg, #d4d9e4 0%, #b8c0cf 100%);
+  background: linear-gradient(180deg, #d9dee8 0%, #c5ccda 46%, #b7c0d0 54%, #c2cada 100%);
   font-size: 11px;
 }
 
@@ -490,6 +490,11 @@ textarea {
   color: var(--amiga-text);
   background: linear-gradient(180deg, #d5dbe6 0%, #bcc4d2 100%);
   font-size: 11px;
+}
+
+.grid-number-input::-webkit-outer-spin-button,
+.grid-number-input::-webkit-inner-spin-button {
+  opacity: 1;
 }
 
 .panel-note {
