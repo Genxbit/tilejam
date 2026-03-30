@@ -874,3 +874,43 @@ Add a dismissible browser notice for non-Chromium browsers and a resource resolu
 * Chrome/Edge workflows continue to work normally
 * existing features remain supported
 * matches architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 24: Hosted demo project support with toolbar Open Demo action
+
+**Status**
+Completed
+
+**Goal**
+Let hosted Tilejam builds open a bundled demo project from the toolbar so users can try the full workflow without local file setup.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+
+**Prompt**
+Add an `Open Demo` action in the top toolbar that loads a bundled demo project from `frontend/public/demo/` using the normal project-loading path, including its linked source image, working tilesheet, scene file, and related scene/image assets.
+
+**Deliverables**
+
+* add an `Open Demo` button to the top toolbar
+* load a bundled project manifest from `frontend/public/demo/`
+* use the existing URL-based project loading flow rather than a special hardcoded one-off path
+* support the demo project resolving its linked:
+  * source image
+  * working tilesheet PNG
+  * scene file
+  * scene image-layer assets
+* keep the demo asset tree self-contained under `frontend/public/demo/`
+* keep local file/project open flows unchanged
+* make the demo flow work well for static hosting such as GitHub Pages
+
+**Validation**
+
+* clicking `Open Demo` loads the bundled demo project without local file pickers
+* the demo source image, working tilesheet, scene, and linked image assets resolve correctly from `frontend/public/demo/`
+* the demo path works from a production static build, not just Vite dev mode
+* local open/save flows continue to work as before
+* the implementation follows architecture rules in `docs/TECH_WORKFLOW.md`

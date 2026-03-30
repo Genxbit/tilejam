@@ -1,4 +1,4 @@
-import type { ProjectState, TilePlacement } from "../types/project";
+import type { PendingProjectFolderPrompt, ProjectState, TilePlacement } from "../types/project";
 import { renderTilesetPngBlob, saveTilesetPngToHandle, saveTilesetPngWithPicker, saveTilesetTsjWithPicker } from "../io/exportTileset";
 import { loadProjectFile, loadProjectFromHandle, loadProjectFromUrl } from "../io/loadProjectFile";
 import { loadSceneFile, loadSceneFromHandle, loadSceneFromUrl, saveSceneToHandle, saveSceneWithPicker } from "../io/sceneFile";
@@ -186,6 +186,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.projectFileHandle = null;
       state.session.projectDirectoryHandle = null;
       state.session.projectBaseUrl = null;
+      state.session.pendingProjectFolderPrompt = null;
       state.session.workingImageFileName = null;
       state.session.workingImageFileHandle = null;
       state.session.sceneFileName = null;
@@ -235,6 +236,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.seamRepairPreview = freshState.session.seamRepairPreview;
       state.session.unresolvedResources = freshState.session.unresolvedResources;
       state.session.unresolvedResourceScope = freshState.session.unresolvedResourceScope;
+      state.session.pendingProjectFolderPrompt = freshState.session.pendingProjectFolderPrompt;
       state.session.sourceCamera = freshState.session.sourceCamera;
       state.session.outputCamera = freshState.session.outputCamera;
       state.session.sourceImageAssetCache = freshState.session.sourceImageAssetCache;
@@ -251,7 +253,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.projectDirectoryHandle = null;
         state.session.projectBaseUrl = null;
         const unresolved = await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
-        await tryResolveProjectAssetsFromDirectory(state, unresolved);
+        state.session.pendingProjectFolderPrompt = createPendingProjectFolderPrompt(file.name, unresolved);
+        if (state.session.pendingProjectFolderPrompt) {
+          state.session.message = `${state.session.message ?? ""} Choose the project folder to resolve linked files.`.trim();
+        }
         updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
         bumpRenderRevision();
         undoStack.length = 0;
@@ -291,7 +296,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.projectFileHandle = handle;
         state.session.projectBaseUrl = null;
         const unresolved = await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
-        await tryResolveProjectAssetsFromDirectory(state, unresolved);
+        state.session.pendingProjectFolderPrompt = createPendingProjectFolderPrompt(file.name, unresolved);
+        if (state.session.pendingProjectFolderPrompt) {
+          state.session.message = `${state.session.message ?? ""} Choose the project folder to resolve linked files.`.trim();
+        }
         updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
         bumpRenderRevision();
         undoStack.length = 0;
@@ -307,6 +315,27 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
       renderAll();
       return true;
+    },
+    onOpenDemo: async () => {
+      try {
+        const demoProjectUrl = new URL("demo/level1.json", window.location.href).toString();
+        const project = await loadProjectFromUrl(demoProjectUrl);
+        state.session.projectFileName = "level1.json";
+        state.session.projectFileHandle = null;
+        state.session.projectDirectoryHandle = null;
+        state.session.projectBaseUrl = demoProjectUrl;
+        state.session.pendingProjectFolderPrompt = null;
+        await loadProjectIntoState(state, project, "Loaded demo project.");
+        updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
+        bumpRenderRevision();
+        undoStack.length = 0;
+        redoStack.length = 0;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown demo open error.";
+        state.session.message = `Open demo failed: ${message}`;
+      }
+
+      renderAll();
     },
     onSaveProject: async () => {
       try {
@@ -339,6 +368,27 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.message = `Project save failed: ${message}`;
       }
 
+      renderAll();
+    },
+    onConfirmProjectFolderPrompt: async () => {
+      const prompt = state.session.pendingProjectFolderPrompt;
+
+      if (!prompt) {
+        return;
+      }
+
+      const didChooseFolder = await tryResolveProjectAssetsFromDirectory(state, prompt);
+
+      if (didChooseFolder) {
+        state.session.pendingProjectFolderPrompt = null;
+      }
+
+      updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
+      bumpRenderRevision();
+      renderAll();
+    },
+    onCancelProjectFolderPrompt: () => {
+      state.session.pendingProjectFolderPrompt = null;
       renderAll();
     },
     onWorkingImageSelected: async (file) => {
@@ -2588,6 +2638,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.projectFileHandle = null;
       state.session.projectDirectoryHandle = null;
       state.session.projectBaseUrl = null;
+      state.session.pendingProjectFolderPrompt = null;
       clearUnresolvedResources(state);
       state.session.message = "Open a source image, working tilesheet, scene, or project to begin.";
       bumpRenderRevision();
@@ -2905,8 +2956,8 @@ async function resolveUnresolvedResource(
 
 async function tryResolveProjectAssetsFromDirectory(
   state: ProjectState,
-  unresolved: UnresolvedProjectAssets,
-): Promise<void> {
+  unresolved: UnresolvedProjectAssets | PendingProjectFolderPrompt,
+): Promise<boolean> {
   const refs = [unresolved.sourceImageRef, unresolved.workingImageRef, unresolved.sceneFileRef].filter((value): value is string => Boolean(value));
 
   const showDirectoryPicker = (window as Window & {
@@ -2917,7 +2968,7 @@ async function tryResolveProjectAssetsFromDirectory(
   }).showDirectoryPicker;
 
   if (refs.length === 0 || !showDirectoryPicker) {
-    return;
+    return false;
   }
 
   try {
@@ -2988,11 +3039,38 @@ async function tryResolveProjectAssetsFromDirectory(
     if (resolutionMessages.length > 0) {
       state.session.message = `${state.session.message ?? ""} ${resolutionMessages.join(" ")}`.trim();
     }
+    return true;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      return;
+      return false;
     }
+
+    return false;
   }
+}
+
+function createPendingProjectFolderPrompt(
+  projectFileName: string,
+  unresolved: UnresolvedProjectAssets,
+): PendingProjectFolderPrompt | null {
+  const refs = [unresolved.sourceImageRef, unresolved.workingImageRef, unresolved.sceneFileRef].filter((value): value is string => Boolean(value));
+  const showDirectoryPicker = (window as Window & {
+    showDirectoryPicker?: (options?: {
+      id?: string;
+      mode?: "read" | "readwrite";
+    }) => Promise<FileSystemDirectoryHandle>;
+  }).showDirectoryPicker;
+
+  if (refs.length < 1 || !showDirectoryPicker) {
+    return null;
+  }
+
+  return {
+    projectFileName,
+    sourceImageRef: unresolved.sourceImageRef,
+    workingImageRef: unresolved.workingImageRef,
+    sceneFileRef: unresolved.sceneFileRef,
+  };
 }
 
 async function loadWorkingImageIntoState(

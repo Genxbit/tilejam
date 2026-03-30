@@ -34,6 +34,7 @@ export type SessionState = {
   projectFileHandle: FileSystemFileHandle | null;
   projectDirectoryHandle: FileSystemDirectoryHandle | null;
   projectBaseUrl: string | null;
+  pendingProjectFolderPrompt: PendingProjectFolderPrompt | null;
   workingImageFileName: string | null;
   workingImageFileHandle: FileSystemFileHandle | null;
   sceneFileName: string | null;
@@ -95,6 +96,13 @@ export type UnresolvedResource = {
   label: string;
   path: string;
   layerId?: number;
+};
+
+export type PendingProjectFolderPrompt = {
+  projectFileName: string;
+  sourceImageRef: string | null;
+  workingImageRef: string | null;
+  sceneFileRef: string | null;
 };
 
 export type TileSize = 8 | 16 | 32 | 64;

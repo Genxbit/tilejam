@@ -30,6 +30,7 @@ export function createProjectState(): ProjectState {
       projectFileHandle: null,
       projectDirectoryHandle: null,
       projectBaseUrl: null,
+      pendingProjectFolderPrompt: null,
       workingImageFileName: null,
       workingImageFileHandle: null,
       sceneFileName: null,

@@ -28,7 +28,10 @@ type ShellOptions = {
   onNewProject: () => void;
   onProjectSelected: (file: File) => Promise<void>;
   onOpenProject: () => Promise<boolean>;
+  onOpenDemo: () => Promise<void>;
   onSaveProject: () => Promise<void>;
+  onConfirmProjectFolderPrompt: () => Promise<void>;
+  onCancelProjectFolderPrompt: () => void;
   onWorkingImageSelected: (file: File) => Promise<void>;
   onOpenWorkingImage: () => Promise<boolean>;
   onSaveWorkingImage: () => Promise<void>;
@@ -142,7 +145,10 @@ export function createShell({
   onNewProject,
   onProjectSelected,
   onOpenProject,
+  onOpenDemo,
   onSaveProject,
+  onConfirmProjectFolderPrompt,
+  onCancelProjectFolderPrompt,
   onWorkingImageSelected,
   onOpenWorkingImage,
   onSaveWorkingImage,
@@ -333,6 +339,14 @@ export function createShell({
     await onSaveProject();
   });
 
+  const openDemoButton = document.createElement("button");
+  openDemoButton.type = "button";
+  openDemoButton.className = "file-input file-input-secondary";
+  openDemoButton.textContent = "Open demo";
+  openDemoButton.addEventListener("click", async () => {
+    await onOpenDemo();
+  });
+
   const workingImageInputLabel = document.createElement("label");
   workingImageInputLabel.className = "file-input file-input-secondary";
   workingImageInputLabel.textContent = "Open tilesheet";
@@ -374,7 +388,7 @@ export function createShell({
   const newProjectButton = createActionButton("New project", onNewProject);
   const undoButton = createActionButton("Undo", onUndo);
   const redoButton = createActionButton("Redo", onRedo);
-  historyActions.append(newProjectButton, projectInputButton, saveProjectButton, undoButton, redoButton);
+  historyActions.append(openDemoButton, newProjectButton, projectInputButton, saveProjectButton, undoButton, redoButton);
   topBar.append(topBarBrand, historyActions);
 
   const fileActions = document.createElement("div");
@@ -977,7 +991,34 @@ export function createShell({
 
   const resourceDialogOverlay = document.createElement("div");
   resourceDialogOverlay.className = "resource-dialog-overlay";
-  resourceDialogOverlay.hidden = state.session.unresolvedResources.length < 1 || !state.session.unresolvedResourceScope;
+  resourceDialogOverlay.hidden = state.session.unresolvedResources.length < 1
+    || !state.session.unresolvedResourceScope
+    || Boolean(state.session.pendingProjectFolderPrompt);
+
+  const projectFolderPromptOverlay = document.createElement("div");
+  projectFolderPromptOverlay.className = "resource-dialog-overlay";
+  projectFolderPromptOverlay.hidden = !state.session.pendingProjectFolderPrompt;
+
+  const projectFolderPromptDialog = document.createElement("section");
+  projectFolderPromptDialog.className = "resource-dialog";
+  const projectFolderPromptHeader = document.createElement("div");
+  projectFolderPromptHeader.className = "resource-dialog-header";
+  const projectFolderPromptTitle = document.createElement("h2");
+  projectFolderPromptTitle.className = "control-title";
+  projectFolderPromptTitle.textContent = "Choose Project Folder";
+  const projectFolderPromptActions = document.createElement("div");
+  projectFolderPromptActions.className = "panel-actions";
+  const projectFolderPromptChoose = createAsyncActionButton("Choose Folder", onConfirmProjectFolderPrompt);
+  const projectFolderPromptCancel = createActionButton("Cancel", onCancelProjectFolderPrompt);
+  projectFolderPromptActions.append(projectFolderPromptChoose, projectFolderPromptCancel);
+  projectFolderPromptHeader.append(projectFolderPromptTitle, projectFolderPromptActions);
+  const projectFolderPromptCopy = document.createElement("p");
+  projectFolderPromptCopy.className = "field-note";
+  projectFolderPromptCopy.textContent = state.session.pendingProjectFolderPrompt
+    ? `Choose the folder that contains ${state.session.pendingProjectFolderPrompt.projectFileName} and its related files.`
+    : "";
+  projectFolderPromptDialog.append(projectFolderPromptHeader, projectFolderPromptCopy);
+  projectFolderPromptOverlay.append(projectFolderPromptDialog);
 
   const resourceDialog = document.createElement("section");
   resourceDialog.className = "resource-dialog";
@@ -998,7 +1039,7 @@ export function createShell({
 
   panel.append(workspaceTabs, tilesheetWorkspacePanel, sceneWorkspacePanel, notes);
   appShell.append(workspace, panel);
-  appFrame.append(topBar, browserNotice, appShell, resourceDialogOverlay);
+  appFrame.append(topBar, browserNotice, appShell, projectFolderPromptOverlay, resourceDialogOverlay);
   root.append(appFrame);
 
   return {
@@ -1076,7 +1117,13 @@ export function createShell({
       syncTilesheetSubTabState(activeTilesheetSubTab, tilesheetSheetTab, tilesheetTileTab, tilesheetSheetPanel, tilesheetTilePanel);
       syncSceneSubTabState(activeSceneSubTab, sceneMapTab, sceneLayersTab, sceneSelectionTab, sceneMapPanel, sceneLayersPanel, sceneSelectionPanel);
       notes.textContent = nextState.session.message ?? "";
-      resourceDialogOverlay.hidden = nextState.session.unresolvedResources.length < 1 || !nextState.session.unresolvedResourceScope;
+      projectFolderPromptOverlay.hidden = !nextState.session.pendingProjectFolderPrompt;
+      projectFolderPromptCopy.textContent = nextState.session.pendingProjectFolderPrompt
+        ? `Choose the folder that contains ${nextState.session.pendingProjectFolderPrompt.projectFileName} and its related files.`
+        : "";
+      resourceDialogOverlay.hidden = nextState.session.unresolvedResources.length < 1
+        || !nextState.session.unresolvedResourceScope
+        || Boolean(nextState.session.pendingProjectFolderPrompt);
       resourceDialogList.replaceChildren();
       for (const resource of nextState.session.unresolvedResources) {
         const row = document.createElement("div");
