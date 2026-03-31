@@ -1,113 +1,169 @@
+<div align="center">
+
 # Tilejam
 
-Tilejam is a small, data-driven tile editor for turning messy or AI-generated source images into clean, grid-aligned tilesets.
+Tilejam is a compact browser-based tile and scene editor for turning rough or AI-generated tilesheets into clean, grid-aligned game assets.
 
-This repository is currently at the first iteration of the product roadmap. The frontend app includes:
+<p>
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178c6">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-7.x-646cff">
+  <img alt="Canvas" src="https://img.shields.io/badge/Canvas-2D-1f2937">
+  <img alt="Preferred browser" src="https://img.shields.io/badge/Browser-Chrome%20%2F%20Edge-3b82f6">
+</p>
 
-* a Vite + TypeScript scaffold
-* a responsive workspace layout with canvas and side panel
-* default project loading on startup from `latest.tilejam.json`
-* manual source image loading from disk
-* project JSON load and save support
-* canvas rendering of the current source image
+</div>
 
-The source-of-truth product and workflow docs live in [`docs/PRODUCT.md`](/Users/larsdahllof/Development/tilejam/docs/PRODUCT.md), [`docs/TECH_WORKFLOW.md`](/Users/larsdahllof/Development/tilejam/docs/TECH_WORKFLOW.md), [`docs/FORMATS.md`](/Users/larsdahllof/Development/tilejam/docs/FORMATS.md), and [`docs/ITERATIONS.md`](/Users/larsdahllof/Development/tilejam/docs/ITERATIONS.md).
+> This project was developed with Codex.
+>
+> Steering docs:
 
-## Current Status
+* [docs/ONBOARDING.md](docs/ONBOARDING.md): start a new Codex session
+* [docs/PRODUCT.md](docs/PRODUCT.md): product intent, workflow, and scope
+* [docs/TECH_WORKFLOW.md](docs/TECH_WORKFLOW.md): architecture, ticket structure, and prompt template
+* [docs/FORMATS.md](docs/FORMATS.md): project, export, and file format rules
+* [docs/ITERATIONS.md](docs/ITERATIONS.md): roadmap and current tickets
 
-The project currently implements Ticket 1 from [`docs/ITERATIONS.md`](/Users/larsdahllof/Development/tilejam/docs/ITERATIONS.md):
+<p align="center">
+<img src="docs/tilejam-tilesheet-screen.png" alt="Tilejam tilesheet editor" width="100%" />
+</p>
 
-* project scaffold
-* responsive layout
-* canvas setup
-* source image load and render
+<p align="center">
+<img src="docs/tilejamn-scene.screen.png" alt="Tilejam scene editor" width="100%" />
+</p>
 
-Grid editing, tile placement, transforms, and export are planned in later tickets.
+## What It Does
 
-The checked-in default project file lives at [`frontend/public/projects/latest.tilejam.json`](/Users/larsdahllof/Development/tilejam/frontend/public/projects/latest.tilejam.json).
+**Tilesheet editor**
 
-Project files store a `sourceImage` reference, not embedded image binary data. App-served images can be restored automatically; local images loaded from disk may need to be relinked when reopening a project in the browser.
+* load a source image or working tilesheet
+* place source regions into an editable output tilesheet
+* crop, repair, transform, and export PNG / TSJ
 
-## Project Structure
+**Scene editor**
 
-The frontend follows the structure defined in [`docs/TECH_WORKFLOW.md`](/Users/larsdahllof/Development/tilejam/docs/TECH_WORKFLOW.md):
+* use the current tilesheet as the scene palette
+* place and edit tiles across layers
+* support TMJ scene files and image layers
 
-```text
-frontend/
-  public/
-  src/
-    app/
-    data/
-    rendering/
-    systems/
-    types/
-    ui/
-```
+## Browser
 
-High-level responsibilities:
+Tilejam runs in the browser, but it is designed for desktop-style local file workflows.
 
-* `app/` wires the application together
-* `data/` owns editable state
-* `systems/` contains domain behavior such as image loading
-* `rendering/` draws the current state to canvas
-* `ui/` creates the layout and input controls
-* `types/` defines shared data shapes
+Chrome or Edge is the preferred browser because Tilejam relies on the File System Access API for the best open/save experience and there is no backend server. Other browsers can still run the app, but some project and file flows are more limited.
 
-## Run
+## Run Locally
 
 Requirements:
 
-* Node.js 20+ recommended
-* npm 10+ recommended
-
-Install dependencies:
+* Node.js 20+
+* npm
 
 ```bash
 npm install
-```
-
-Start the development server:
-
-```bash
 npm run dev
 ```
 
-By default, Vite serves the app at:
+Open the local URL printed by Vite, usually [http://localhost:5174](http://localhost:5174).
 
-```text
-http://localhost:5174/
-```
-
-If that port is busy, Vite will print a different local URL in the terminal. Open the reported URL in your web browser.
-
-On startup, the app attempts to load the default project from [`frontend/public/projects/latest.tilejam.json`](/Users/larsdahllof/Development/tilejam/frontend/public/projects/latest.tilejam.json). If that file cannot be loaded, it falls back to the bundled sample image.
-
-## Test
-
-There is not a formal automated test suite yet. For now, validation is done with a production build and a quick manual smoke test.
-
-Build the app:
+## Production Build
 
 ```bash
 npm run build
-```
-
-Optional preview of the production build:
-
-```bash
 npm run preview
 ```
 
-Manual smoke test checklist:
+For a Pages-like local test, you can also serve `frontend/dist` with a static server after `npm run build`.
 
-* the app loads without errors
-* the default project loads and the source image is visible on the canvas
-* the layout stays usable when resizing the window
-* choosing a local image updates the canvas and side panel metadata
-* loading a `.tilejam.json` file updates the current project state
-* saving the project writes back to the opened file in supported browsers
-* browsers without file-system write access fall back to save-as or download behavior
+## GitHub Pages
 
-## Next Steps
+Tilejam can run on GitHub Pages as a static site once the repository is published there.
 
-The next roadmap item is Ticket 2: tile grid support with configurable tile sizes and grid overlay rendering.
+Use the hosted app for:
+
+* `Open Demo` to try the bundled example setup
+* local source / tilesheet / scene / project files from your own machine
+* local exports and saves back to your own disk
+
+For the best hosted file workflow, use Chrome or Edge.
+
+> GitHub Pages serves the app, but your project files, scene files, and exports still stay on your own disk.
+
+## Preferred Project Folder Structure
+
+A compact folder layout like [docs/examples](docs/examples) works best for linked project files:
+
+```text
+your-project/
+  level1.json
+  level1.tmj
+  level1.tsj
+  source-textures/
+    mountain-sheet.png
+  textures/
+    mountain-sheet.png
+    clouds-bg.png
+```
+
+Use the project JSON, scene file, tileset files, and related source/image assets in the same project folder tree so Tilejam can resolve linked files correctly.
+
+## Creating Source Sheets With ChatGPT
+
+You can generate input source sheets in ChatGPT and then clean them up in Tilejam.
+
+These source sheets are often useful but not perfectly aligned. Tilejam helps crop, place, adjust, and repair them into a clean working tilesheet.
+
+Prompt template:
+
+```text
+Create a 1024x1024 pixel art tileset in a 32x32 grid (32x32px tiles).
+
+Style: polished cartoon pixel art with soft shading, subtle gradients, rounded forms, and vibrant colors, similar to modern mobile games.
+
+Theme: [INSERT THEME]
+
+Requirements:
+- Tiles strictly aligned to grid, no overlap between tiles
+- Uniform removable background (transparent-style or flat color)
+- Group similar assets per horizontal row (no mixed categories)
+- Terrain/background rows must tile seamlessly horizontally
+- Consistent lighting, scale, and color harmony across all tiles
+```
+
+<details>
+<summary>Why Tilejam helps after generation</summary>
+
+AI-generated source sheets are often close, but not clean enough to use directly. Tilejam is there to crop, align, place, repair seams, and rebuild a usable working tilesheet.
+
+</details>
+
+## Codex Workflow
+
+Typical feature workflow:
+
+1. discuss the feature and desired behavior with Codex
+2. ask Codex to create a ticket in [docs/ITERATIONS.md](docs/ITERATIONS.md) using the ticket structure from [docs/TECH_WORKFLOW.md](docs/TECH_WORKFLOW.md)
+3. ask Codex to implement that ticket
+4. ask Codex to validate architecture and design against `TECH_WORKFLOW.md`
+
+Use the `Codex Prompt Template` in [docs/TECH_WORKFLOW.md](docs/TECH_WORKFLOW.md) when you want a compact implementation prompt.
+
+Common Codex tasks:
+
+* create or update the next ticket in `docs/ITERATIONS.md`
+* implement a specific ticket from `docs/ITERATIONS.md`
+* validate architecture against `docs/TECH_WORKFLOW.md`
+* validate UX/design against the same rules
+* review UX, grouping, and editor layout before coding
+* update product, workflow, format, or iteration docs when rules change
+* check browser and static-host behavior for Chrome, Edge, Safari, and GitHub Pages
+
+## Start A New Codex Session
+
+Use [docs/ONBOARDING.md](docs/ONBOARDING.md) to initialize a new session.
+
+Suggested start:
+
+1. ask Codex to use `docs/ONBOARDING.md`
+2. review the current ticket and steering docs
+3. discuss the next change
+4. create or refine the next ticket before implementation
