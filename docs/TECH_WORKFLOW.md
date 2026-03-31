@@ -282,12 +282,24 @@ Notes:
 
 ## Ticket Structure
 
+Use this structure for tickets in `docs/ITERATIONS.md`:
+
+* title
+* status
 * goal
+* docs when specific source docs should guide the work
 * prompt
 * deliverables
 * validation
 
-Keep tickets small.
+Ticket rules:
+
+* keep tickets small
+* keep the app runnable
+* keep prompts concrete and implementation-focused
+* list deliverables as explicit observable outcomes
+* preserve existing supported features unless the ticket explicitly changes them
+* validation should tie back to relevant rules in `docs/TECH_WORKFLOW.md`, including architecture when applicable
 
 ---
 
@@ -306,14 +318,18 @@ Task
 Implement the current ticket from `docs/ITERATIONS.md`.
 
 Docs
+Use the docs listed in the current ticket when present, plus:
 `docs/PRODUCT.md`
 `docs/TECH_WORKFLOW.md`
 `docs/FORMATS.md`
 
 Deliver
-Expected systems, files, or behavior.
+Implement the expected systems, files, and behavior from the ticket deliverables.
+Preserve existing supported features unless the ticket explicitly changes them.
+Keep the app runnable.
 
 Validate
-How the result should be verified.
+Verify the ticket validation criteria.
+Tie validation back to relevant rules in `docs/TECH_WORKFLOW.md`, including architecture when applicable.
 
 If rules are missing, update `docs/PRODUCT.md` or `docs/FORMATS.md` first.

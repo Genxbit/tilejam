@@ -10,6 +10,17 @@ Keep tickets small. Keep the app runnable.
 
 ---
 
+## Ticket Template
+
+All tickets in this file should follow `Ticket Structure` in `docs/TECH_WORKFLOW.md`.
+
+Additional iteration rules:
+
+* keep tickets small and runnable
+* preserve existing supported features unless the ticket explicitly changes them
+
+---
+
 ## Ticket 1: Scaffold + layout + image loading
 
 **Status**
