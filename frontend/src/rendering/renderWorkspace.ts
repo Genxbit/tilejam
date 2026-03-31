@@ -185,10 +185,6 @@ function drawGridOverlay(
   state: ProjectState,
   viewport: SourceViewport,
 ): void {
-  if (state.session.activeWorkspaceMode === "tilesheet" && !state.session.showTilesheetGrid) {
-    return;
-  }
-
   const sourceMetrics = getSourcePanelMetrics(state);
 
   if (!sourceMetrics || sourceMetrics.columns < 1 || sourceMetrics.rows < 1) {
