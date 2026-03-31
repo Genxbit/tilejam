@@ -22,7 +22,7 @@
       "parallaxy": 0.001,
       "repeatx": true,
       "repeaty": true,
-      "image": "clouds-bg.png"
+      "image": "textures/clouds-bg.png"
     },
     {
       "id": 2,
