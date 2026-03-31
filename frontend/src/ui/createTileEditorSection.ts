@@ -852,6 +852,8 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
         nextState,
         {
           selectionCount: nextState.session.selectedOutputCells.length > 0 ? nextState.session.selectedOutputCells.length : nextSelectedTiles.length,
+          selectedTileCount: nextSelectedTiles.length,
+          clipboardAvailable: Boolean(nextState.session.outputTileClipboard),
           copyButton: copyTileButton,
           pasteButton: pasteTileButton,
           clearButton: clearTileButton,
@@ -1153,6 +1155,8 @@ function syncSelectedTileEditor(
   state: ProjectState,
   controls: {
     selectionCount: number;
+    selectedTileCount: number;
+    clipboardAvailable: boolean;
     copyButton: HTMLButtonElement;
     pasteButton: HTMLButtonElement;
     clearButton: HTMLButtonElement;
@@ -1220,7 +1224,8 @@ function syncSelectedTileEditor(
   ];
 
   if (!tile) {
-    controls.copyButton.disabled = true;
+    controls.copyButton.disabled = controls.selectedTileCount < 1;
+    controls.pasteButton.disabled = !controls.clipboardAvailable;
     controls.clearButton.disabled = true;
     for (const input of inputs) {
       input.disabled = true;
@@ -1228,8 +1233,8 @@ function syncSelectedTileEditor(
     return;
   }
 
-  controls.copyButton.disabled = false;
-  controls.pasteButton.disabled = false;
+  controls.copyButton.disabled = controls.selectedTileCount < 1;
+  controls.pasteButton.disabled = !controls.clipboardAvailable;
   controls.clearButton.disabled = false;
   setInputValueUnlessFocused(controls.tileColInput, `${tile.destCol}`);
   setInputValueUnlessFocused(controls.tileRowInput, `${tile.destRow}`);

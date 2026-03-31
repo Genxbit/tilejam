@@ -144,9 +144,20 @@ function drawSourcePanel(
         drawTilesheetPalette(baseContext, state, viewport);
       } else {
         const sourceAsset = getResolvedSourceImageAsset(state);
+        const sourceMetrics = getSourcePanelMetrics(state);
 
-        if (sourceAsset.image) {
-          baseContext.drawImage(sourceAsset.image, viewport.contentX, viewport.contentY, viewport.contentWidth, viewport.contentHeight);
+        if (sourceAsset.image && sourceMetrics) {
+          baseContext.drawImage(
+            sourceAsset.image,
+            0,
+            0,
+            sourceMetrics.pixelWidth,
+            sourceMetrics.pixelHeight,
+            viewport.contentX,
+            viewport.contentY,
+            viewport.contentWidth,
+            viewport.contentHeight,
+          );
         }
       }
       drawGridOverlay(baseContext, state, viewport);

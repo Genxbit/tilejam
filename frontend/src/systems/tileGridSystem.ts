@@ -1,6 +1,6 @@
 import type { ProjectState, TileSize, TilejamProject } from "../types/project";
 
-export const TILE_SIZE_OPTIONS: TileSize[] = [8, 16, 32, 64];
+export const TILE_SIZE_OPTIONS: TileSize[] = [8, 16, 32, 64, 128, 256, 512, 1024];
 
 export type SourceGridMetrics = {
   columns: number;

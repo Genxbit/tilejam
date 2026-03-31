@@ -275,10 +275,10 @@ export function getSourcePanelMetrics(state: ProjectState): {
   }
 
   return {
-    pixelWidth: image.width,
-    pixelHeight: image.height,
     columns: Math.max(1, Math.floor(image.width / state.project.sourceTileWidth)),
     rows: Math.max(1, Math.floor(image.height / state.project.sourceTileHeight)),
+    pixelWidth: Math.max(1, Math.floor(image.width / state.project.sourceTileWidth)) * state.project.sourceTileWidth,
+    pixelHeight: Math.max(1, Math.floor(image.height / state.project.sourceTileHeight)) * state.project.sourceTileHeight,
     tileWidth: state.project.sourceTileWidth,
     tileHeight: state.project.sourceTileHeight,
   };

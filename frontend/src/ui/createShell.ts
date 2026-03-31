@@ -5,6 +5,7 @@ import type {
   SeamDirection,
   SeamRepairMode,
   SeamRepairReference,
+  TileSize,
   TileAnchorX,
   TileAnchorY,
   TileFitMode,
@@ -47,8 +48,8 @@ type ShellOptions = {
   onDeleteSceneSelection: () => void;
   onMoveSceneSelection: (deltaCol: number, deltaRow: number) => void;
   onWorkspaceModeChanged: (mode: WorkspaceMode) => void;
-  onSourceGridSizeChanged: (tileSize: 8 | 16 | 32 | 64) => void;
-  onOutputTileSizeChanged: (tileSize: 8 | 16 | 32 | 64) => Promise<void>;
+  onSourceGridSizeChanged: (tileSize: TileSize) => void;
+  onOutputTileSizeChanged: (tileSize: TileSize) => Promise<void>;
   onOutputWidthChanged: (width: number) => void;
   onOutputHeightChanged: (height: number) => void;
   onSceneWidthChanged: (width: number) => void;
@@ -462,8 +463,8 @@ export function createShell({
   sourceGridSelect.addEventListener("change", () => {
     const tileSize = Number.parseInt(sourceGridSelect.value, 10);
 
-    if (tileSize === 8 || tileSize === 16 || tileSize === 32 || tileSize === 64) {
-      onSourceGridSizeChanged(tileSize);
+    if (TILE_SIZE_OPTIONS.includes(tileSize as TileSize)) {
+      onSourceGridSizeChanged(tileSize as TileSize);
     }
   });
 
@@ -488,8 +489,8 @@ export function createShell({
   outputTileSelect.addEventListener("change", async () => {
     const tileSize = Number.parseInt(outputTileSelect.value, 10);
 
-    if (tileSize === 8 || tileSize === 16 || tileSize === 32 || tileSize === 64) {
-      await onOutputTileSizeChanged(tileSize);
+    if (TILE_SIZE_OPTIONS.includes(tileSize as TileSize)) {
+      await onOutputTileSizeChanged(tileSize as TileSize);
     }
   });
 

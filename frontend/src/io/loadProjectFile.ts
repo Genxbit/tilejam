@@ -96,17 +96,17 @@ function createPersistedProject(project: TilejamProject): {
   return persistedProject;
 }
 
-function readTileSize(value: unknown, path: string): 8 | 16 | 32 | 64 {
+function readTileSize(value: unknown, path: string): 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 {
   const size = readNumber(value, path);
 
-  if (size !== 8 && size !== 16 && size !== 32 && size !== 64) {
-    throw new Error(`${path} must be 8, 16, 32, or 64.`);
+  if (size !== 8 && size !== 16 && size !== 32 && size !== 64 && size !== 128 && size !== 256 && size !== 512 && size !== 1024) {
+    throw new Error(`${path} must be 8, 16, 32, 64, 128, 256, 512, or 1024.`);
   }
 
   return size;
 }
 
-function readOptionalTileSize(value: unknown, fallbackValue: unknown, path: string): 8 | 16 | 32 | 64 {
+function readOptionalTileSize(value: unknown, fallbackValue: unknown, path: string): 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024 {
   if (value === undefined) {
     return readTileSize(fallbackValue, path);
   }

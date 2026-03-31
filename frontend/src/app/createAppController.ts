@@ -68,6 +68,7 @@ import {
   clearTileLayoutPreview,
   ensureDragMovePreview,
   ensureGroupTransformPreview,
+  getSelectedOutputBounds,
   ensureTileLayoutPreview,
   getSelectedTileGroupSignature,
   syncTransformPreviewState,
@@ -782,13 +783,17 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       recordHistory();
       const previousTileWidth = state.project.tileWidth;
       const previousTileHeight = state.project.tileHeight;
+      const previousWorkingImage = state.project.workingImage;
+      const previousWorkingImageFileName = state.session.workingImageFileName;
 
       try {
-        const workingTilesheetRef = state.session.workingImageFileName ?? getDisplayFileName(state.project.workingImage);
-        const canResliceCurrentWorkingTilesheet = Boolean(workingTilesheetRef && state.project.tiles.length > 0);
+        const workingTilesheetRef = state.session.workingImageFileName
+          ?? getDisplayFileName(state.project.workingImage)
+          ?? "working-tilesheet.png";
+        const canResliceCurrentWorkingTilesheet = state.project.tiles.length > 0;
         let currentTilesheetSnapshotFile: File | null = null;
 
-        if (canResliceCurrentWorkingTilesheet && workingTilesheetRef) {
+        if (canResliceCurrentWorkingTilesheet) {
           const { blob, missingTileCount } = await renderTilesetPngBlob(state);
 
           if (missingTileCount > 0) {
@@ -800,7 +805,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
         setOutputTileSize(state, tileSize);
 
-        if (currentTilesheetSnapshotFile && workingTilesheetRef) {
+        if (currentTilesheetSnapshotFile) {
           const cachedWorkingTilesheetRef = await loadImageAssetFromFile(
             state,
             currentTilesheetSnapshotFile,
@@ -818,6 +823,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
             cachedWorkingTilesheet.width,
             cachedWorkingTilesheet.height,
           );
+          state.project.workingImage = workingTilesheetRef;
+          state.session.workingImageFileName = workingTilesheetRef;
           bumpRenderRevision();
           const grid = getOutputGridMetrics(state.project);
           const outputPixels = getProjectPixelSize(state.project);
@@ -837,6 +844,8 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         undoStack.pop();
         state.project.tileWidth = previousTileWidth;
         state.project.tileHeight = previousTileHeight;
+        state.project.workingImage = previousWorkingImage;
+        state.session.workingImageFileName = previousWorkingImageFileName;
         const message = error instanceof Error ? error.message : "Unknown output tile size error.";
         state.session.message = `Output tile change failed: ${message}`;
       }
@@ -1617,6 +1626,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       }
 
       const target = state.session.hoveredOutputTile
+        ?? (() => {
+          const bounds = getSelectedOutputBounds(state);
+          return bounds ? { col: bounds.minCol, row: bounds.minRow } : null;
+        })()
         ?? (() => {
           const tile = getSelectedOutputTile(state);
           return tile ? { col: tile.destCol, row: tile.destRow } : null;
@@ -2586,6 +2599,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
       if (state.session.activeWorkspaceMode === "tilesheet" && state.session.outputTileClipboard) {
         const target = state.session.hoveredOutputTile
+          ?? (() => {
+            const bounds = getSelectedOutputBounds(state);
+            return bounds ? { col: bounds.minCol, row: bounds.minRow } : null;
+          })()
           ?? (() => {
             const tile = getSelectedOutputTile(state);
             return tile ? { col: tile.destCol, row: tile.destRow } : null;
