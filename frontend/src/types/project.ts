@@ -64,7 +64,7 @@ export type SessionState = {
   selectedSceneCell: GridCoordinate | null;
   selectedSceneCells: GridCoordinate[];
   hoveredPanel: WorkspacePanel | null;
-  tilePreviewMode: TilePreviewMode;
+  showTilesheetGrid: boolean;
   showSceneGrid: boolean;
   scenePreviewPointer: { x: number; y: number } | null;
   fillTileColor: string;
@@ -226,7 +226,6 @@ export type TileFilterMode = "nearest" | "linear";
 export type TileFitMode = "manual" | "stretch" | "contain";
 export type TileAnchorX = "left" | "center" | "right";
 export type TileAnchorY = "top" | "center" | "bottom";
-export type TilePreviewMode = "none" | "repeat" | "neighbors";
 export type ColorReplaceTargetMode = "transparent" | "color";
 export type SeamDirection = "left" | "right" | "top" | "bottom";
 export type SeamRepairMode = "full" | "luminance" | "chroma";

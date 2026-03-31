@@ -8,7 +8,6 @@ import type {
   TileAnchorY,
   TileFilterMode,
   TileFitMode,
-  TilePreviewMode,
 } from "../types/project";
 import { getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
 import { getSeamRepairPair } from "../systems/seamRepairSystem";
@@ -71,7 +70,6 @@ type TileEditorCallbacks = {
   onBakeSelectedTileEdgeExtend: () => Promise<void>;
   onRotateSelectedTile: (delta: 1 | -1) => void;
   onTrimSelectedTileTransparent: () => void;
-  onTilePreviewModeChanged: (previewMode: TilePreviewMode) => void;
   onFillTileColorChanged: (color: string) => void;
   onApplyTileFill: () => Promise<void>;
   onColorReplaceSourceColorChanged: (color: string) => void;
@@ -424,35 +422,6 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
     createActionButton("Rotate +90", () => { callbacks.onRotateSelectedTile(1); }),
   );
 
-  const previewField = document.createElement("label");
-  previewField.className = "field-group";
-  const previewLabel = document.createElement("span");
-  previewLabel.className = "field-label";
-  previewLabel.textContent = "Preview mode";
-  const previewSelect = document.createElement("select");
-  previewSelect.className = "tile-size-select";
-  [
-    ["none", "None"],
-    ["repeat", "Repeat"],
-    ["neighbors", "Neighbors"],
-  ].forEach(([value, label]) => {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    previewSelect.append(option);
-  });
-  previewSelect.value = state.session.tilePreviewMode;
-  previewSelect.addEventListener("change", () => {
-    if (previewSelect.value === "none" || previewSelect.value === "repeat" || previewSelect.value === "neighbors") {
-      callbacks.onTilePreviewModeChanged(previewSelect.value);
-    }
-  });
-  previewField.append(previewLabel, previewSelect);
-
-  const previewNote = document.createElement("p");
-  previewNote.className = "field-note";
-  previewNote.textContent = "Preview is shown on the canvas for the selected tile.";
-
   const colorInputs = document.createElement("div");
   colorInputs.className = "grid-inputs";
   const brightnessField = createLabeledNumberField("Brightness", selectedTile?.brightness ?? 0, "Brightness", undefined, 0.1);
@@ -768,10 +737,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
     createEditorGroup("Color Replace", colorReplaceSection),
     createEditorGroup("Seam Repair", seamRepairSection),
   );
-  propertiesPanel.append(
-    createEditorGroup("Preview", previewField, previewNote),
-    createEditorGroup("Metadata", metadataInputs),
-  );
+  propertiesPanel.append(createEditorGroup("Metadata", metadataInputs));
 
   syncScaleControls(selectedTile, selectedTiles.length, scaleModeToggle, scaleXField.input, scaleYField.input, currentEditMode, state);
   syncGroupTransformUi(
@@ -817,7 +783,6 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
       currentGroupOffsetX = nextState.session.groupOffsetX;
       currentGroupOffsetY = nextState.session.groupOffsetY;
       currentEditMode = nextState.session.tileMultiEditMode;
-      previewSelect.value = nextState.session.tilePreviewMode;
       manualFitButton.dataset.active = nextSelectedTile?.fitMode === "manual" ? "true" : "false";
       stretchFitButton.dataset.active = nextSelectedTile?.fitMode === "stretch" ? "true" : "false";
       containFitButton.dataset.active = nextSelectedTile?.fitMode === "contain" ? "true" : "false";

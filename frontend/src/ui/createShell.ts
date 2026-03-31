@@ -9,7 +9,6 @@ import type {
   TileAnchorX,
   TileAnchorY,
   TileFitMode,
-  TilePreviewMode,
   WorkspaceMode,
 } from "../types/project";
 import { getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
@@ -73,6 +72,7 @@ type ShellOptions = {
     repeatY?: boolean;
   }) => void;
   onSceneLayerMoved: (delta: -1 | 1) => void;
+  onTilesheetGridVisibilityChanged: (visible: boolean) => void;
   onSceneGridVisibilityChanged: (visible: boolean) => void;
   onTileMultiEditModeChanged: (mode: "individual" | "group") => void;
   onSelectedTileUpdated: (patch: SelectedTilePatch) => Promise<void>;
@@ -97,7 +97,6 @@ type ShellOptions = {
   onBakeSelectedTileEdgeExtend: () => Promise<void>;
   onRotateSelectedTile: (delta: 1 | -1) => void;
   onTrimSelectedTileTransparent: () => void;
-  onTilePreviewModeChanged: (previewMode: TilePreviewMode) => void;
   onFillTileColorChanged: (color: string) => void;
   onApplyTileFill: () => Promise<void>;
   onColorReplaceSourceColorChanged: (color: string) => void;
@@ -178,6 +177,7 @@ export function createShell({
   onOpenSceneLayerImage,
   onSceneLayerUpdated,
   onSceneLayerMoved,
+  onTilesheetGridVisibilityChanged,
   onSceneGridVisibilityChanged,
   onTileMultiEditModeChanged,
   onSelectedTileUpdated,
@@ -197,7 +197,6 @@ export function createShell({
   onBakeSelectedTileEdgeExtend,
   onRotateSelectedTile,
   onTrimSelectedTileTransparent,
-  onTilePreviewModeChanged,
   onFillTileColorChanged,
   onApplyTileFill,
   onColorReplaceSourceColorChanged,
@@ -524,6 +523,15 @@ export function createShell({
   const setupSection = createControlSection("Sheet Setup", "Set the source grid, output size, and exported tile size together.");
   const controls = document.createElement("div");
   controls.className = "grid-controls";
+  const tilesheetGridToggle = createCheckboxField("Hide grid", !state.session.showTilesheetGrid, (checked) => {
+    onTilesheetGridVisibilityChanged(!checked);
+  });
+  const tilesheetGridField = document.createElement("div");
+  tilesheetGridField.className = "number-field";
+  const tilesheetGridLabel = document.createElement("span");
+  tilesheetGridLabel.className = "number-field-label";
+  tilesheetGridLabel.textContent = "Tilesheet grid";
+  tilesheetGridField.append(tilesheetGridLabel, tilesheetGridToggle);
 
   const derivedGridField = document.createElement("div");
   derivedGridField.className = "field-group";
@@ -569,7 +577,6 @@ export function createShell({
     onBakeSelectedTileEdgeExtend,
     onRotateSelectedTile,
     onTrimSelectedTileTransparent,
-    onTilePreviewModeChanged,
     onFillTileColorChanged,
     onApplyTileFill,
     onColorReplaceSourceColorChanged,
@@ -622,7 +629,7 @@ export function createShell({
   items.forEach((item) => metadata.append(item.term, item.description));
 
   controls.append(sourceGridField, outputGridField, outputTileField, derivedGridField);
-  setupSection.append(controls);
+  setupSection.append(tilesheetGridField, controls);
   const tilesheetPanelContent = document.createElement("div");
   tilesheetPanelContent.className = "sidebar-section-stack";
   const sheetStatusSection = createControlSection("Status", "Quick sheet summary.");
@@ -1069,6 +1076,7 @@ export function createShell({
       tileEditor.update(nextState);
       sourceGridSelect.value = `${nextState.project.sourceTileWidth}`;
       outputTileSelect.value = `${nextState.project.tileWidth}`;
+      (tilesheetGridToggle.querySelector("input") as HTMLInputElement).checked = !nextState.session.showTilesheetGrid;
       widthInput.value = `${nextState.project.outputWidth}`;
       heightInput.value = `${nextState.project.outputHeight}`;
       sceneWidthField.input.value = `${nextState.project.scene?.width ?? 32}`;

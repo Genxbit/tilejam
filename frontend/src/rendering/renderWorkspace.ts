@@ -185,6 +185,10 @@ function drawGridOverlay(
   state: ProjectState,
   viewport: SourceViewport,
 ): void {
+  if (state.session.activeWorkspaceMode === "tilesheet" && !state.session.showTilesheetGrid) {
+    return;
+  }
+
   const sourceMetrics = getSourcePanelMetrics(state);
 
   if (!sourceMetrics || sourceMetrics.columns < 1 || sourceMetrics.rows < 1) {
@@ -305,9 +309,9 @@ function drawOutputGrid(
   context.strokeStyle = GRID_STRONG;
   context.lineWidth = 1.5;
   context.strokeRect(viewport.frame.x + 0.5, viewport.frame.y + 0.5, viewport.frame.width - 1, viewport.frame.height - 1);
-  drawTilePreview(context, state, viewport);
-
-  const shouldDrawGrid = state.session.activeWorkspaceMode !== "scene" || state.session.showSceneGrid;
+  const shouldDrawGrid = state.session.activeWorkspaceMode === "scene"
+    ? state.session.showSceneGrid
+    : state.session.showTilesheetGrid;
 
   if (!shouldDrawGrid) {
     context.fillStyle = VIEW_HINT;
@@ -968,90 +972,6 @@ function drawHoveredOutputTile(
   context.strokeStyle = SELECTION_STROKE;
   context.lineWidth = 1.5;
   context.strokeRect(x + 0.5, y + 0.5, viewport.cellWidth - 1, viewport.cellHeight - 1);
-}
-
-function drawTilePreview(
-  context: CanvasRenderingContext2D,
-  state: ProjectState,
-  viewport: OutputViewport,
-): void {
-  const selectedTile = getSelectedOutputTile(state);
-  const previewMode = state.session.tilePreviewMode;
-
-  if (!selectedTile || previewMode === "none" || state.session.activeWorkspaceMode === "scene") {
-    return;
-  }
-
-  const image = getSourceImageForRef(state, selectedTile.sourceImageRef) ?? state.sourceImageAsset.image;
-
-  if (!image) {
-    return;
-  }
-
-  const previewSize = 96;
-  const cardPadding = 12;
-  const gap = 2;
-  const cardWidth = previewSize + cardPadding * 2;
-  const cardHeight = previewSize + cardPadding * 2 + 22;
-  const cardX = viewport.frame.x + viewport.frame.width - cardWidth - 10;
-  const cardY = viewport.frame.y + 10;
-  const cellSize = Math.floor((previewSize - gap * 2) / 3);
-
-  context.save();
-  context.fillStyle = "rgba(7, 16, 22, 0.92)";
-  context.strokeStyle = BORDER;
-  context.lineWidth = 1;
-  roundRect(context, cardX, cardY, cardWidth, cardHeight, 12);
-  context.fill();
-  context.stroke();
-
-  context.fillStyle = LABEL;
-  context.font = "12px monospace";
-  context.fillText(previewMode === "repeat" ? "Repeat Preview" : "Neighbor Preview", cardX + 12, cardY + 18);
-
-  const originX = cardX + cardPadding;
-  const originY = cardY + 28;
-
-  for (let row = 0; row < 3; row += 1) {
-    for (let col = 0; col < 3; col += 1) {
-      const drawX = originX + col * (cellSize + gap);
-      const drawY = originY + row * (cellSize + gap);
-
-      context.fillStyle = "rgba(12, 28, 40, 0.95)";
-      context.fillRect(drawX, drawY, cellSize, cellSize);
-
-      const tile = previewMode === "repeat"
-        ? selectedTile
-        : getNeighborPreviewTile(state, selectedTile.destCol + col - 1, selectedTile.destRow + row - 1) ?? selectedTile;
-
-      const tileImage = getSourceImageForRef(state, tile.sourceImageRef) ?? image;
-      drawTileIntoRect(
-        context,
-        tileImage,
-        tile,
-        drawX,
-        drawY,
-        state.project.tileWidth,
-        state.project.tileHeight,
-        cellSize / state.project.tileWidth,
-        cellSize / state.project.tileHeight,
-      );
-
-      context.strokeStyle = col === 1 && row === 1 ? SELECTED_TILE_STROKE : "rgba(198, 215, 229, 0.15)";
-      context.lineWidth = col === 1 && row === 1 ? 1.5 : 1;
-      context.strokeRect(drawX + 0.5, drawY + 0.5, cellSize - 1, cellSize - 1);
-    }
-  }
-
-  context.restore();
-}
-
-function getNeighborPreviewTile(
-  state: ProjectState,
-  col: number,
-  row: number,
-): ProjectState["project"]["tiles"][number] | null {
-  return state.project.tiles.find((tile) => tile.destCol === col && tile.destRow === row) ?? null;
 }
 
 function roundRect(

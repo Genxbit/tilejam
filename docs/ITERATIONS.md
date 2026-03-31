@@ -914,3 +914,41 @@ Add an `Open Demo` action in the top toolbar that loads a bundled demo project f
 * the demo path works from a production static build, not just Vite dev mode
 * local open/save flows continue to work as before
 * the implementation follows architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 25: Tilesheet grid visibility and selection-anchored paste cleanup
+
+**Status**
+Completed
+
+**Goal**
+Make the tilesheet editing workflow cleaner by letting the user hide the tilesheet grid and making paste anchor only to the current tilesheet selection.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+
+**Prompt**
+Replace the old tilesheet preview path with a direct tilesheet grid visibility toggle in `Tilesheet -> Sheet`, remove the unused preview code, and make tilesheet paste use the selected tile or selected patch as its destination instead of the hovered cell.
+
+**Deliverables**
+
+* add a `Tilesheet grid` visibility toggle high in `Tilesheet -> Sheet`
+* hide/show the tilesheet grid overlays without affecting scene grid behavior
+* remove the old unused tile preview mode state, UI, callbacks, and canvas rendering code
+* make tilesheet paste anchor to:
+  * the selected patch bounds, or
+  * the selected tile
+* require an actual tilesheet selection before paste can occur
+* stop hover-only paste targeting in the tilesheet
+
+**Validation**
+
+* the tilesheet grid can be hidden and shown from `Tilesheet -> Sheet`
+* tilesheet mode no longer depends on the removed old preview path
+* pasting in the tilesheet places content at the selected tile or selected patch origin
+* paste does not use the mouse hover position when no selection exists
+* existing tilesheet editing behavior remains supported
+* the implementation follows architecture rules in `docs/TECH_WORKFLOW.md`

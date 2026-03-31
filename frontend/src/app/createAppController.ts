@@ -217,7 +217,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.selectedSceneCell = freshState.session.selectedSceneCell;
       state.session.selectedSceneCells = freshState.session.selectedSceneCells;
       state.session.hoveredPanel = freshState.session.hoveredPanel;
-      state.session.tilePreviewMode = freshState.session.tilePreviewMode;
+      state.session.showTilesheetGrid = freshState.session.showTilesheetGrid;
       state.session.showSceneGrid = freshState.session.showSceneGrid;
       state.session.scenePreviewPointer = freshState.session.scenePreviewPointer;
       state.session.fillTileColor = freshState.session.fillTileColor;
@@ -1025,6 +1025,11 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = `Moved scene layer ${layer.name} ${delta < 0 ? "up" : "down"} in the stack.`;
       renderAll();
     },
+    onTilesheetGridVisibilityChanged: (visible) => {
+      state.session.showTilesheetGrid = visible;
+      state.session.message = visible ? "Tilesheet grid shown." : "Tilesheet grid hidden.";
+      renderCanvas();
+    },
     onSceneGridVisibilityChanged: (visible) => {
       state.session.showSceneGrid = visible;
       state.session.message = visible ? "Scene editing grid shown." : "Scene preview enabled.";
@@ -1402,10 +1407,6 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.message = `Trimmed transparent edges for tile ${tile.id}.`;
       renderAll();
     },
-    onTilePreviewModeChanged: (previewMode) => {
-      state.session.tilePreviewMode = previewMode;
-      renderAll();
-    },
     onFillTileColorChanged: (color) => {
       state.session.fillTileColor = normalizeHexColor(color, "#000000");
       renderAll();
@@ -1625,18 +1626,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         return;
       }
 
-      const target = state.session.hoveredOutputTile
-        ?? (() => {
-          const bounds = getSelectedOutputBounds(state);
-          return bounds ? { col: bounds.minCol, row: bounds.minRow } : null;
-        })()
-        ?? (() => {
-          const tile = getSelectedOutputTile(state);
-          return tile ? { col: tile.destCol, row: tile.destRow } : null;
-        })();
+      const target = getPasteTargetCell(state);
 
       if (!target) {
-        state.session.message = "Hover or select a destination tile before pasting.";
+        state.session.message = "Select a destination tile before pasting.";
         renderAll();
         return;
       }
@@ -2598,15 +2591,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       }
 
       if (state.session.activeWorkspaceMode === "tilesheet" && state.session.outputTileClipboard) {
-        const target = state.session.hoveredOutputTile
-          ?? (() => {
-            const bounds = getSelectedOutputBounds(state);
-            return bounds ? { col: bounds.minCol, row: bounds.minRow } : null;
-          })()
-          ?? (() => {
-            const tile = getSelectedOutputTile(state);
-            return tile ? { col: tile.destCol, row: tile.destRow } : null;
-          })();
+        const target = getPasteTargetCell(state);
 
         if (!target) {
           return;
@@ -3088,6 +3073,22 @@ function createPendingProjectFolderPrompt(
     workingImageRef: unresolved.workingImageRef,
     sceneFileRef: unresolved.sceneFileRef,
   };
+}
+
+function getPasteTargetCell(state: ProjectState): { col: number; row: number } | null {
+  const bounds = getSelectedOutputBounds(state);
+
+  if (bounds) {
+    return { col: bounds.minCol, row: bounds.minRow };
+  }
+
+  const tile = getSelectedOutputTile(state);
+
+  if (tile) {
+    return { col: tile.destCol, row: tile.destRow };
+  }
+
+  return null;
 }
 
 async function loadWorkingImageIntoState(
