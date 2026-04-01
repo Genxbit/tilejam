@@ -52,6 +52,7 @@ export type SessionState = {
   tileMultiEditMode: "individual" | "group";
   tileLayoutPreview: TileLayoutPreview | null;
   dragMovePreview: GroupTransformPreview | null;
+  sceneDragPreview: SceneDragPreview | null;
   groupTransformPreview: GroupTransformPreview | null;
   groupOffsetX: number;
   groupOffsetY: number;
@@ -137,6 +138,13 @@ export type TileLayoutPreview = {
   renderRevision: number;
   primaryTileId: number | null;
   patch: Partial<Pick<TilePlacement, "destCol" | "destRow" | "offsetX" | "offsetY" | "scaleX" | "scaleY" | "flipX" | "flipY">>;
+};
+
+export type SceneDragPreview = {
+  anchorCol: number;
+  anchorRow: number;
+  cells: SceneClipboard["cells"];
+  originCells: GridCoordinate[];
 };
 
 export type WorkspacePanel = "source" | "output";

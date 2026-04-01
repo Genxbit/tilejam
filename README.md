@@ -88,6 +88,30 @@ For the best hosted file workflow, use Chrome or Edge.
 
 > GitHub Pages serves the app, but your project files, scene files, and exports still stay on your own disk.
 
+## Controls
+
+Use the toolbar `Help` button in the app for the same shortcuts and mouse controls.
+
+**Mouse**
+
+* source panel: drag to select source tiles
+* tilesheet / scene: click to select one cell
+* tilesheet / scene: drag to build a rectangular selection
+* tilesheet / scene: `Cmd-drag` on Mac or `Ctrl-drag` on PC to move the selected group
+* source / output: wheel to zoom
+* source / output: `Option-drag` on Mac, `Alt-drag` on PC, or middle-mouse drag to pan
+
+**Keyboard**
+
+* copy: `Cmd+C` on Mac, `Ctrl+C` on PC
+* paste: `Cmd+V` on Mac, `Ctrl+V` on PC
+* undo: `Cmd+Z` on Mac, `Ctrl+Z` on PC
+* redo: `Shift+Cmd+Z` on Mac, `Ctrl+Y` or `Shift+Ctrl+Z` on PC
+* delete selection: `Delete` or `Backspace`
+* move selected tiles or scene cells: `Shift+Arrow keys`
+* pan hovered view: `Option+Arrow keys` on Mac, `Alt+Arrow keys` on PC
+* reset hovered view: `0`
+
 ## Preferred Project Folder Structure
 
 A compact folder layout like [docs/examples](docs/examples) works best for linked project files:

@@ -227,6 +227,7 @@ export function createShell({
   onResolveUnresolvedResource,
 }: ShellOptions): Shell {
   root.innerHTML = "";
+  let helpDialogOpen = false;
 
   const appFrame = document.createElement("div");
   appFrame.className = "app-frame";
@@ -386,9 +387,13 @@ export function createShell({
   const historyActions = document.createElement("div");
   historyActions.className = "top-bar-actions";
   const newProjectButton = createActionButton("New project", onNewProject);
+  const helpButton = createActionButton("Help", () => {
+    helpDialogOpen = true;
+    helpDialogOverlay.hidden = false;
+  });
   const undoButton = createActionButton("Undo", onUndo);
   const redoButton = createActionButton("Redo", onRedo);
-  historyActions.append(openDemoButton, newProjectButton, projectInputButton, saveProjectButton, undoButton, redoButton);
+  historyActions.append(openDemoButton, newProjectButton, projectInputButton, saveProjectButton, helpButton, undoButton, redoButton);
   topBar.append(topBarBrand, historyActions);
 
   const fileActions = document.createElement("div");
@@ -700,17 +705,16 @@ export function createShell({
   const sceneCopyButton = createActionButton("Copy", onCopySceneSelection);
   const scenePasteButton = createActionButton("Paste", onPasteSceneSelection);
   const sceneDeleteButton = createActionButton("Delete", onDeleteSceneSelection);
-  scenePasteButton.disabled = !state.session.sceneClipboard;
+  scenePasteButton.disabled = !state.session.sceneClipboard || !state.session.selectedSceneCell;
   sceneEditActions.append(sceneCopyButton, scenePasteButton, sceneDeleteButton);
 
   const sceneMoveActions = document.createElement("div");
   sceneMoveActions.className = "panel-actions";
-  sceneMoveActions.append(
-    createActionButton("Left", () => { onMoveSceneSelection(-1, 0); }),
-    createActionButton("Right", () => { onMoveSceneSelection(1, 0); }),
-    createActionButton("Up", () => { onMoveSceneSelection(0, -1); }),
-    createActionButton("Down", () => { onMoveSceneSelection(0, 1); }),
-  );
+  const sceneMoveLeftButton = createActionButton("Left", () => { onMoveSceneSelection(-1, 0); });
+  const sceneMoveRightButton = createActionButton("Right", () => { onMoveSceneSelection(1, 0); });
+  const sceneMoveUpButton = createActionButton("Up", () => { onMoveSceneSelection(0, -1); });
+  const sceneMoveDownButton = createActionButton("Down", () => { onMoveSceneSelection(0, 1); });
+  sceneMoveActions.append(sceneMoveLeftButton, sceneMoveRightButton, sceneMoveUpButton, sceneMoveDownButton);
 
   const sceneSizeInputs = document.createElement("div");
   sceneSizeInputs.className = "grid-inputs";
@@ -1045,9 +1049,60 @@ export function createShell({
   resourceDialog.append(resourceDialogHeader, resourceDialogCopy, resourceDialogList);
   resourceDialogOverlay.append(resourceDialog);
 
+  const helpDialogOverlay = document.createElement("div");
+  helpDialogOverlay.className = "resource-dialog-overlay";
+  helpDialogOverlay.hidden = !helpDialogOpen;
+
+  const helpDialog = document.createElement("section");
+  helpDialog.className = "resource-dialog help-dialog";
+  const helpDialogHeader = document.createElement("div");
+  helpDialogHeader.className = "resource-dialog-header";
+  const helpDialogTitle = document.createElement("h2");
+  helpDialogTitle.className = "control-title";
+  helpDialogTitle.textContent = "Mouse And Keyboard Help";
+  const helpDialogClose = createActionButton("Close", () => {
+    helpDialogOpen = false;
+    helpDialogOverlay.hidden = true;
+  });
+  helpDialogHeader.append(helpDialogTitle, helpDialogClose);
+
+  const helpDialogCopy = document.createElement("p");
+  helpDialogCopy.className = "field-note";
+  helpDialogCopy.textContent = "Scene and tilesheet editing share the same core selection, move, copy, and paste rules where applicable.";
+
+  const helpSections = document.createElement("div");
+  helpSections.className = "help-sections";
+  helpSections.append(
+    createHelpSection("Mouse", [
+      ["Source panel", "Drag to select source tiles"],
+      ["Tilesheet / Scene", "Click to select one cell"],
+      ["Tilesheet / Scene", "Drag to build a rectangular selection"],
+      ["Tilesheet / Scene", "Cmd-drag / Ctrl-drag to move the selected group"],
+      ["Source / Output", "Wheel to zoom"],
+      ["Source / Output", "Option-drag / Alt-drag or middle mouse drag to pan"],
+    ]),
+    createHelpColumnsSection(
+      "Keyboard",
+      ["Action", "Mac", "PC"],
+      [
+        ["Copy selection", "Cmd+C", "Ctrl+C"],
+        ["Paste selection", "Cmd+V", "Ctrl+V"],
+        ["Undo", "Cmd+Z", "Ctrl+Z"],
+        ["Redo", "Shift+Cmd+Z", "Ctrl+Y or Shift+Ctrl+Z"],
+        ["Delete selection", "Delete / Backspace", "Delete / Backspace"],
+        ["Move selected tiles / scene cells", "Shift+Arrow keys", "Shift+Arrow keys"],
+        ["Pan hovered view", "Option+Arrow keys", "Alt+Arrow keys"],
+        ["Reset hovered view", "0", "0"],
+      ],
+    ),
+  );
+
+  helpDialog.append(helpDialogHeader, helpDialogCopy, helpSections);
+  helpDialogOverlay.append(helpDialog);
+
   panel.append(workspaceTabs, tilesheetWorkspacePanel, sceneWorkspacePanel, notes);
   appShell.append(workspace, panel);
-  appFrame.append(topBar, browserNotice, appShell, projectFolderPromptOverlay, resourceDialogOverlay);
+  appFrame.append(topBar, browserNotice, appShell, projectFolderPromptOverlay, resourceDialogOverlay, helpDialogOverlay);
   root.append(appFrame);
 
   return {
@@ -1098,8 +1153,12 @@ export function createShell({
       sceneEditActions.hidden = nextSceneLayer?.type === "imagelayer";
       sceneMoveActions.hidden = nextSceneLayer?.type === "imagelayer";
       sceneCopyButton.disabled = !nextState.session.sourceSelection && nextState.session.selectedSceneCells.length < 1;
-      scenePasteButton.disabled = !nextState.session.sceneClipboard;
+      scenePasteButton.disabled = !nextState.session.sceneClipboard || !nextState.session.selectedSceneCell || nextSceneLayer?.type !== "tilelayer";
       sceneDeleteButton.disabled = nextState.session.selectedSceneCells.length < 1 || nextSceneLayer?.type !== "tilelayer";
+      sceneMoveLeftButton.disabled = nextState.session.selectedSceneCells.length < 1 || nextSceneLayer?.type !== "tilelayer";
+      sceneMoveRightButton.disabled = nextState.session.selectedSceneCells.length < 1 || nextSceneLayer?.type !== "tilelayer";
+      sceneMoveUpButton.disabled = nextState.session.selectedSceneCells.length < 1 || nextSceneLayer?.type !== "tilelayer";
+      sceneMoveDownButton.disabled = nextState.session.selectedSceneCells.length < 1 || nextSceneLayer?.type !== "tilelayer";
       (sceneGridToggle.querySelector("input") as HTMLInputElement).checked = !nextState.session.showSceneGrid;
       sceneLayerSelect.replaceChildren();
       for (const layer of nextState.project.scene?.layers ?? []) {
@@ -1189,6 +1248,72 @@ function createMetaItem(label: string, value: string) {
   description.textContent = value;
 
   return { term, description };
+}
+
+function createHelpSection(title: string, rows: Array<[string, string]>): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "help-section";
+
+  const heading = document.createElement("h3");
+  heading.className = "control-subtitle";
+  heading.textContent = title;
+
+  const list = document.createElement("div");
+  list.className = "help-list";
+
+  for (const [label, value] of rows) {
+    const row = document.createElement("div");
+    row.className = "help-row";
+
+    const rowLabel = document.createElement("div");
+    rowLabel.className = "help-label";
+    rowLabel.textContent = label;
+
+    const rowValue = document.createElement("div");
+    rowValue.className = "help-value";
+    rowValue.textContent = value;
+
+    row.append(rowLabel, rowValue);
+    list.append(row);
+  }
+
+  section.append(heading, list);
+  return section;
+}
+
+function createHelpColumnsSection(title: string, headers: [string, string, string], rows: Array<[string, string, string]>): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "help-section";
+
+  const heading = document.createElement("h3");
+  heading.className = "control-subtitle";
+  heading.textContent = title;
+
+  const table = document.createElement("div");
+  table.className = "help-table";
+
+  const headerRow = document.createElement("div");
+  headerRow.className = "help-table-row help-table-header";
+  for (const header of headers) {
+    const cell = document.createElement("div");
+    cell.textContent = header;
+    headerRow.append(cell);
+  }
+  table.append(headerRow);
+
+  for (const rowValues of rows) {
+    const row = document.createElement("div");
+    row.className = "help-table-row";
+    for (const value of rowValues) {
+      const cell = document.createElement("div");
+      cell.textContent = value;
+      row.append(cell);
+    }
+    table.append(row);
+  }
+
+  section.append(heading, table);
+  return section;
 }
 
 function createNumberInput(value: number, ariaLabel: string, min?: number, step = 1): HTMLInputElement {

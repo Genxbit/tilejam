@@ -1,7 +1,7 @@
 import type { ProjectState } from "../types/project";
 import { getSeamRepairPairs, getSeamRepairSettings, repairSeamPair } from "../systems/seamRepairSystem";
 import { getSelectedOutputCells, getSelectedOutputTile, getSelectedOutputTiles } from "../systems/tileEditorSystem";
-import { getActiveSceneLayer, getSceneCellGid, getSelectedSceneCells } from "../systems/sceneSystem";
+import { getActiveSceneLayer, getPreviewSelectedSceneAnchor, getPreviewSelectedSceneCells, getSceneCellGid, getSelectedSceneCells } from "../systems/sceneSystem";
 import { drawTileIntoRect, renderTileCanvas } from "../systems/tileRenderSystem";
 import { getVisibleSelection } from "../systems/selectionSystem";
 import { getResolvedSourceImageAsset, getSourceImageForRef } from "../systems/sourceImageSystem";
@@ -286,6 +286,7 @@ function drawOutputGrid(
   context.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
   context.clip();
   drawDragMovePreview(context, state, viewport);
+  drawSceneDragPreview(context, state, viewport);
   drawTileLayoutPreview(context, state, viewport);
   drawGroupTransformPreview(context, state, viewport);
   const isScenePreview = state.session.activeWorkspaceMode === "scene" && !state.session.showSceneGrid;
@@ -370,9 +371,13 @@ function drawOutputBase(
   cache: RenderCache,
 ): void {
   const dragMovePreview = getActiveDragMovePreview(state);
+  const sceneDragPreview = getActiveSceneDragPreview(state);
   const groupPreview = getActiveGroupTransformPreview(state);
   const tileLayoutPreview = getActiveTileLayoutPreview(state);
   const skippedTileIds = dragMovePreview || groupPreview || tileLayoutPreview ? new Set(state.session.selectedOutputTileIds) : null;
+  const skippedSceneCellKeys = sceneDragPreview
+    ? new Set(sceneDragPreview.originCells.map((cell) => `${cell.col}:${cell.row}`))
+    : null;
   const outputKey = [
     state.session.renderRevision,
     state.session.activeWorkspaceMode,
@@ -393,6 +398,9 @@ function drawOutputBase(
     viewport.cellWidth,
     viewport.cellHeight,
     dragMovePreview ? `drag-move-preview:${dragMovePreview.selectionSignature}:${dragMovePreview.offsetX}:${dragMovePreview.offsetY}` : "drag-move-preview:none",
+    sceneDragPreview
+      ? `scene-drag-preview:${sceneDragPreview.anchorCol}:${sceneDragPreview.anchorRow}:${sceneDragPreview.originCells.map((cell) => `${cell.col}:${cell.row}`).join("|")}`
+      : "scene-drag-preview:none",
     groupPreview ? `group-preview:${groupPreview.selectionSignature}` : "group-preview:none",
     tileLayoutPreview ? `tile-layout-preview:${tileLayoutPreview.selectionSignature}` : "tile-layout-preview:none",
   ].join("|");
@@ -411,7 +419,7 @@ function drawOutputBase(
       baseContext.rect(viewport.frame.x, viewport.frame.y, viewport.frame.width, viewport.frame.height);
       baseContext.clip();
       if (state.session.activeWorkspaceMode === "scene") {
-        drawSceneTiles(baseContext, state, viewport);
+        drawSceneTiles(baseContext, state, viewport, skippedSceneCellKeys);
       } else {
         drawPlacedTiles(baseContext, state, viewport, skippedTileIds);
       }
@@ -497,6 +505,14 @@ function getActiveDragMovePreview(state: ProjectState): ProjectState["session"][
   }
 
   return state.session.dragMovePreview;
+}
+
+function getActiveSceneDragPreview(state: ProjectState): ProjectState["session"]["sceneDragPreview"] {
+  if (state.session.activeWorkspaceMode !== "scene") {
+    return null;
+  }
+
+  return state.session.sceneDragPreview;
 }
 
 function getActiveTileLayoutPreview(state: ProjectState): ProjectState["session"]["tileLayoutPreview"] {
@@ -585,6 +601,52 @@ function drawDragMovePreview(
   }
 
   drawCanvasGroupPreview(context, state, viewport, preview);
+}
+
+function drawSceneDragPreview(
+  context: CanvasRenderingContext2D,
+  state: ProjectState,
+  viewport: OutputViewport,
+): void {
+  const preview = getActiveSceneDragPreview(state);
+  const activeLayer = getActiveSceneLayer(state);
+
+  if (!preview || !activeLayer || activeLayer.type !== "tilelayer" || !activeLayer.visible || activeLayer.opacity <= 0) {
+    return;
+  }
+
+  context.save();
+  context.globalAlpha = activeLayer.opacity * 0.96;
+  const previewParallax = getScenePreviewParallaxOffset(state, viewport, activeLayer.parallaxX, activeLayer.parallaxY);
+  const layerOffsetX = activeLayer.offsetX * viewport.scaleX + previewParallax.x;
+  const layerOffsetY = activeLayer.offsetY * viewport.scaleY + previewParallax.y;
+
+  for (const cell of preview.cells) {
+    const gid = cell.gid;
+
+    if (gid < 1) {
+      continue;
+    }
+
+    const tile = state.project.tiles.find((entry) => entry.id === gid - 1);
+
+    if (!tile) {
+      continue;
+    }
+
+    drawTileInstance(
+      context,
+      state,
+      viewport,
+      preview.anchorCol + cell.colOffset,
+      preview.anchorRow + cell.rowOffset,
+      tile,
+      layerOffsetX,
+      layerOffsetY,
+    );
+  }
+
+  context.restore();
 }
 
 function drawCanvasGroupPreview(
@@ -711,6 +773,7 @@ function drawSceneTiles(
   context: CanvasRenderingContext2D,
   state: ProjectState,
   viewport: OutputViewport,
+  skippedSceneCellKeys: Set<string> | null = null,
 ): void {
   const scene = state.project.scene;
 
@@ -737,6 +800,10 @@ function drawSceneTiles(
 
     for (let row = 0; row < scene.height; row += 1) {
       for (let col = 0; col < scene.width; col += 1) {
+        if (layer.id === state.session.activeSceneLayerId && skippedSceneCellKeys?.has(`${col}:${row}`)) {
+          continue;
+        }
+
         const gid = getSceneCellGid(state, col, row, layer.id);
 
         if (gid < 1) {
@@ -929,8 +996,8 @@ function drawSelectedSceneCell(
   state: ProjectState,
   viewport: OutputViewport,
 ): void {
-  const selectedCell = state.session.selectedSceneCell;
-  const selectedCells = getSelectedSceneCells(state);
+  const selectedCell = getPreviewSelectedSceneAnchor(state);
+  const selectedCells = getPreviewSelectedSceneCells(state);
 
   if (selectedCells.length < 1) {
     return;

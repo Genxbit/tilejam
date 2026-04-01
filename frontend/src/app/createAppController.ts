@@ -26,7 +26,7 @@ import {
   updateSelectedOutputTile,
 } from "../systems/tileEditorSystem";
 import { assignAllSourceTilesToOutputGrid, assignSelectionToOutputTile, copySourceSelectionToOutputClipboard, rebuildTilesFromWorkingSheet } from "../systems/tilePlacementSystem";
-import { addSceneLayer, clearSceneLayers, copySelectedSceneCells, copySourceSelectionToSceneClipboard, deleteSelectedSceneCells, ensureScene, getActiveSceneLayer, getSelectedSceneCells, getTopSceneLayerId, moveActiveSceneLayerBy, moveSelectedSceneCellBy, moveSelectedSceneCellsTo, pasteSceneClipboard, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneCellRectangle, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer } from "../systems/sceneSystem";
+import { addSceneLayer, beginSceneDragPreview, clearSceneDragPreview, clearSceneLayers, copySelectedSceneCells, copySourceSelectionToSceneClipboard, deleteSelectedSceneCells, ensureScene, getActiveSceneLayer, getScenePasteTargetCell, getSelectedSceneCells, getTopSceneLayerId, moveActiveSceneLayerBy, moveSelectedSceneCellBy, moveSelectedSceneCellsTo, pasteSceneClipboard, placeSelectionIntoScene, resetScene, resizeScene, selectSceneCell, selectSceneCellRectangle, selectSceneLayer, setSceneTilesetSource, updateActiveSceneLayer, updateSceneDragPreviewTarget } from "../systems/sceneSystem";
 import { clearSelectionState, commitDraftSourceSelection, moveHoveredOutputTileBy, moveSourceSelectionBy, setHoveredOutputTile, updateDraftSourceSelection } from "../systems/selectionSystem";
 import {
   clearSourceImageAsset,
@@ -108,7 +108,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
   let activePointerId: number | null = null;
   let sourceDragAnchor: { col: number; row: number } | null = null;
   let outputDragAnchor: { col: number; row: number } | null = null;
-  let dragMode: "select" | "select-output" | "pan" | "move-tile" | null = null;
+  let dragMode: "select" | "select-output" | "select-scene" | "pan" | "move-tile" | "move-scene" | null = null;
   let panPanel: "source" | "output" | null = null;
   let lastPointerPoint: { x: number; y: number } | null = null;
   let movingTileId: number | null = null;
@@ -205,6 +205,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.tileMultiEditMode = freshState.session.tileMultiEditMode;
       state.session.tileLayoutPreview = freshState.session.tileLayoutPreview;
       state.session.dragMovePreview = freshState.session.dragMovePreview;
+      state.session.sceneDragPreview = freshState.session.sceneDragPreview;
       state.session.groupTransformPreview = freshState.session.groupTransformPreview;
       state.session.groupOffsetX = freshState.session.groupOffsetX;
       state.session.groupOffsetY = freshState.session.groupOffsetY;
@@ -693,10 +694,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         return;
       }
 
-      const target = state.session.hoveredOutputTile ?? state.session.selectedSceneCell;
+      const target = getScenePasteTargetCell(state);
 
       if (!target) {
-        state.session.message = "Hover or select a destination scene cell before pasting.";
+        state.session.message = "Select a destination scene cell before pasting.";
         renderAll();
         return;
       }
@@ -1896,33 +1897,40 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         return;
       }
 
-      if (event.shiftKey) {
-        const anchorCell = state.session.selectedSceneCell;
-        const selectedCells = selectSceneCellRectangle(
-          state,
-          anchorCell?.col ?? outputHit.col,
-          anchorCell?.row ?? outputHit.row,
-          outputHit.col,
-          outputHit.row,
-        );
-        state.session.message = `Selected ${selectedCells.length} scene cell${selectedCells.length === 1 ? "" : "s"} in a rectangle.`;
+      const isMoveGesture = event.metaKey || event.ctrlKey;
+      const clickedInExistingSelection = getSelectedSceneCells(state).some(
+        (cell) => cell.col === outputHit.col && cell.row === outputHit.row,
+      );
+
+      if (!isMoveGesture) {
+        const sceneCell = selectSceneCell(state, outputHit.col, outputHit.row);
+
+        if (sceneCell) {
+          activePointerId = event.pointerId;
+          dragMode = "select-scene";
+          outputDragAnchor = { col: outputHit.col, row: outputHit.row };
+          movingTileOrigin = null;
+          clearSceneDragPreview(state);
+          lastPointerPoint = point;
+          shell.canvas.setPointerCapture(event.pointerId);
+          state.session.message = `Selected scene cell ${sceneCell.col}, ${sceneCell.row}. Drag to expand the selection.`;
+        }
+
         renderAll();
         return;
       }
 
-      const clickedInExistingSelection = getSelectedSceneCells(state).some(
-        (cell) => cell.col === outputHit.col && cell.row === outputHit.row,
-      );
       const sceneCell = clickedInExistingSelection
         ? (state.session.selectedSceneCell ?? { col: outputHit.col, row: outputHit.row })
         : selectSceneCell(state, outputHit.col, outputHit.row);
 
       if (sceneCell) {
         activePointerId = event.pointerId;
-        dragMode = "move-tile";
+        dragMode = "move-scene";
         movingTileOrigin = sceneCell;
+        beginSceneDragPreview(state);
         shell.canvas.setPointerCapture(event.pointerId);
-        state.session.message = `Selected scene cell ${sceneCell.col}, ${sceneCell.row}. Drag to move it.`;
+        state.session.message = `Selected scene cell ${sceneCell.col}, ${sceneCell.row}. Drag to move the selection.`;
       }
 
       renderAll();
@@ -2068,6 +2076,17 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       return;
     }
 
+    if (activePointerId === event.pointerId && dragMode === "select-scene" && outputDragAnchor) {
+      const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
+
+      if (outputHit) {
+        selectSceneCellRectangle(state, outputDragAnchor.col, outputDragAnchor.row, outputHit.col, outputHit.row);
+        requestCanvasRender();
+      }
+
+      return;
+    }
+
     if (activePointerId === event.pointerId && dragMode === "move-tile" && movingTileId !== null) {
       const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
       const currentHovered = state.session.hoveredOutputTile;
@@ -2083,6 +2102,22 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       if (currentHovered?.col !== outputHit?.col || currentHovered?.row !== outputHit?.row) {
         requestCanvasRender();
       }
+      return;
+    }
+
+    if (activePointerId === event.pointerId && dragMode === "move-scene" && movingTileOrigin) {
+      const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
+      const currentHovered = state.session.hoveredOutputTile;
+      setHoveredOutputTile(state, outputHit);
+
+      if (outputHit) {
+        updateSceneDragPreviewTarget(state, outputHit.col, outputHit.row);
+      }
+
+      if (currentHovered?.col !== outputHit?.col || currentHovered?.row !== outputHit?.row || Boolean(outputHit)) {
+        requestCanvasRender();
+      }
+
       return;
     }
 
@@ -2143,6 +2178,24 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
           ? `Selected ${selectedCellCount} cells with ${selectedTileCount} placed tile${selectedTileCount === 1 ? "" : "s"}.`
           : `Selected ${selectedCellCount} empty cell${selectedCellCount === 1 ? "" : "s"}.`
         : "No output cells selected.";
+      renderAll();
+      return;
+    }
+
+    if (dragMode === "select-scene" && outputDragAnchor) {
+      activePointerId = null;
+      dragMode = null;
+      outputDragAnchor = null;
+      lastPointerPoint = null;
+
+      if (shell.canvas.hasPointerCapture(event.pointerId)) {
+        shell.canvas.releasePointerCapture(event.pointerId);
+      }
+
+      const selectedCellCount = getSelectedSceneCells(state).length;
+      state.session.message = selectedCellCount > 0
+        ? `Selected ${selectedCellCount} scene cell${selectedCellCount === 1 ? "" : "s"}.`
+        : "No scene cells selected.";
       renderAll();
       return;
     }
@@ -2213,7 +2266,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       return;
     }
 
-    if (dragMode === "move-tile" && state.session.activeWorkspaceMode === "scene" && movingTileOrigin) {
+    if (dragMode === "move-scene" && state.session.activeWorkspaceMode === "scene" && movingTileOrigin) {
       const point = getCanvasPoint(shell.canvas, event);
       const layout = getWorkspaceLayout(shell.canvas.width, shell.canvas.height, state);
       const outputHit = getOutputGridCellAtPoint(layout, point.x, point.y);
@@ -2233,7 +2286,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       activePointerId = null;
       dragMode = null;
       movingTileOrigin = null;
-      clearDragMovePreview(state);
+      clearSceneDragPreview(state);
       lastPointerPoint = null;
 
       if (shell.canvas.hasPointerCapture(event.pointerId)) {
@@ -2312,6 +2365,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
     movingTileId = null;
     movingTileOrigin = null;
     clearDragMovePreview(state);
+    clearSceneDragPreview(state);
     lastPointerPoint = null;
 
     if (shell.canvas.hasPointerCapture(event.pointerId)) {
@@ -2567,9 +2621,11 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
           return;
         }
 
-        const target = state.session.hoveredOutputTile ?? state.session.selectedSceneCell;
+        const target = getScenePasteTargetCell(state);
 
         if (!target) {
+          state.session.message = "Select a destination scene cell before pasting.";
+          renderAll();
           return;
         }
 
@@ -2686,6 +2742,7 @@ function restoreHistoryEntry(state: ProjectState, entry: HistoryEntry): void {
   clearTileLayoutPreview(state);
   clearGroupTransformPreview(state);
   clearDragMovePreview(state);
+  clearSceneDragPreview(state);
   state.session.hoveredOutputTile = null;
   normalizeProjectTilesToGrid(state);
 }

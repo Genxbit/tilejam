@@ -1,6 +1,7 @@
 import type {
   GridCoordinate,
   ProjectState,
+  SceneDragPreview,
   SceneClipboard,
   SceneImageLayerState,
   SceneLayerState,
@@ -352,6 +353,11 @@ export function pasteSceneClipboard(
   return pasted;
 }
 
+export function getScenePasteTargetCell(state: ProjectState): GridCoordinate | null {
+  const selectedCell = state.session.selectedSceneCell ?? getSelectedSceneCells(state)[0] ?? null;
+  return selectedCell ? { ...selectedCell } : null;
+}
+
 export function selectSceneCell(state: ProjectState, col: number, row: number): GridCoordinate | null {
   const scene = ensureScene(state);
 
@@ -401,7 +407,11 @@ export function moveSelectedSceneCellBy(state: ProjectState, deltaCol: number, d
   return moveSelectedSceneCellsTo(state, cell.col + deltaCol, cell.row + deltaRow);
 }
 
-export function moveSelectedSceneCellsTo(state: ProjectState, destCol: number, destRow: number): GridCoordinate | null {
+export function getSceneMoveTarget(
+  state: ProjectState,
+  destCol: number,
+  destRow: number,
+): { anchorCol: number; anchorRow: number; deltaCol: number; deltaRow: number; selectedCells: GridCoordinate[] } | null {
   const scene = ensureScene(state);
   const layer = getActiveSceneLayer(state);
   const selectedCell = state.session.selectedSceneCell;
@@ -421,8 +431,97 @@ export function moveSelectedSceneCellsTo(state: ProjectState, destCol: number, d
   const targetMinRow = clamp(destRow - anchorOffsetRow, 0, scene.height - (maxRow - minRow + 1));
   const deltaCol = targetMinCol - minCol;
   const deltaRow = targetMinRow - minRow;
-  const nextCol = selectedCell.col + deltaCol;
-  const nextRow = selectedCell.row + deltaRow;
+
+  return {
+    anchorCol: selectedCell.col + deltaCol,
+    anchorRow: selectedCell.row + deltaRow,
+    deltaCol,
+    deltaRow,
+    selectedCells,
+  };
+}
+
+export function beginSceneDragPreview(state: ProjectState): SceneDragPreview | null {
+  const clipboard = copySelectedSceneCells(state);
+  const anchor = getScenePasteTargetCell(state);
+  const selectedCells = getSelectedSceneCells(state);
+
+  if (!clipboard || !anchor || selectedCells.length < 1) {
+    state.session.sceneDragPreview = null;
+    return null;
+  }
+
+  state.session.sceneDragPreview = {
+    anchorCol: anchor.col,
+    anchorRow: anchor.row,
+    cells: clipboard.cells.map((cell) => ({ ...cell })),
+    originCells: selectedCells.map((cell) => ({ ...cell })),
+  };
+
+  return state.session.sceneDragPreview;
+}
+
+export function updateSceneDragPreviewTarget(state: ProjectState, destCol: number, destRow: number): SceneDragPreview | null {
+  const target = getSceneMoveTarget(state, destCol, destRow);
+
+  if (!target) {
+    state.session.sceneDragPreview = null;
+    return null;
+  }
+
+  const preview = state.session.sceneDragPreview ?? beginSceneDragPreview(state);
+
+  if (!preview) {
+    return null;
+  }
+
+  preview.anchorCol = target.anchorCol;
+  preview.anchorRow = target.anchorRow;
+  return preview;
+}
+
+export function clearSceneDragPreview(state: ProjectState): void {
+  state.session.sceneDragPreview = null;
+}
+
+export function getPreviewSelectedSceneCells(state: ProjectState): GridCoordinate[] {
+  const preview = state.session.sceneDragPreview;
+
+  if (!preview) {
+    return getSelectedSceneCells(state);
+  }
+
+  return preview.cells.map((cell) => ({
+    col: preview.anchorCol + cell.colOffset,
+    row: preview.anchorRow + cell.rowOffset,
+  }));
+}
+
+export function getPreviewSelectedSceneAnchor(state: ProjectState): GridCoordinate | null {
+  const preview = state.session.sceneDragPreview;
+
+  if (preview) {
+    return { col: preview.anchorCol, row: preview.anchorRow };
+  }
+
+  return state.session.selectedSceneCell ? { ...state.session.selectedSceneCell } : null;
+}
+
+export function moveSelectedSceneCellsTo(state: ProjectState, destCol: number, destRow: number): GridCoordinate | null {
+  const scene = ensureScene(state);
+  const layer = getActiveSceneLayer(state);
+  const target = getSceneMoveTarget(state, destCol, destRow);
+
+  if (!layer || layer.type !== "tilelayer" || !target) {
+    return null;
+  }
+
+  const { anchorCol: nextCol, anchorRow: nextRow, deltaCol, deltaRow, selectedCells } = target;
+  const selectedCell = state.session.selectedSceneCell;
+
+  if (!selectedCell) {
+    return null;
+  }
 
   if (nextCol === selectedCell.col && nextRow === selectedCell.row) {
     return selectedCell;

@@ -48,6 +48,7 @@ export function createProjectState(): ProjectState {
       tileMultiEditMode: "individual",
       tileLayoutPreview: null,
       dragMovePreview: null,
+      sceneDragPreview: null,
       groupTransformPreview: null,
       groupOffsetX: 0,
       groupOffsetY: 0,

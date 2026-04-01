@@ -963,3 +963,51 @@ Replace the old tilesheet preview path with a direct tilesheet grid visibility t
 * paste does not use the mouse hover position when no selection exists
 * existing tilesheet editing behavior remains supported
 * the implementation follows architecture rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 26: Align scene editor interactions with tilesheet editing and add in-app help
+
+**Status**
+Completed
+
+**Goal**
+Make scene editing follow the same interaction patterns as tilesheet editing for selection, copy/paste, drag-move, keyboard shortcuts, and help discoverability.
+
+**Docs**
+
+* `docs/PRODUCT.md`
+* `docs/TECH_WORKFLOW.md`
+
+**Prompt**
+Align the scene editor interaction model with the tilesheet editor so copy, paste, drag-select, modified drag-move, live move preview, and keyboard shortcuts follow the same user-facing rules where applicable. Scene paste should require a selected target cell, scene drag-move should overwrite on release, and the app should expose a toolbar `Help` dialog with Mac and PC mouse/keyboard guidance. Update the README with the same shortcut guidance.
+
+**Deliverables**
+
+* make scene copy/paste follow the same explicit selection-driven model as tilesheet editing
+* require a selected target cell for scene paste
+* make plain drag build a rectangular scene selection
+* make modified drag move the selected scene group
+* show live scene content while dragging a selected group
+* commit scene drag-move on release with overwrite behavior
+* align scene keyboard shortcuts with tilesheet behavior where applicable:
+  * copy
+  * paste
+  * delete
+  * undo / redo
+  * keyboard move / nudge
+* add a `Help` button in the top toolbar
+* show a compact in-app help dialog with Mac and PC mouse/keyboard combinations
+* update `README.md` with the same shortcut/help summary
+* keep architecture aligned with `docs/TECH_WORKFLOW.md`
+
+**Validation**
+
+* scene selection, copy, paste, drag-select, and modified drag-move behave consistently with the tilesheet editor
+* scene paste requires a selected target cell and does not use hover-only targeting
+* moving a selected scene group shows live content during drag and overwrites on release
+* keyboard shortcuts behave consistently across scene and tilesheet where intended
+* the toolbar help dialog clearly shows Mac and PC controls
+* `README.md` reflects the same shortcut/help guidance
+* existing scene and tilesheet features remain supported
+* the implementation follows relevant rules in `docs/TECH_WORKFLOW.md`, including architecture
