@@ -1063,15 +1063,22 @@ export function createShell({
   const helpDialogTitle = document.createElement("h2");
   helpDialogTitle.className = "control-title";
   helpDialogTitle.textContent = "Mouse And Keyboard Help";
+  const helpDialogHeaderActions = document.createElement("div");
+  helpDialogHeaderActions.className = "panel-actions";
   const helpDialogClose = createActionButton("Close", () => {
     helpDialogOpen = false;
     helpDialogOverlay.hidden = true;
   });
-  helpDialogHeader.append(helpDialogTitle, helpDialogClose);
+  helpDialogHeaderActions.append(helpDialogClose);
+  helpDialogHeader.append(helpDialogTitle, helpDialogHeaderActions);
 
   const helpDialogCopy = document.createElement("p");
   helpDialogCopy.className = "field-note";
   helpDialogCopy.textContent = "Scene and tilesheet editing share the same core selection, move, copy, and paste rules where applicable.";
+
+  const helpRepoNote = document.createElement("p");
+  helpRepoNote.className = "panel-note";
+  helpRepoNote.textContent = "GitHub: https://github.com/Genxbit/tilejam";
 
   const helpSections = document.createElement("div");
   helpSections.className = "help-sections";
@@ -1100,7 +1107,7 @@ export function createShell({
     ),
   );
 
-  helpDialog.append(helpDialogHeader, helpDialogCopy, helpSections);
+  helpDialog.append(helpDialogHeader, helpDialogCopy, helpRepoNote, helpSections);
   helpDialogOverlay.append(helpDialog);
 
   panel.append(workspaceTabs, tilesheetWorkspacePanel, sceneWorkspacePanel, notes);
