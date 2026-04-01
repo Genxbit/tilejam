@@ -244,7 +244,8 @@ export function createShell({
 
   const topBarProject = document.createElement("p");
   topBarProject.className = "top-bar-project";
-  topBarProject.textContent = `Project: ${getDisplayFileLabel(state.session.projectFileName ?? "unsaved")}`;
+  topBarProject.textContent = getProjectStatusLabel(state);
+  topBarProject.dataset.dirty = state.session.tilesheetDirty || state.session.sceneDirty ? "true" : "false";
   topBarBrand.append(topBarTitle, topBarProject);
 
   const browserNotice = document.createElement("div");
@@ -380,6 +381,7 @@ export function createShell({
   saveWorkingImageButton.type = "button";
   saveWorkingImageButton.className = "file-input file-input-secondary";
   saveWorkingImageButton.textContent = "Save tilesheet";
+  saveWorkingImageButton.dataset.pending = state.session.tilesheetDirty ? "true" : "false";
   saveWorkingImageButton.addEventListener("click", async () => {
     await onSaveWorkingImage();
   });
@@ -444,6 +446,7 @@ export function createShell({
   saveSceneButton.type = "button";
   saveSceneButton.className = "file-input file-input-secondary";
   saveSceneButton.textContent = "Save scene";
+  saveSceneButton.dataset.pending = state.session.sceneDirty ? "true" : "false";
   saveSceneButton.addEventListener("click", async () => {
     await onSaveScene();
   });
@@ -1110,7 +1113,10 @@ export function createShell({
     update(nextState) {
       const scrollTop = panel.scrollTop;
       activeWorkspaceTab = nextState.session.activeWorkspaceMode === "scene" ? "scene" : "tilesheet";
-      topBarProject.textContent = `Project: ${getDisplayFileLabel(nextState.session.projectFileName ?? "unsaved")}`;
+      topBarProject.textContent = getProjectStatusLabel(nextState);
+      topBarProject.dataset.dirty = nextState.session.tilesheetDirty || nextState.session.sceneDirty ? "true" : "false";
+      saveWorkingImageButton.dataset.pending = nextState.session.tilesheetDirty ? "true" : "false";
+      saveSceneButton.dataset.pending = nextState.session.sceneDirty ? "true" : "false";
       browserNotice.hidden = nextState.session.browserWorkflowNoticeDismissed || isChromiumBrowser();
       items[0].description.textContent = nextState.project.sourceImage ?? nextState.sourceImageAsset.name ?? "Not loaded";
       items[1].description.textContent = nextState.project.workingImage ?? nextState.session.workingImageFileName ?? "Not loaded";
@@ -1485,4 +1491,9 @@ function getDisplayFileLabel(value: string): string {
   const normalized = value.replace(/\\/g, "/");
   const segments = normalized.split("/");
   return segments[segments.length - 1] || value;
+}
+
+function getProjectStatusLabel(state: ProjectState): string {
+  const dirtyMarker = state.session.tilesheetDirty || state.session.sceneDirty ? " *" : "";
+  return `Project: ${getDisplayFileLabel(state.session.projectFileName ?? "unsaved")}${dirtyMarker}`;
 }

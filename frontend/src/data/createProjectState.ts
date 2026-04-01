@@ -26,6 +26,17 @@ export function createProjectState(): ProjectState {
     session: {
       browserWorkflowNoticeDismissed: false,
       message: "The bundled sample image is loaded on startup so the canvas stays immediately visible.",
+      tilesheetDirty: false,
+      sceneDirty: false,
+      savedTilesheetSignature: JSON.stringify({
+        tileWidth: 32,
+        tileHeight: 32,
+        outputWidth: 1024,
+        outputHeight: 1024,
+        workingImage: null,
+        tiles: [],
+      }),
+      savedSceneSignature: null,
       projectFileName: null,
       projectFileHandle: null,
       projectDirectoryHandle: null,
@@ -86,7 +97,17 @@ export function createProjectState(): ProjectState {
         panX: 0,
         panY: 0,
       },
+      sceneSourceCamera: {
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+      },
       outputCamera: {
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+      },
+      sceneOutputCamera: {
         zoom: 1,
         panX: 0,
         panY: 0,

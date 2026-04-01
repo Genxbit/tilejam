@@ -100,6 +100,11 @@ textarea {
   color: var(--amiga-text-soft);
 }
 
+.top-bar-project[data-dirty="true"] {
+  color: #7c2f00;
+  font-weight: 700;
+}
+
 .top-bar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -175,6 +180,12 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.panel-actions[data-pending="true"] {
+  padding: 8px;
+  border: 1px solid rgba(54, 87, 136, 0.28);
+  background: linear-gradient(180deg, rgba(223, 233, 247, 0.72) 0%, rgba(205, 218, 236, 0.72) 100%);
 }
 
 .panel-actions button[data-active="true"] {
@@ -402,6 +413,75 @@ textarea {
   gap: 8px;
 }
 
+.mode-switch-field {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(84, 93, 112, 0.14);
+  background: linear-gradient(180deg, rgba(242, 246, 252, 0.72) 0%, rgba(228, 235, 244, 0.72) 100%);
+}
+
+.mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(89, 98, 116, 0.42);
+  border-radius: 0;
+  background: linear-gradient(180deg, #eef2f8 0%, #dfe6f0 100%);
+  color: var(--amiga-text);
+  font-size: 11px;
+  font-weight: 700;
+  justify-self: start;
+}
+
+.mode-switch-label {
+  white-space: nowrap;
+}
+
+.mode-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mode-switch-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 18px;
+  padding: 2px;
+  border: 1px solid rgba(58, 67, 84, 0.65);
+  background: linear-gradient(180deg, #d3dae5 0%, #bcc6d4 100%);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.mode-switch-knob {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(58, 67, 84, 0.7);
+  background: linear-gradient(180deg, #f8fbff 0%, #dbe2ec 100%);
+  transition: transform 120ms ease;
+}
+
+.mode-switch:has(input:checked) {
+  border-color: rgba(54, 87, 136, 0.72);
+  background: linear-gradient(180deg, #dce9fb 0%, #bfd2ee 100%);
+  color: #132a47;
+}
+
+.mode-switch:has(input:checked) .mode-switch-track {
+  background: linear-gradient(180deg, #9fd0ff 0%, #6ea3df 100%);
+  border-color: rgba(38, 62, 102, 0.8);
+}
+
+.mode-switch:has(input:checked) .mode-switch-knob {
+  transform: translateX(16px);
+}
+
 .checkbox-field,
 .toggle-pill {
   display: inline-flex;
@@ -455,6 +535,19 @@ textarea {
   border-color: rgba(54, 87, 136, 0.72);
   background: linear-gradient(180deg, #dce9fb 0%, #bfd2ee 100%);
   color: #132a47;
+}
+
+.file-input-secondary[data-pending="true"]:not(:disabled) {
+  border-color: rgba(54, 87, 136, 0.72);
+  background: linear-gradient(180deg, #dce9fb 0%, #bfd2ee 100%);
+  color: #132a47;
+  box-shadow: inset 1px 1px 0 rgba(233, 241, 252, 0.38);
+}
+
+.panel-actions[data-pending="true"] .file-input-secondary:not(:disabled):not([data-active="true"]) {
+  border-color: rgba(89, 98, 116, 0.5);
+  background: linear-gradient(180deg, #d7deea 0%, #c3ccdb 100%);
+  color: var(--amiga-text);
 }
 
 .number-field {

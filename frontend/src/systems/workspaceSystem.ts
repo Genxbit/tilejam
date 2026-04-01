@@ -153,7 +153,7 @@ export function zoomWorkspacePanel(
     return null;
   }
 
-  const camera = panel === "source" ? state.session.sourceCamera : state.session.outputCamera;
+  const camera = getWorkspaceCamera(state, panel);
   const worldX = getWorldX(viewport, pointX, false);
   const worldY = getWorldY(viewport, pointY, false);
   const factor = deltaY < 0 ? 1.1 : 1 / 1.1;
@@ -188,14 +188,14 @@ export function panWorkspacePanel(
   deltaY: number,
   layout: WorkspaceLayout,
 ): void {
-  const camera = panel === "source" ? state.session.sourceCamera : state.session.outputCamera;
+  const camera = getWorkspaceCamera(state, panel);
   camera.panX += deltaX;
   camera.panY += deltaY;
   clampCameraToViewport(state, panel, layout);
 }
 
 export function resetWorkspaceView(state: ProjectState, panel: WorkspacePanel): void {
-  const camera = panel === "source" ? state.session.sourceCamera : state.session.outputCamera;
+  const camera = getWorkspaceCamera(state, panel);
   camera.zoom = 1;
   camera.panX = 0;
   camera.panY = 0;
@@ -224,7 +224,7 @@ function getSourceViewport(panel: Rect, state: ProjectState): SourceViewport | n
   };
 
   const baseScale = Math.min(frame.width / metrics.pixelWidth, frame.height / metrics.pixelHeight);
-  return createViewport("source", frame, metrics.pixelWidth, metrics.pixelHeight, baseScale, state.session.sourceCamera);
+  return createViewport("source", frame, metrics.pixelWidth, metrics.pixelHeight, baseScale, getSourceWorkspaceCamera(state));
 }
 
 function getOutputViewport(panel: Rect, state: ProjectState): OutputViewport {
@@ -236,7 +236,7 @@ function getOutputViewport(panel: Rect, state: ProjectState): OutputViewport {
     height: panel.height - OUTPUT_FRAME_TOP_OFFSET - OUTPUT_FRAME_BOTTOM_INSET,
   };
   const baseScale = Math.min(frame.width / outputMetrics.pixelWidth, frame.height / outputMetrics.pixelHeight);
-  const viewport = createViewport("output", frame, outputMetrics.pixelWidth, outputMetrics.pixelHeight, baseScale, state.session.outputCamera);
+  const viewport = createViewport("output", frame, outputMetrics.pixelWidth, outputMetrics.pixelHeight, baseScale, getOutputWorkspaceCamera(state));
 
   return {
     ...viewport,
@@ -346,7 +346,7 @@ function clampCameraToViewport(
   panel: WorkspacePanel,
   layout: WorkspaceLayout,
 ): void {
-  const camera = panel === "source" ? state.session.sourceCamera : state.session.outputCamera;
+  const camera = getWorkspaceCamera(state, panel);
   const viewport = panel === "source" ? layout.sourceViewport : layout.outputViewport;
 
   if (!viewport) {
@@ -399,4 +399,20 @@ function isInsideRect(rect: Rect, x: number, y: number): boolean {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function getWorkspaceCamera(state: ProjectState, panel: WorkspacePanel): CameraState {
+  return panel === "source" ? getSourceWorkspaceCamera(state) : getOutputWorkspaceCamera(state);
+}
+
+export function getSourceWorkspaceCamera(state: ProjectState): CameraState {
+  return state.session.activeWorkspaceMode === "scene"
+    ? state.session.sceneSourceCamera
+    : state.session.sourceCamera;
+}
+
+export function getOutputWorkspaceCamera(state: ProjectState): CameraState {
+  return state.session.activeWorkspaceMode === "scene"
+    ? state.session.sceneOutputCamera
+    : state.session.outputCamera;
 }

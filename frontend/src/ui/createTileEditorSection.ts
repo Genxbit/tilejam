@@ -248,7 +248,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   });
   const cancelGroupTransformButton = createActionButton("Cancel", callbacks.onCancelTileLayoutPreview);
   groupTransformActions.append(applyGroupTransformButton, cancelGroupTransformButton);
-  const scaleModeToggle = createCheckboxField("Across tile bounds", currentEditMode === "group", (checked) => {
+  const scaleModeToggle = createModeSwitchField("Cross-tile transform", currentEditMode === "group", (checked) => {
     currentEditMode = checked ? "group" : "individual";
     callbacks.onTileMultiEditModeChanged(currentEditMode);
     syncScaleControls(currentSelectedTile, currentSelectionCount, scaleModeToggle, scaleXField.input, scaleYField.input, currentEditMode, state);
@@ -685,6 +685,16 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
     seamRepairButton,
   );
 
+  const modeSwitchRow = document.createElement("div");
+  modeSwitchRow.className = "mode-switch-field";
+  const modeSwitchLabel = document.createElement("span");
+  modeSwitchLabel.className = "field-label";
+  modeSwitchLabel.textContent = "Transform mode";
+  const modeSwitchNote = document.createElement("p");
+  modeSwitchNote.className = "field-note";
+  modeSwitchNote.textContent = "Off keeps layout edits within each tile. On lets the selected tile or patch cross tile bounds.";
+  modeSwitchRow.append(modeSwitchLabel, scaleModeToggle, modeSwitchNote);
+
   const transformToggleRow = document.createElement("div");
   transformToggleRow.className = "toggle-row";
   const flipXToggle = createCheckboxField("Flip X", selectedTile?.flipX ?? false, (checked) => {
@@ -693,7 +703,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   const flipYToggle = createCheckboxField("Flip Y", selectedTile?.flipY ?? false, (checked) => {
     callbacks.onPreviewTileLayoutUpdated({ flipY: checked });
   });
-  transformToggleRow.append(scaleModeToggle, flipXToggle, flipYToggle);
+  transformToggleRow.append(flipXToggle, flipYToggle);
 
   const propertyToggleRow = document.createElement("div");
   propertyToggleRow.className = "toggle-row";
@@ -723,7 +733,7 @@ export function createTileEditorSection(state: ProjectState, callbacks: TileEdit
   metadataInputs.append(nameField.field, tagsField.field, collisionField.field);
 
   layoutPanel.append(
-    createEditorGroup("Layout", transformToggleRow, tileCellInputs, offsetInputs, scaleInputs, groupTransformActions),
+    createEditorGroup("Layout", modeSwitchRow, transformToggleRow, tileCellInputs, offsetInputs, scaleInputs, groupTransformActions),
     createEditorGroup("Rendering", propertyToggleRow),
   );
   processingPanel.append(
@@ -992,8 +1002,14 @@ function syncGroupTransformUi(
 
   const hasPreview = state.session.groupTransformPreview !== null;
   const hasLayoutPreview = state.session.tileLayoutPreview !== null;
-  applyButton.disabled = isGroupMode ? !hasPreview : !hasLayoutPreview;
-  cancelButton.disabled = isGroupMode ? !hasPreview : !hasLayoutPreview;
+  const hasPendingChanges = isGroupMode ? hasPreview : hasLayoutPreview;
+  applyButton.disabled = !hasPendingChanges;
+  cancelButton.disabled = !hasPendingChanges;
+  actions.dataset.pending = hasPendingChanges ? "true" : "false";
+  applyButton.dataset.active = hasPendingChanges ? "true" : "false";
+  applyButton.dataset.pending = hasPendingChanges ? "true" : "false";
+  cancelButton.dataset.active = hasPendingChanges ? "true" : "false";
+  cancelButton.dataset.pending = hasPendingChanges ? "true" : "false";
 }
 
 function createNumberInput(value: number, ariaLabel: string, min?: number, step = 1): HTMLInputElement {
@@ -1047,6 +1063,27 @@ function createCheckboxField(label: string, checked: boolean, onChange: (checked
   const text = document.createElement("span");
   text.textContent = label;
   field.append(input, text);
+  return field;
+}
+
+function createModeSwitchField(label: string, checked: boolean, onChange: (checked: boolean) => void): HTMLLabelElement {
+  const field = document.createElement("label");
+  field.className = "mode-switch";
+  const labelText = document.createElement("span");
+  labelText.className = "mode-switch-label";
+  labelText.textContent = label;
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = checked;
+  input.addEventListener("change", () => {
+    onChange(input.checked);
+  });
+  const track = document.createElement("span");
+  track.className = "mode-switch-track";
+  const knob = document.createElement("span");
+  knob.className = "mode-switch-knob";
+  track.append(knob);
+  field.append(labelText, input, track);
   return field;
 }
 

@@ -6,7 +6,7 @@ import { drawTileIntoRect, renderTileCanvas } from "../systems/tileRenderSystem"
 import { getVisibleSelection } from "../systems/selectionSystem";
 import { getResolvedSourceImageAsset, getSourceImageForRef } from "../systems/sourceImageSystem";
 import { getOutputGridMetrics, getProjectPixelSize, getSourceGridMetrics } from "../systems/tileGridSystem";
-import { getOutputPanelMetrics, getSourcePanelMetrics, getWorkspaceLayout, type OutputViewport, type SourceViewport } from "../systems/workspaceSystem";
+import { getOutputPanelMetrics, getOutputWorkspaceCamera, getSourcePanelMetrics, getSourceWorkspaceCamera, getWorkspaceLayout, type OutputViewport, type SourceViewport } from "../systems/workspaceSystem";
 
 const BACKGROUND = "#12202f";
 const BORDER = "#3e6d89";
@@ -14,7 +14,7 @@ const LABEL = "#c6d7e5";
 const EMPTY_PANEL = "#1a3042";
 const GRID = "rgba(237, 244, 250, 0.22)";
 const GRID_STRONG = "rgba(125, 173, 199, 0.55)";
-const OUTPUT_FILL = "#101c28";
+const OUTPUT_FILL = EMPTY_PANEL;
 const OUTPUT_GRID = "rgba(242, 193, 78, 0.28)";
 const SELECTION_FILL = "rgba(88, 201, 255, 0.22)";
 const SELECTION_STROKE = "#6be2ff";
@@ -60,6 +60,8 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
   context.fillRect(0, 0, width, height);
 
   const layout = getWorkspaceLayout(width, height, state);
+  const sourceCamera = getSourceWorkspaceCamera(state);
+  const outputCamera = getOutputWorkspaceCamera(state);
   const { sourcePanel, outputPanel } = layout;
   const cache = getRenderCache(canvas);
   const hasScenePalette = !(state.session.activeWorkspaceMode === "scene" && state.project.tiles.length < 1);
@@ -75,15 +77,12 @@ export function renderWorkspace(canvas: HTMLCanvasElement, state: ProjectState):
 
   const viewport = layout.sourceViewport;
   drawSourcePanel(context, state, viewport, cache);
-  context.strokeStyle = BORDER;
-  context.lineWidth = 2;
-  context.strokeRect(viewport.frame.x - 8, viewport.frame.y - 8, viewport.frame.width + 16, viewport.frame.height + 16);
 
   context.fillStyle = LABEL;
   context.font = "12px monospace";
   drawWrappedPanelText(context, getSourcePanelLabel(state), sourcePanel.x + 12, sourcePanel.y + 18, sourcePanel.width - 24, 14, 2);
   context.fillStyle = VIEW_HINT;
-  context.fillText(`Zoom ${state.session.sourceCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`, sourcePanel.x + 12, sourcePanel.y + sourcePanel.height - 12);
+  context.fillText(`Zoom ${sourceCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`, sourcePanel.x + 12, sourcePanel.y + sourcePanel.height - 12);
 }
 
 function getRenderCache(canvas: HTMLCanvasElement): RenderCache {
@@ -255,9 +254,6 @@ function drawPanel(
 ): void {
   context.fillStyle = EMPTY_PANEL;
   context.fillRect(panel.x, panel.y, panel.width, panel.height);
-  context.strokeStyle = BORDER;
-  context.lineWidth = 2;
-  context.strokeRect(panel.x + 0.5, panel.y + 0.5, panel.width - 1, panel.height - 1);
 }
 
 function drawOutputGrid(
@@ -266,6 +262,7 @@ function drawOutputGrid(
   viewport: OutputViewport,
   cache: RenderCache,
 ): void {
+  const outputCamera = getOutputWorkspaceCamera(state);
   const outputMetrics = getOutputPanelMetrics(state);
 
   context.fillStyle = LABEL;
@@ -303,9 +300,6 @@ function drawOutputGrid(
     drawSelectedOutputTile(context, state, viewport);
   }
   context.restore();
-  context.strokeStyle = GRID_STRONG;
-  context.lineWidth = 1.5;
-  context.strokeRect(viewport.frame.x + 0.5, viewport.frame.y + 0.5, viewport.frame.width - 1, viewport.frame.height - 1);
   const shouldDrawGrid = state.session.activeWorkspaceMode === "scene"
     ? state.session.showSceneGrid
     : state.session.showTilesheetGrid;
@@ -313,7 +307,7 @@ function drawOutputGrid(
   if (!shouldDrawGrid) {
     context.fillStyle = VIEW_HINT;
     context.fillText(
-      `Zoom ${state.session.outputCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`,
+      `Zoom ${outputCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`,
       viewport.frame.x,
       viewport.frame.y + viewport.frame.height + 16,
     );
@@ -358,7 +352,7 @@ function drawOutputGrid(
 
   context.fillStyle = VIEW_HINT;
   context.fillText(
-    `Zoom ${state.session.outputCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`,
+    `Zoom ${outputCamera.zoom.toFixed(2)}x · Wheel to zoom · Option-drag to pan`,
     viewport.frame.x,
     viewport.frame.y + viewport.frame.height + 16,
   );

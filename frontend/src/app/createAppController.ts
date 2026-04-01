@@ -183,6 +183,10 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.project = freshState.project;
       state.sourceImageAsset = freshState.sourceImageAsset;
       state.session.message = "Started a new project.";
+      state.session.tilesheetDirty = freshState.session.tilesheetDirty;
+      state.session.sceneDirty = freshState.session.sceneDirty;
+      state.session.savedTilesheetSignature = freshState.session.savedTilesheetSignature;
+      state.session.savedSceneSignature = freshState.session.savedSceneSignature;
       state.session.projectFileName = null;
       state.session.projectFileHandle = null;
       state.session.projectDirectoryHandle = null;
@@ -240,7 +244,9 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.unresolvedResourceScope = freshState.session.unresolvedResourceScope;
       state.session.pendingProjectFolderPrompt = freshState.session.pendingProjectFolderPrompt;
       state.session.sourceCamera = freshState.session.sourceCamera;
+      state.session.sceneSourceCamera = freshState.session.sceneSourceCamera;
       state.session.outputCamera = freshState.session.outputCamera;
+      state.session.sceneOutputCamera = freshState.session.sceneOutputCamera;
       state.session.sourceImageAssetCache = freshState.session.sourceImageAssetCache;
       state.session.renderRevision += 1;
       undoStack.length = 0;
@@ -397,6 +403,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       try {
         recordHistory();
         await loadWorkingImageIntoState(state, file, null);
+        markTilesheetSaved(state);
         refreshUnresolvedResourcesForCurrentScope(state);
       } catch (error) {
         undoStack.pop();
@@ -432,6 +439,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         const file = await handle.getFile();
         recordHistory();
         await loadWorkingImageIntoState(state, file, handle);
+        markTilesheetSaved(state);
         refreshUnresolvedResourcesForCurrentScope(state);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -457,6 +465,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
           state.session.message = result.missingTileCount > 0
             ? `Saved working PNG to ${fileName}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
             : `Saved working PNG to ${fileName}.`;
+          markTilesheetSaved(state);
           renderAll();
           return;
         }
@@ -471,6 +480,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
           state.session.message = result.missingTileCount > 0
             ? `Saved working PNG to ${result.handle.name}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
             : `Saved working PNG to ${result.handle.name}.`;
+          markTilesheetSaved(state);
           renderAll();
           return;
         }
@@ -481,6 +491,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.message = result.missingTileCount > 0
           ? `Downloaded working PNG as ${suggestedName}. ${result.missingTileCount} tile${result.missingTileCount === 1 ? "" : "s"} could not be rendered because their source image is unavailable.`
           : `Downloaded working PNG as ${suggestedName}. Browser file overwrite is not supported here.`;
+        markTilesheetSaved(state);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -541,6 +552,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.activeWorkspaceMode = "scene";
         await resolveSceneImageLayersFromSceneFile(state, scene);
         const tilesheetResolution = await resolveSceneTilesheetIfPossible(state);
+        markSceneSaved(state);
         updateUnresolvedResources(state, "scene", collectSceneUnresolvedResources(state, scene));
         bumpRenderRevision();
         state.session.message = `Loaded scene: ${file.name}.${tilesheetResolution ? ` ${tilesheetResolution}` : ""}`;
@@ -587,6 +599,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.activeWorkspaceMode = "scene";
         await resolveSceneImageLayersFromSceneFile(state, scene);
         const tilesheetResolution = await resolveSceneTilesheetIfPossible(state);
+        markSceneSaved(state);
         updateUnresolvedResources(state, "scene", collectSceneUnresolvedResources(state, scene));
         bumpRenderRevision();
         state.session.message = `Loaded scene: ${file.name}.${tilesheetResolution ? ` ${tilesheetResolution}` : ""}`;
@@ -613,6 +626,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
           await saveSceneToHandle(state.session.sceneFileHandle, scene);
           state.project.sceneFile = state.session.sceneFileName ?? suggestedName;
           state.session.message = `Saved scene to ${state.session.sceneFileName ?? suggestedName}.`;
+          markSceneSaved(state);
           renderAll();
           return;
         }
@@ -624,10 +638,12 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
           state.session.sceneFileName = handle.name;
           state.project.sceneFile = handle.name;
           state.session.message = `Saved scene to ${handle.name}.`;
+          markSceneSaved(state);
         } else {
           state.session.sceneFileName = suggestedName;
           state.project.sceneFile = suggestedName;
           state.session.message = `Downloaded scene as ${suggestedName}. Browser file overwrite is not supported here.`;
+          markSceneSaved(state);
         }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -1760,6 +1776,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
 
   function renderAll(): void {
     syncTransformPreviewState(state);
+    refreshDirtyFlags(state);
     shell.update(state);
     renderWorkspace(shell.canvas, state);
   }
@@ -2780,6 +2797,40 @@ function getDisplayFileName(path: string | null): string | null {
   return segments[segments.length - 1] || path;
 }
 
+function getTilesheetSaveSignature(state: ProjectState): string {
+  return JSON.stringify({
+    tileWidth: state.project.tileWidth,
+    tileHeight: state.project.tileHeight,
+    outputWidth: state.project.outputWidth,
+    outputHeight: state.project.outputHeight,
+    workingImage: state.project.workingImage,
+    tiles: state.project.tiles,
+  });
+}
+
+function getSceneSaveSignature(state: ProjectState): string | null {
+  if (!state.project.scene) {
+    return null;
+  }
+
+  return JSON.stringify(state.project.scene);
+}
+
+function markTilesheetSaved(state: ProjectState): void {
+  state.session.savedTilesheetSignature = getTilesheetSaveSignature(state);
+  state.session.tilesheetDirty = false;
+}
+
+function markSceneSaved(state: ProjectState): void {
+  state.session.savedSceneSignature = getSceneSaveSignature(state);
+  state.session.sceneDirty = false;
+}
+
+function refreshDirtyFlags(state: ProjectState): void {
+  state.session.tilesheetDirty = getTilesheetSaveSignature(state) !== state.session.savedTilesheetSignature;
+  state.session.sceneDirty = getSceneSaveSignature(state) !== state.session.savedSceneSignature;
+}
+
 function isRelativeAssetReference(reference: string | null): boolean {
   if (!reference) {
     return false;
@@ -2933,6 +2984,8 @@ async function loadProjectIntoState(
   }
 
   state.session.message = `${messagePrefix} ${resolutionMessages.join(" ")}`.trim();
+  markTilesheetSaved(state);
+  markSceneSaved(state);
   return unresolved;
 }
 

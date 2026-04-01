@@ -30,6 +30,10 @@ export type SourceImageAssetState = {
 export type SessionState = {
   browserWorkflowNoticeDismissed: boolean;
   message: string | null;
+  tilesheetDirty: boolean;
+  sceneDirty: boolean;
+  savedTilesheetSignature: string | null;
+  savedSceneSignature: string | null;
   projectFileName: string | null;
   projectFileHandle: FileSystemFileHandle | null;
   projectDirectoryHandle: FileSystemDirectoryHandle | null;
@@ -86,7 +90,9 @@ export type SessionState = {
   unresolvedResources: UnresolvedResource[];
   unresolvedResourceScope: "project" | "scene" | null;
   sourceCamera: CameraState;
+  sceneSourceCamera: CameraState;
   outputCamera: CameraState;
+  sceneOutputCamera: CameraState;
   sourceImageAssetCache: Record<string, CachedSourceImageAsset>;
   renderRevision: number;
 };
