@@ -1011,3 +1011,47 @@ Align the scene editor interaction model with the tilesheet editor so copy, past
 * `README.md` reflects the same shortcut/help guidance
 * existing scene and tilesheet features remain supported
 * the implementation follows relevant rules in `docs/TECH_WORKFLOW.md`, including architecture
+
+---
+
+## Ticket 27: Add GitHub Actions CI and GitHub Pages deployment workflow
+
+**Status**
+Completed
+
+**Goal**
+Set up Tilejam for a safer public-repo workflow with pull-request validation and controlled manual GitHub Pages deployment.
+
+**Docs**
+
+* `docs/TECH_WORKFLOW.md`
+
+**Prompt**
+Add a GitHub Actions CI workflow that validates Tilejam on pull requests and a GitHub Pages deployment workflow that builds and deploys `frontend/dist` through manual dispatch. Keep the setup suitable for a solo maintainer using pull requests and branch protection without requiring self-approval.
+
+**Deliverables**
+
+* add a CI workflow under `.github/workflows/` that:
+  * runs on pull requests
+  * installs dependencies
+  * runs `npm run build`
+* add a GitHub Pages deployment workflow under `.github/workflows/` that:
+  * runs by manual dispatch
+  * installs dependencies
+  * runs `npm run build`
+  * publishes `frontend/dist` using the GitHub Pages Actions flow
+* keep the workflow compatible with a solo-maintainer process:
+  * protected default branch
+  * pull requests required
+  * status checks required
+  * no mandatory reviewer approval required
+* document the required GitHub repo settings briefly where needed
+* keep the app runnable and static-host friendly
+
+**Validation**
+
+* pull requests run CI and fail when the build fails
+* the built app can be deployed to GitHub Pages through a manual workflow run
+* the Pages workflow publishes `frontend/dist`
+* the setup works cleanly with a solo-maintainer PR flow
+* the implementation follows relevant rules in `docs/TECH_WORKFLOW.md`
