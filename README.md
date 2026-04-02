@@ -5,6 +5,14 @@
 Tilejam is a compact browser-based tile and scene editor for turning rough or AI-generated tilesheets into clean, grid-aligned game assets.
 
 <p>
+  <a href="https://genxbit.github.io/tilejam/">
+    <img alt="Open Tilejam App" src="https://img.shields.io/badge/Open-Tilejam%20App-1d4ed8?style=for-the-badge">
+  </a>
+</p>
+
+<p><sub>Live app on GitHub Pages</sub></p>
+
+<p>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178c6">
   <img alt="Vite" src="https://img.shields.io/badge/Vite-7.x-646cff">
   <img alt="Canvas" src="https://img.shields.io/badge/Canvas-2D-1f2937">
