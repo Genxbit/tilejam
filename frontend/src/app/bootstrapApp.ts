@@ -9,5 +9,11 @@ export async function bootstrapApp(root: HTMLDivElement | null): Promise<void> {
   const state = createProjectState();
   const controller = createAppController(root, state);
 
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+      window.location.reload();
+    }
+  });
+
   await controller.initialize();
 }
