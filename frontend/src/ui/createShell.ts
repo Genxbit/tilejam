@@ -1023,7 +1023,13 @@ export function createShell({
   projectFolderPromptTitle.textContent = "Choose Project Folder";
   const projectFolderPromptActions = document.createElement("div");
   projectFolderPromptActions.className = "panel-actions";
-  const projectFolderPromptChoose = createAsyncActionButton("Choose Folder", onConfirmProjectFolderPrompt);
+  const projectFolderPromptChoose = document.createElement("button");
+  projectFolderPromptChoose.type = "button";
+  projectFolderPromptChoose.className = "file-input file-input-secondary";
+  projectFolderPromptChoose.textContent = "Choose Folder";
+  projectFolderPromptChoose.addEventListener("click", () => {
+    void onConfirmProjectFolderPrompt();
+  });
   const projectFolderPromptCancel = createActionButton("Cancel", onCancelProjectFolderPrompt);
   projectFolderPromptActions.append(projectFolderPromptChoose, projectFolderPromptCancel);
   projectFolderPromptHeader.append(projectFolderPromptTitle, projectFolderPromptActions);
