@@ -264,6 +264,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.pendingProjectFolderPrompt = createPendingProjectFolderPrompt(file.name, unresolved);
         if (state.session.pendingProjectFolderPrompt) {
           state.session.message = `${state.session.message ?? ""} Choose the project folder to resolve linked files.`.trim();
+          await pauseForProjectFolderPrompt();
         }
         updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
         bumpRenderRevision();
@@ -307,6 +308,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.pendingProjectFolderPrompt = createPendingProjectFolderPrompt(file.name, unresolved);
         if (state.session.pendingProjectFolderPrompt) {
           state.session.message = `${state.session.message ?? ""} Choose the project folder to resolve linked files.`.trim();
+          await pauseForProjectFolderPrompt();
         }
         updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
         bumpRenderRevision();
@@ -3157,8 +3159,17 @@ async function tryResolveProjectAssetsFromDirectory(
       return false;
     }
 
+    const message = error instanceof Error ? error.message : "The project folder chooser could not be opened.";
+    state.session.message = `Project folder open failed: ${message}`;
+
     return false;
   }
+}
+
+async function pauseForProjectFolderPrompt(): Promise<void> {
+  await new Promise((resolve) => {
+    window.setTimeout(resolve, 250);
+  });
 }
 
 function createPendingProjectFolderPrompt(
