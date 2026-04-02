@@ -84,7 +84,7 @@ For a Pages-like local test, you can also serve `frontend/dist` with a static se
 
 ## GitHub Pages
 
-Tilejam can run on GitHub Pages as a static site once the repository is published there.
+Tilejam runs on GitHub Pages as a static site.
 
 Use the hosted app for:
 
