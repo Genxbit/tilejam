@@ -58,6 +58,9 @@ import {
   collectSceneUnresolvedResources,
   findUnresolvedResource,
   refreshUnresolvedResourcesForCurrentScope,
+  isRelativeAssetReference,
+  resolveProjectAssetReference,
+  shouldAttemptProjectAssetUrlResolution,
   updateUnresolvedResources,
 } from "../systems/resourceResolutionSystem";
 import { renderTileCanvas } from "../systems/tileRenderSystem";
@@ -191,6 +194,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.projectFileHandle = null;
       state.session.projectDirectoryHandle = null;
       state.session.projectBaseUrl = null;
+      state.session.projectAssetResolutionMode = freshState.session.projectAssetResolutionMode;
       state.session.pendingProjectFolderPrompt = null;
       state.session.workingImageFileName = null;
       state.session.workingImageFileHandle = null;
@@ -257,10 +261,11 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       try {
         const project = await loadProjectFile(file);
         state.session.projectFileName = file.name;
-        state.session.projectFileHandle = null;
-        state.session.projectDirectoryHandle = null;
-        state.session.projectBaseUrl = null;
-        const unresolved = await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
+      state.session.projectFileHandle = null;
+      state.session.projectDirectoryHandle = null;
+      state.session.projectBaseUrl = null;
+      state.session.projectAssetResolutionMode = "local-file";
+      const unresolved = await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
         state.session.pendingProjectFolderPrompt = createPendingProjectFolderPrompt(file.name, unresolved);
         if (state.session.pendingProjectFolderPrompt) {
           state.session.message = `${state.session.message ?? ""} Choose the project folder to resolve linked files.`.trim();
@@ -304,6 +309,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.projectFileName = file.name;
         state.session.projectFileHandle = handle;
         state.session.projectBaseUrl = null;
+        state.session.projectAssetResolutionMode = "local-file";
         const unresolved = await loadProjectIntoState(state, project, `Loaded project: ${file.name}.`);
         state.session.pendingProjectFolderPrompt = createPendingProjectFolderPrompt(file.name, unresolved);
         if (state.session.pendingProjectFolderPrompt) {
@@ -334,6 +340,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
         state.session.projectFileHandle = null;
         state.session.projectDirectoryHandle = null;
         state.session.projectBaseUrl = demoProjectUrl;
+        state.session.projectAssetResolutionMode = "hosted-demo";
         state.session.pendingProjectFolderPrompt = null;
         await loadProjectIntoState(state, project, "Loaded demo project.");
         updateUnresolvedResources(state, "project", collectProjectUnresolvedResources(state));
@@ -2715,6 +2722,7 @@ export function createAppController(root: HTMLElement, state: ProjectState) {
       state.session.projectFileHandle = null;
       state.session.projectDirectoryHandle = null;
       state.session.projectBaseUrl = null;
+      state.session.projectAssetResolutionMode = "local-file";
       state.session.pendingProjectFolderPrompt = null;
       clearUnresolvedResources(state);
       state.session.message = "Open a source image, working tilesheet, scene, or project to begin.";
@@ -2833,26 +2841,6 @@ function refreshDirtyFlags(state: ProjectState): void {
   state.session.sceneDirty = getSceneSaveSignature(state) !== state.session.savedSceneSignature;
 }
 
-function isRelativeAssetReference(reference: string | null): boolean {
-  if (!reference) {
-    return false;
-  }
-
-  if (reference.startsWith("/") || reference.startsWith("data:")) {
-    return false;
-  }
-
-  return !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(reference);
-}
-
-function resolveProjectAssetReference(state: ProjectState, reference: string): string {
-  if (!isRelativeAssetReference(reference) || !state.session.projectBaseUrl) {
-    return reference;
-  }
-
-  return new URL(reference, state.session.projectBaseUrl).toString();
-}
-
 function getWorkingImageFilename(state: ProjectState): string {
   const existingName = state.session.workingImageFileName ?? state.project.workingImage;
 
@@ -2918,6 +2906,10 @@ async function loadProjectIntoState(
   if (!project.sourceImage) {
     clearSourceImageAsset(state);
     resolutionMessages.push("No source image reference was included.");
+  } else if (!shouldAttemptProjectAssetUrlResolution(state, project.sourceImage)) {
+    clearSourceImageAsset(state);
+    unresolved.sourceImageRef = project.sourceImage;
+    resolutionMessages.push(`Source image "${project.sourceImage}" needs local relinking. Use "Open source" to continue.`);
   } else {
     const resolvedSourceImage = resolveProjectAssetReference(state, project.sourceImage);
 
@@ -2933,6 +2925,11 @@ async function loadProjectIntoState(
   }
 
   if (project.workingImage && project.workingImage !== project.sourceImage) {
+    if (!shouldAttemptProjectAssetUrlResolution(state, project.workingImage)) {
+      unresolved.workingImageRef = project.workingImage;
+      state.project.tiles = [];
+      resolutionMessages.push(`Working PNG "${project.workingImage}" needs local relinking. Use "Open tilesheet" to continue.`);
+    } else {
     const resolvedWorkingImage = resolveProjectAssetReference(state, project.workingImage);
 
     try {
@@ -2956,12 +2953,18 @@ async function loadProjectIntoState(
       state.project.tiles = [];
       resolutionMessages.push(`Working PNG "${project.workingImage}" could not be resolved automatically. Use "Open tilesheet" to relink it.`);
     }
+    }
   } else {
     state.project.tiles = [];
     resolutionMessages.push("No working PNG reference was included. Open tilesheet to rebuild editable tiles.");
   }
 
   if (project.sceneFile) {
+    if (!shouldAttemptProjectAssetUrlResolution(state, project.sceneFile)) {
+      state.project.scene = null;
+      unresolved.sceneFileRef = project.sceneFile;
+      resolutionMessages.push(`Scene "${project.sceneFile}" needs local relinking. Use "Open scene" to continue.`);
+    } else {
     const resolvedSceneFile = resolveProjectAssetReference(state, project.sceneFile);
 
     try {
@@ -2977,6 +2980,7 @@ async function loadProjectIntoState(
       state.project.scene = null;
       unresolved.sceneFileRef = isRelativeAssetReference(project.sceneFile) ? project.sceneFile : null;
       resolutionMessages.push(`Scene "${project.sceneFile}" could not be resolved automatically. Use "Open scene" to relink it.`);
+    }
     }
   } else {
     state.project.scene = null;
@@ -3250,8 +3254,13 @@ async function resolveSceneTilesheetIfPossible(state: ProjectState): Promise<str
     return `Using current tilesheet ${currentWorkingImage}.`;
   }
 
+  if (!shouldAttemptProjectAssetUrlResolution(state, expectedWorkingImage)) {
+    return `Scene references ${scene.tilesetSource}. Open ${expectedWorkingImage} manually to render it here.`;
+  }
+
   try {
-    const workingImageRef = await loadImageAssetFromUrl(state, expectedWorkingImage, expectedWorkingImage);
+    const resolvedWorkingImage = resolveProjectAssetReference(state, expectedWorkingImage);
+    const workingImageRef = await loadImageAssetFromUrl(state, resolvedWorkingImage, expectedWorkingImage);
     const asset = state.session.sourceImageAssetCache[workingImageRef];
 
     if (!asset) {
@@ -3272,6 +3281,10 @@ async function resolveSceneImageLayersFromSceneFile(
   state: ProjectState,
   scene: NonNullable<ProjectState["project"]["scene"]>,
 ): Promise<void> {
+  if (state.session.projectAssetResolutionMode !== "hosted-demo") {
+    return;
+  }
+
   await Promise.all(
     scene.layers.map(async (layer) => {
       if (layer.type !== "imagelayer" || !layer.image) {
@@ -3312,6 +3325,10 @@ async function resolveSceneImageLayerPath(
   }
 
   if (sceneFileRef && state.session.projectBaseUrl) {
+    if (!shouldAttemptProjectAssetUrlResolution(state, sceneFileRef)) {
+      return false;
+    }
+
     try {
       const resolvedSceneUrl = resolveProjectAssetReference(state, sceneFileRef);
       const resolvedImageUrl = new URL(trimmedPath, resolvedSceneUrl).toString();

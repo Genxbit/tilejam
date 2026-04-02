@@ -1,4 +1,4 @@
-import type { ProjectState, SceneMapState, UnresolvedResource } from "../types/project";
+import type { ProjectAssetResolutionMode, ProjectState, SceneMapState, UnresolvedResource } from "../types/project";
 import { getSourceImageForRef } from "./sourceImageSystem";
 
 export function updateUnresolvedResources(
@@ -135,4 +135,49 @@ export function getResourceAccept(resource: UnresolvedResource): string {
     case "scene-image-layer":
       return "image/*";
   }
+}
+
+export function shouldResolveRelativeProjectAssetsByUrl(
+  mode: ProjectAssetResolutionMode,
+  reference: string | null,
+): boolean {
+  if (!reference) {
+    return false;
+  }
+
+  if (!isRelativeAssetReference(reference)) {
+    return true;
+  }
+
+  return mode === "hosted-demo";
+}
+
+export function resolveProjectAssetReference(
+  state: ProjectState,
+  reference: string,
+): string {
+  if (!isRelativeAssetReference(reference) || !state.session.projectBaseUrl) {
+    return reference;
+  }
+
+  return new URL(reference, state.session.projectBaseUrl).toString();
+}
+
+export function shouldAttemptProjectAssetUrlResolution(
+  state: ProjectState,
+  reference: string | null,
+): boolean {
+  return shouldResolveRelativeProjectAssetsByUrl(state.session.projectAssetResolutionMode, reference);
+}
+
+export function isRelativeAssetReference(reference: string | null): boolean {
+  if (!reference) {
+    return false;
+  }
+
+  if (reference.startsWith("/") || reference.startsWith("data:")) {
+    return false;
+  }
+
+  return !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(reference);
 }

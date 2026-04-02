@@ -38,6 +38,7 @@ export type SessionState = {
   projectFileHandle: FileSystemFileHandle | null;
   projectDirectoryHandle: FileSystemDirectoryHandle | null;
   projectBaseUrl: string | null;
+  projectAssetResolutionMode: ProjectAssetResolutionMode;
   pendingProjectFolderPrompt: PendingProjectFolderPrompt | null;
   workingImageFileName: string | null;
   workingImageFileHandle: FileSystemFileHandle | null;
@@ -111,6 +112,8 @@ export type PendingProjectFolderPrompt = {
   workingImageRef: string | null;
   sceneFileRef: string | null;
 };
+
+export type ProjectAssetResolutionMode = "hosted-demo" | "local-file";
 
 export type TileSize = 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024;
 

@@ -1055,3 +1055,38 @@ Add a GitHub Actions CI workflow that validates Tilejam on pull requests and a G
 * the Pages workflow publishes `frontend/dist`
 * the setup works cleanly with a solo-maintainer PR flow
 * the implementation follows relevant rules in `docs/TECH_WORKFLOW.md`
+
+---
+
+## Ticket 28: Extract explicit hosted vs local asset resolution strategy
+
+**Status**
+Completed
+
+**Goal**
+Make project and scene asset loading use an explicit resolution strategy instead of ad hoc URL probing rules.
+
+**Docs**
+
+* `docs/TECH_WORKFLOW.md`
+
+**Prompt**
+Refactor project and scene asset loading so hosted demo content and user-opened local files use an explicit resolution strategy owned by a system. Hosted demo assets should resolve by URL, while local project and scene files should prefer local relinking workflows and avoid noisy hosted URL probing.
+
+**Deliverables**
+
+* add an explicit asset resolution strategy for hosted demo vs local file workflows
+* move project asset resolution policy out of `app/createAppController.ts` into a system
+* make `Open Demo` use hosted URL resolution consistently
+* make `Open project` use local-first resolution for relative project assets
+* make scene-linked tilesheet and image-layer resolution follow the same explicit strategy model
+* keep unresolved-resource prompts and local relinking flows working
+* keep the app runnable and existing supported features intact
+
+**Validation**
+
+* hosted demo assets still load by URL on GitHub Pages
+* local `Open project` no longer probes hosted relative asset URLs before local relinking
+* scene-linked assets follow the same explicit hosted vs local resolution strategy
+* unresolved-resource prompts still work
+* the implementation follows relevant rules in `docs/TECH_WORKFLOW.md`, especially architecture ownership

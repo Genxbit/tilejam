@@ -41,6 +41,7 @@ export function createProjectState(): ProjectState {
       projectFileHandle: null,
       projectDirectoryHandle: null,
       projectBaseUrl: null,
+      projectAssetResolutionMode: "local-file",
       pendingProjectFolderPrompt: null,
       workingImageFileName: null,
       workingImageFileHandle: null,
