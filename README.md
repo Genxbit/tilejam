@@ -25,6 +25,7 @@ Tilejam is a compact browser-based tile and scene editor for turning rough or AI
 >
 > Steering docs:
 
+* [AGENTS.md](AGENTS.md): repo-level Codex and review guidance
 * [docs/ONBOARDING.md](docs/ONBOARDING.md): start a new Codex session
 * [docs/PRODUCT.md](docs/PRODUCT.md): product intent, workflow, and scope
 * [docs/TECH_WORKFLOW.md](docs/TECH_WORKFLOW.md): architecture, ticket structure, and prompt template
@@ -184,6 +185,7 @@ Common Codex tasks:
 * create or update the next ticket in `docs/ITERATIONS.md`
 * implement a specific ticket from `docs/ITERATIONS.md`
 * validate architecture against `docs/TECH_WORKFLOW.md`
+* use `.codex/agents/architecture-reviewer.toml` for a focused architecture review
 * validate UX/design against the same rules
 * review UX, grouping, and editor layout before coding
 * update product, workflow, format, or iteration docs when rules change

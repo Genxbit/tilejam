@@ -10,6 +10,7 @@ Start a new Codex session with the correct context.
 
 Always read:
 
+* `AGENTS.md`
 * `docs/PRODUCT.md`
 * `docs/TECH_WORKFLOW.md`
 * `docs/FORMATS.md`
@@ -33,6 +34,7 @@ These are the source of truth. Do not duplicate rules here.
 * follow `TECH_WORKFLOW.md` for structure and patterns
 * follow `FORMATS.md` for data and export
 * follow `PRODUCT.md` for scope
+* use `.codex/agents/architecture-reviewer.toml` when you want an architecture-focused review prompt
 * do not invent new patterns without updating docs
 
 ---
